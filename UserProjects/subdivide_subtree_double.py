@@ -31,3 +31,7 @@ double_polycount(active_element)
 active_element.iterateSubtree(double_polycount)
 
 active_element.selectOne()
+
+# Show summary message to user
+coat.ui.showInfoMessage(
+    "Subtree subdivision complete (doubled polycount)", 3000)

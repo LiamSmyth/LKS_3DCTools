@@ -91,6 +91,10 @@ coat.ui.setSliderValue("$SymmetryParams::tStepX", float(BASE_SIZE))
 coat.ui.setSliderValue("$SymmetryParams::tStepZ", float(BASE_SIZE))
 coat.ui.cmd("$COMBOBOX_CoordSystemXYZXYZ_axis")
 
+# Show summary message to user
+coat.ui.showInfoMessage(
+    f"Tiling plane grid setup complete ({len(instances) + 1} tiles)", 4000)
+
 
 """1
 // cmd - based script:

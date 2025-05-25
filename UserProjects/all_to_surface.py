@@ -1,21 +1,21 @@
+"""
+All to Surface
 
+Convert all sculpt objects in the scene to surface mode.
+"""
 import coat
-import math
+from _utils.scene_iteration_utils import SceneIterationUtils
 
 
-def convert_to_surface(el: coat.SceneElement):
-    el.selectOne()
-    vol: coat.Volume = el.Volume()
-    if not vol.isSurface():
-        vol.toSurface()
+def main():
+    """Convert all sculpt objects to surface mode"""
+    print("Converting all objects to surface mode...")
+    SceneIterationUtils.convert_all_to_surface()
+    print("All objects converted to surface mode")
 
-    return False  # To continue iteration
+    # Show summary message to user
+    coat.ui.showInfoMessage("All objects converted to surface mode", 3000)
 
 
-active_element: coat.SceneElement = coat.Scene.current()
-
-scene_root: coat.SceneElement = coat.Scene.sculptRoot()
-
-scene_root.iterateSubtree(convert_to_surface)
-
-active_element.selectOne()
+# 3DCoat executes script content directly, so call main() here
+main()

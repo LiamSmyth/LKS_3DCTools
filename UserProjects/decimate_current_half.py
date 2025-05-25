@@ -1,55 +1,57 @@
+"""
+Decimate Current Half
 
+This script decimates the current object to 50% of its original polycount.
+It uses the 3DCoat decimation dialog with preset values.
+"""
 import coat
-import math
-
-active_element: coat.SceneElement = coat.Scene.current()
-
-
-def decimate_half(el: coat.SceneElement):
-    # Check if there was a Layer 1 or Layer1 before decimate.
-    # If there was not, make sure to delete it after decimating
-
-    layers_that_exist = []
-
-    # Check for existence of layers 0-9, cache any that are found
-    for i in range(0, 10):
-        strings_to_check = [f"Layer {i}", f"Layer{i}"]
-        for string in strings_to_check:
-            if coat.Scene.getLayer(string, False) != -1:
-                layers_that_exist.append(string)
-
-    print(f"Found layers before decimate: {layers_that_exist}")
-
-    if not el.isSculptObject():
-        print("Not a sculpt object")
-        return False
-
-    vol: coat.Volume = el.Volume()
-    if not vol.isSurface():
-        vol.toSurface()
-
-    def decimate_ui():
-        # Set the reduction percent to 50 and press OK
-        coat.ui.setSliderValue("$DecimationParams::ReductionPercent", 50)
-        coat.ui.cmd("$DialogButton#1")
-
-    coat.ui.cmd("$Decimate", decimate_ui)
-
-    coat.Scene.removeEmptyLayers()
-
-    # Remove any layers that were not present before decimate
-    for i in range(0, 10):
-        strings_to_check = [f"Layer {i}", f"Layer{i}"]
-        for string in strings_to_check:
-            if coat.Scene.getLayer(string, False) != -1:
-                print(f"Found layer {string}")
-                if string not in layers_that_exist:
-                    print(f"Removing {string}")
-                    coat.Scene.removeLayer(string)
-
-    return False  # To continue iteration
+from _utils.object_utils import ObjectUtils
+from _utils.ui_dialog_utils import UIDialogUtils
 
 
-decimate_half(active_element)
-coat.Scene.removeEmptyLayers()
-coat.Scene.setActiveLayer(0)
+def decimate_current_half():
+    """Decimate current object to half its polycount"""
+
+    # Get current sculpt object and volume with validation
+    result = ObjectUtils.get_current_sculpt_volume()
+    if not result:
+        return
+
+    current_object, vol = result
+
+    # Validate object has polygons
+    if not ObjectUtils.validate_object_has_polygons(vol):
+        return
+
+    # Convert to surface if it's voxelized
+    ObjectUtils.ensure_surface_mode(vol)
+
+    # Get current polycount
+    current_polycount = vol.getPolycount()
+
+    print(f"Decimating object from {current_polycount:,} polygons...")
+
+    # Execute the decimate command to half
+    UIDialogUtils.execute_decimate_to_half()
+
+    # Get the new polycount after decimation
+    new_polycount = vol.getPolycount()
+    ObjectUtils.print_polycount_info(
+        "Decimation complete", current_polycount, new_polycount)
+
+    reduction_percent = (
+        (current_polycount - new_polycount) / current_polycount) * 100
+    ObjectUtils.show_polycount_message(
+        f"Decimated ({reduction_percent:.1f}% reduction)", new_polycount)
+
+    # Show summary message to user
+    coat.ui.showInfoMessage(
+        f"Object decimated to {new_polycount:,} polygons ({reduction_percent:.1f}% reduction)", 4000)
+
+
+def main():
+    decimate_current_half()
+
+
+# 3DCoat executes script content directly, so call main() here
+main()

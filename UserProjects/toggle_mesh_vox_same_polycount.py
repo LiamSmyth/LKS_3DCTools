@@ -1,138 +1,80 @@
-# This example demonstrate adding prumitives into the mesh, then we merge the mesh into the scene
-import coat
-from coat import vec3
-from coat import Mesh
-
-# add the new sculpt volume named "meshes"
-
-
-####################
-# Base constants for the tiling plane - could later make these set with initialization popup menu
-####################
-BASE_SIZE: int = 64
-THICKNESS: int = 16
-border: int = BASE_SIZE // 4
-size = BASE_SIZE + border
-
-
-####################
-# Prepare base plane
-####################
-# Disable symmetry so we don't start with a duplicated plane
-coat.ui.cmd("$SYMMETRY")
-coat.ui.setBoolValue("$SymmetryParams::EnableSymmetry", False)
-
-root: coat.SceneElement = coat.Scene.sculptRoot()
-
-sculpt_plane: coat.SceneElement = root.addChild(
-    f"Center Plane ({BASE_SIZE}x{BASE_SIZE}) ")
-sculpt_plane_volume = sculpt_plane.Volume()
-sculpt_plane_volume.toSurface()
-
-mesh: coat.Mesh = coat.Mesh.box(size=vec3(size, THICKNESS, size), yAxis=vec3(
-    0, 1, 0), center=vec3(0, -float(THICKNESS) / 2.0, 0), detail_size=1, fillet=0)
-
-# mesh = Mesh.plane(center=vec3(0, 0, 0), sizeX=size, sizeY=size,
-#                  divisionsX=size, divisionsY=size, xAxis=vec3.AxisX, yAxis=vec3.AxisZ)
-
-sculpt_plane_volume.mergeMesh(mesh)
-
-
-####################
-# Duplicate the sculpt plane and move it to the instance locations
-####################
-
-# Make vec3's for top-left, top, top-right, left, right, bottom-left, bottom, bottom-right
-instance_locations = [
-    vec3(-BASE_SIZE, 0, BASE_SIZE), vec3(0, 0,
-                                         BASE_SIZE), vec3(BASE_SIZE, 0, BASE_SIZE),
-    vec3(-BASE_SIZE, 0, 0), vec3(BASE_SIZE, 0, 0),
-    vec3(-BASE_SIZE, 0, -BASE_SIZE), vec3(0, 0, -
-                                          BASE_SIZE), vec3(BASE_SIZE, 0, -BASE_SIZE)
-]
-
-
-def duplicateAsInstance(src: coat.SceneElement, loc: vec3) -> coat.SceneElement:
-
-    inst: coat.SceneElement = src.duplicateAsInstance()
-    inst_m: coat.mat4 = inst.getTransform()
-    inst_m.SetTranslation(loc)
-    inst.setTransform(inst_m)
-    inst.rename(f"Instance {loc.x}, {loc.y}, {loc.z}")
-    # inst.setGhost(True)
-
-    return inst
-
-
-instances: [coat.SceneElement] = []
-
-for loc in instance_locations:
-    instances.append(duplicateAsInstance(sculpt_plane, loc))
-
-for inst in instances:
-    inst: coat.SceneElement = inst
-    inst.changeParent(sculpt_plane)
-
-# Select the sculpt plane
-sculpt_plane.selectOne()
-
-
-####################
-# Set symmetry mode to match the instance plane
-####################
-
-coat.ui.cmd("$SYMMETRY")
-coat.ui.setBoolValue("$SymmetryParams::EnableSymmetry", True)
-coat.ui.cmd("$COMBOBOX_SymmetryTypeTranslation")
-coat.ui.setSliderValue("$SymmetryParams::tNumX", 1)
-coat.ui.setSliderValue("$SymmetryParams::tNumY", 0)
-coat.ui.setSliderValue("$SymmetryParams::tNumZ", 1)
-coat.ui.setSliderValue("$SymmetryParams::tStepX", float(BASE_SIZE))
-coat.ui.setSliderValue("$SymmetryParams::tStepZ", float(BASE_SIZE))
-coat.ui.cmd("$COMBOBOX_CoordSystemXYZXYZ_axis")
-
-
-"""1
-// cmd - based script:
-cmd("$SymmetryParams::tStepX");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$SymmetryParams::tStepX");
-
-// cmd - based script:
-cmd("$SymmetryParams::tStepX");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$SymmetryParams::tStepX");
-// cmd - based script:
-cmd("$COMBOBOX_CoordSystemXYZXYZ_axis");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$COMBOBOX_CoordSystemXYZXYZ_axis");
-
-
-// cmd - based script:
-cmd("$SymmetryParams::tNumY");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$SymmetryParams::tNumY");
-
-// cmd - based script:
-cmd("$SymmetryParams::EnableSymmetry");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$SymmetryParams::EnableSymmetry");
-
-// cmd - based script:
-cmd("ViewGizmo");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("ViewGizmo");
-// cmd - based script:
-cmd("COMBOBOX_SymmetryType");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("COMBOBOX_SymmetryType");
-// cmd - based script:
-cmd("$COMBOBOX_SymmetryTypeXYZ_Mirror");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$COMBOBOX_SymmetryTypeXYZ_Mirror");
-// cmd - based script:
-cmd("$COMBOBOX_SymmetryTypeTranslation");
-// UI - based script, need to define the variable somewhere before: UI ui;
-ui("$COMBOBOX_SymmetryTypeTranslation");
-
 """
+Toggle Mesh/Voxel Same Polycount
+
+This script toggles the current sculpt object between surface (mesh) and voxel modes
+while attempting to maintain approximately the same polycount.
+"""
+import coat
+from _utils.ui_dialog_utils import UIDialogUtils
+import importlib
+
+
+def toggle_mesh_voxel_same_polycount():
+    """Toggle between mesh and voxel modes while preserving polycount"""
+
+    # Get the current object
+    current_object: coat.SceneElement = coat.Scene.current()
+
+    if not current_object:
+        coat.ui.showInfoMessage("No object selected", 3000)
+        return
+
+    if not current_object.isSculptObject():
+        coat.ui.showInfoMessage("Selected object is not a sculpt object", 3000)
+        return
+
+    # Ensure the object is selected
+    current_object.selectOne()
+
+    # Get the volume
+    vol: coat.Volume = current_object.Volume()
+
+    if not vol:
+        coat.ui.showInfoMessage("No volume found on selected object", 3000)
+        return
+
+    # Get current polycount for reference
+    initial_polycount = vol.getPolycount()
+    object_name = current_object.name()
+
+    print(f"Processing object: {object_name}")
+    print(f"Current polycount: {initial_polycount}")
+
+    if vol.isSurface():
+        print("Surface Polycount before: ", vol.getPolycount())
+        # Resmaple before, and after conversion to voxel
+        UIDialogUtils.execute_resample_element_to_polycount(
+            current_object, initial_polycount)
+
+        print("Surface Resampled to polycount: ", vol.getPolycount())
+        vol.toVoxels()
+        print("Converted to Voxels - polycount: ", vol.getPolycount())
+        UIDialogUtils.execute_resample_element_to_polycount(
+            current_object, initial_polycount)
+
+        print("Voxels Resampled to polycount: ", vol.getPolycount())
+
+        new_polycount = vol.getPolycount()
+        print(f"Converted to voxels - new polycount: {new_polycount}")
+        coat.ui.showInfoMessage(
+            f"Converted to Voxels: {new_polycount:,} polys", 3000)
+
+    else:
+        # Currently in voxel mode, convert to surface
+        print("Converting from Voxels to Surface...")
+
+        # Convert to surface mesh
+        vol.toSurface()
+
+        new_polycount = vol.getPolycount()
+        print(f"Converted to surface - new polycount: {new_polycount}")
+        coat.ui.showInfoMessage(
+            f"Converted to Surface: {new_polycount:,} polys", 3000)
+
+
+def main():
+    toggle_mesh_voxel_same_polycount()
+
+
+# 3DCoat executes script content directly, so call main() here
+main()

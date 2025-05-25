@@ -1,4 +1,3 @@
-
 import coat
 import math
 
@@ -13,3 +12,6 @@ coat.Scene.sculptRoot().iterateSubtree(set_ghost)
 
 active_element: coat.SceneElement = coat.Scene.current()
 coat.SceneElement.selectOne(active_element)
+
+# Show summary message to user
+coat.ui.showInfoMessage("All objects unghosted", 3000)

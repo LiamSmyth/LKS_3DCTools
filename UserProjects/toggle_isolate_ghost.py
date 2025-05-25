@@ -1,27 +1,22 @@
+"""
+Toggle Isolate Ghost
 
+Toggle ghost state for all objects except the current one (isolate mode).
+If isolate is already active, unghost all objects.
+"""
 import coat
-import math
+from _utils.scene_iteration_utils import SceneIterationUtils
 
 
-active_element: coat.SceneElement = coat.Scene.current()
+def main():
+    """Toggle isolation mode (ghost all except current)"""
+    print("Toggling isolation mode...")
+    SceneIterationUtils.toggle_ghost_all_except_current()
+    print("Isolation mode toggled")
 
-# if the scene root is ghosted, then we are already isolated
-isolate_is_active = coat.Scene.sculptRoot().ghost()
-
-# Iterate all elements. Enable their ghost if isolate is not active,
-# disable if it is active
-sculpt_root: coat.SceneElement = coat.Scene.sculptRoot()
-
-
-def update_ghost(el: coat.SceneElement):
-    el.setGhost(not isolate_is_active)
+    # Show summary message to user
+    coat.ui.showInfoMessage("Isolation mode toggled", 3000)
 
 
-update_ghost(sculpt_root)
-
-sculpt_root.iterateSubtree(update_ghost)
-
-
-# Ensure the active element is not ghosted
-coat.SceneElement.selectOne(active_element)
-active_element.setGhost(False)
+# 3DCoat executes script content directly, so call main() here
+main()

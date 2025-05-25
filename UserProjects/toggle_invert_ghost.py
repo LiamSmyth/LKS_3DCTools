@@ -1,4 +1,3 @@
-
 import coat
 import math
 
@@ -11,3 +10,6 @@ def invert_ghost(el: coat.SceneElement):
 scene_root: coat.SceneElement = coat.Scene.sculptRoot()
 
 scene_root.iterateSubtree(invert_ghost)
+
+# Show summary message to user
+coat.ui.showInfoMessage("All object ghost states inverted", 3000)

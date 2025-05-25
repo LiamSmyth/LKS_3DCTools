@@ -1,4 +1,3 @@
-
 import coat
 import math
 
@@ -19,3 +18,7 @@ set_ghost(active_element)
 active_element.iterateSubtree(set_ghost)
 
 coat.SceneElement.selectOne(active_element)
+
+# Show summary message to user
+ghost_status = "ghosted" if new_ghost else "unghosted"
+coat.ui.showInfoMessage(f"Object and children {ghost_status}", 3000)

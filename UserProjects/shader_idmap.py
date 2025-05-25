@@ -1,7 +1,6 @@
-
 import coat
 import math
-
+# TODO: assign new id map to each object
 
 active_element: coat.SceneElement = coat.Scene.current()
 
@@ -26,5 +25,7 @@ sculpt_root.iterateSubtree(update_ghost)
 coat.SceneElement.selectOne(active_element)
 active_element.setGhost(False)
 
+coat.ui.cmd("$select_PbrShaders/#0_LKS Matcap/LKS Metal Matcap 01/mcubes")
 
-"$select_PbrShaders/#0_LKS Matcap/LKS Metal Matcap 01/mcubes"
+# Show summary message to user
+coat.ui.showInfoMessage("Shader ID map applied", 3000)

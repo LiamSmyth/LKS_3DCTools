@@ -76,6 +76,10 @@ for inst in instances:
 # Select the sculpt plane
 root.selectOne()
 
+# Show summary message to user
+coat.ui.showInfoMessage(
+    f"Instance tiling complete ({len(instances)} instances created)", 4000)
+
 
 ####################
 # Set symmetry mode to match the instance plane
