@@ -8,6 +8,7 @@ import math
 
 def process_element(el: coat.SceneElement):
     if not el.Volume().isSurface():
+        el.Volume().collapseBollTree()
         el.Volume().toSurface()
 
     return False  # To continue iteration
@@ -21,6 +22,7 @@ def main():
     vol: coat.Volume = el.Volume()
 
     if not vol.isSurface():
+        vol.collapseBollTree()
         vol.toSurface()
 
     el.iterateSubtree(process_element)
