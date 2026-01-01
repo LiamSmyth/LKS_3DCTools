@@ -44,10 +44,14 @@ def split_frozen_area():
 
     # Then separate the hidden geometry into a new object
     coat.ui.cmd("$SeparateHidden")
+    coat.io.step(4)
+    vol.closeHoles(8192)
+
+    coat.io.step(4)
 
     # Find any new children that were created by the split operation
     new_children: list = []
-    current_child_count = current_object.childCount()
+    current_child_count = current_object.parent().childCount()
 
     for i in range(current_child_count):
         print("Current child count:", current_child_count)
@@ -63,7 +67,17 @@ def split_frozen_area():
         if obj.isSculptObject():
             vol: coat.Volume = obj.Volume()
             if vol.isSurface():
+                obj.selectOne()
+                coat.io.step(4)
                 vol.closeHoles(8192)
+                # Prepare ui command to smooth object
+
+                def smooth_command():
+                    coat.ui.setSliderValue(
+                        "$SmoothParams::SmoothingDegree", 1.0)
+                    coat.ui.cmd("$DialogButton#1")
+
+                coat.ui.cmd("$SmoothObject", smooth_command)
                 print(f"Closed holes for {obj.name()}")
 
     coat.ui.showInfoMessage(

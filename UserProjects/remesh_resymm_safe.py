@@ -81,4 +81,3 @@ remesh_resymm_safe(active_element)
 lay_0_indx = coat.Scene.getLayer("Layer 0")
 coat.Scene.setActiveLayer(lay_0_indx)
 coat.Scene.removeEmptyLayers()
-coat.SceneElement.visi
