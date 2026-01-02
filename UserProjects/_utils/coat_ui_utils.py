@@ -79,6 +79,23 @@ def execute_command(command: str) -> None:
     coat.ui.cmd(command)
 
 
+def is_in_room(room: str) -> bool:
+    """
+    Check if currently in the specified room.
+
+    Uses 'contains' check since currentRoom() may return variations
+    like "Sculpt Room" vs "Sculpt".
+
+    Args:
+        room: Room name to check for
+
+    Returns:
+        True if currently in the specified room
+    """
+    current_room: str = coat.ui.currentRoom()
+    return room in current_room
+
+
 def switch_to_room(room: str, wait_frames: int = DEFAULT_WAIT_FRAMES) -> None:
     """
     Switch to specified room and wait for transition.
@@ -87,8 +104,7 @@ def switch_to_room(room: str, wait_frames: int = DEFAULT_WAIT_FRAMES) -> None:
         room: Room name ("Sculpt", "Retopo", "Paint", "Tweak", "UV", "Render")
         wait_frames: Number of frames to wait after switch (default 4)
     """
-    current_room: str = coat.ui.currentRoom()
-    if current_room != room:
+    if not is_in_room(room):
         coat.ui.toRoom(room)
         coat.io.step(wait_frames)
 

@@ -11,6 +11,7 @@ Room: All
 """
 import coat
 from _utils.lks_settings import get_settings, save_settings
+from _utils.coat_ui_utils import show_message
 
 
 class LKSToolsConfig:
@@ -26,20 +27,20 @@ class LKSToolsConfig:
         settings = get_settings()
 
         # ==================== DYNAMIC SUBDIV ====================
-        self.auto_subdivide = settings.auto_subdivide
-        self.details_level = float(settings.details_level)
-        self.remove_stretching = settings.remove_stretching
+        self.auto_subdivide: bool = settings.auto_subdivide
+        self.details_level: float = float(settings.details_level)
+        self.remove_stretching: bool = settings.remove_stretching
 
         # ==================== AUTOPO ====================
-        self.autopo_density = settings.autopo_density
+        self.autopo_density: int = settings.autopo_density
 
         # ==================== DECIMATE ====================
-        self.decimate_percent = 50  # Reduction percentage
+        self.decimate_percent: int = 50  # Reduction percentage
 
         # Track previous brush for sticky settings
-        self._prev_brush = ""
+        self._prev_brush: str = ""
 
-    def ui(self):
+    def ui(self) -> list:
         """
         Define UI layout. Returns list of control definitions.
 
@@ -52,7 +53,7 @@ class LKSToolsConfig:
         - "MethodName" - button that calls self.MethodName()
         - "[2 1]" - column layout (proportions)
         """
-        items = []
+        items: list = []
 
         # ==================== DYNAMIC SUBDIV SECTION ====================
         items.append("#Dynamic Subdivision")
@@ -62,6 +63,37 @@ class LKSToolsConfig:
         items.append("[1 1]")  # Two equal columns
         items.append("ApplyToBrushes")
         items.append("IncrementDetails")
+
+        items.append("---")
+
+        # ==================== OBJECT OPERATIONS SECTION ====================
+        items.append("#Object Operations")
+        items.append("[1 1]")
+        items.append("ScaleDown100x")
+        items.append("ScaleUp100x")
+        items.append("[1 1]")
+        items.append("ToSurfaceAll")
+        items.append("ToVoxelAll")
+
+        items.append("---")
+
+        # ==================== GHOST/VISIBILITY SECTION ====================
+        items.append("#Visibility")
+        items.append("[1 1]")
+        items.append("GhostToggleTree")
+        items.append("UnghostAll")
+        items.append("[1 1]")
+        items.append("GhostIsolate")
+        items.append("GhostInvert")
+
+        items.append("---")
+
+        # ==================== DECIMATE SECTION ====================
+        items.append("#Decimate")
+        items.append("decimate_percent,[10,90]")
+        items.append("[1 1]")
+        items.append("DecimateCurrent")
+        items.append("DecimateTree")
 
         items.append("---")
 
@@ -75,32 +107,22 @@ class LKSToolsConfig:
 
         items.append("---")
 
-        # ==================== DECIMATE SECTION ====================
-        items.append("#Decimate")
-        items.append("decimate_percent,[10,90]")
-        items.append("[1 1]")
-        items.append("DecimateCurrent")
-        items.append("DecimateTree")
-
-        items.append("---")
-
         # ==================== SAVE/CLOSE ====================
         items.append("SaveSettings")
 
         return items
 
-    def process(self):
+    def process(self) -> bool:
         """
         Called each frame while dialog is open.
         Used for polling/updating dynamic values.
         Returns False to keep dialog open.
         """
-        # Could implement sticky brush polling here
         return False
 
-    # ==================== BUTTON HANDLERS ====================
+    # ==================== DYNAMIC SUBDIV HANDLERS ====================
 
-    def ApplyToBrushes(self):
+    def ApplyToBrushes(self) -> None:
         """Apply current dynamic subdiv settings to all brushes."""
         from _utils.brush_settings_utils import BrushSettingsUtils
         BrushSettingsUtils.apply_global_brush_settings(
@@ -108,49 +130,200 @@ class LKSToolsConfig:
             self.details_level,
             self.remove_stretching
         )
-        coat.ui.showInfoMessage("Applied to all brushes", 2000)
+        show_message("Applied to all brushes", 2000)
 
-    def IncrementDetails(self):
+    def IncrementDetails(self) -> None:
         """Increment details level by 1."""
         self.details_level = min(8.0, self.details_level + 1.0)
         self.ApplyToBrushes()
 
-    def RunAutopo(self):
+    # ==================== OBJECT OPERATION HANDLERS ====================
+
+    def ScaleDown100x(self) -> None:
+        """Scale current object down by 100x."""
+        from _utils.object_utils import ObjectUtils
+        el: coat.SceneElement | None = coat.Scene.current()
+        if not el:
+            show_message("No object selected", 2000)
+            return
+        ObjectUtils.scale_selected_element(el, 0.01)
+        show_message("Scaled down 100x", 2000)
+
+    def ScaleUp100x(self) -> None:
+        """Scale current object up by 100x."""
+        from _utils.object_utils import ObjectUtils
+        el: coat.SceneElement | None = coat.Scene.current()
+        if not el:
+            show_message("No object selected", 2000)
+            return
+        ObjectUtils.scale_selected_element(el, 100.0)
+        show_message("Scaled up 100x", 2000)
+
+    def ToSurfaceAll(self) -> None:
+        """Convert all objects to surface mode."""
+        from _utils.scene_api import SceneAPI
+        from _utils.mesh_utils import convert_to_surface
+
+        all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
+        )
+        count: int = 0
+        for el in all_elements:
+            if el.isSculptObject():
+                vol: coat.Volume = el.Volume()
+                if vol.isVoxelized():
+                    convert_to_surface(vol)
+                    count += 1
+        show_message(f"Converted {count} to surface", 2000)
+
+    def ToVoxelAll(self) -> None:
+        """Convert all objects to voxel mode."""
+        from _utils.scene_api import SceneAPI
+
+        all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
+        )
+        count: int = 0
+        for el in all_elements:
+            if el.isSculptObject():
+                vol: coat.Volume = el.Volume()
+                if vol.isSurface():
+                    vol.toVoxels()
+                    count += 1
+        show_message(f"Converted {count} to voxels", 2000)
+
+    # ==================== GHOST/VISIBILITY HANDLERS ====================
+
+    def GhostToggleTree(self) -> None:
+        """Toggle ghost on current subtree."""
+        from _utils.scene_api import SceneAPI
+        from _utils.visibility_utils import set_ghost
+
+        current: coat.SceneElement | None = SceneAPI.get_current_element()
+        if not current:
+            show_message("No object selected", 2000)
+            return
+
+        new_ghost: bool = not current.ghost()
+        elements: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+        count: int = set_ghost(elements, new_ghost)
+        current.selectOne()
+
+        status: str = "ghosted" if new_ghost else "unghosted"
+        show_message(f"{count} objects {status}", 2000)
+
+    def UnghostAll(self) -> None:
+        """Unghost all objects."""
+        from _utils.scene_api import SceneAPI
+        from _utils.visibility_utils import unghost_elements
+
+        all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
+        )
+        count: int = unghost_elements(all_elements)
+        show_message(f"Unghosted {count} objects", 2000)
+
+    def GhostIsolate(self) -> None:
+        """Ghost all except current selection."""
+        from _utils.scene_api import SceneAPI
+        from _utils.visibility_utils import ghost_except
+
+        current: coat.SceneElement | None = SceneAPI.get_current_element()
+        if not current:
+            show_message("No object selected", 2000)
+            return
+
+        all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
+        )
+        selected: list[coat.SceneElement] = SceneAPI.get_selected_elements()
+        count: int = ghost_except(all_elements, selected)
+        show_message(f"Isolated - ghosted {count}", 2000)
+
+    def GhostInvert(self) -> None:
+        """Invert ghost state on all objects."""
+        from _utils.scene_api import SceneAPI
+        from _utils.visibility_utils import invert_ghost_on_elements
+
+        all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
+        )
+        count: int = invert_ghost_on_elements(all_elements)
+        show_message(f"Inverted {count} objects", 2000)
+
+    # ==================== DECIMATE HANDLERS ====================
+
+    def DecimateCurrent(self) -> None:
+        """Decimate current selection by percent."""
+        from _utils.mesh_utils import DecimateParams, execute_decimate, cleanup_after_mesh_operation
+        from _utils.object_utils import ObjectUtils
+
+        result = ObjectUtils.get_current_sculpt_volume()
+        if not result:
+            return
+
+        current_object, vol = result
+        ObjectUtils.ensure_surface_mode(vol)
+
+        execute_decimate(DecimateParams(
+            reduction_percent=float(self.decimate_percent)))
+        cleanup_after_mesh_operation()
+        show_message(f"Decimated {self.decimate_percent}%", 2000)
+
+    def DecimateTree(self) -> None:
+        """Decimate subtree by percent."""
+        from _utils.mesh_utils import DecimateParams, execute_decimate, cleanup_after_mesh_operation, ensure_surface_mode
+        from _utils.scene_api import SceneAPI
+
+        current: coat.SceneElement | None = SceneAPI.get_current_element()
+        if not current:
+            show_message("No object selected", 2000)
+            return
+
+        elements: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+        count: int = 0
+
+        for el in elements:
+            if el.isSculptObject():
+                vol: coat.Volume = el.Volume()
+                ensure_surface_mode(vol)
+                el.selectOne()
+                execute_decimate(DecimateParams(
+                    reduction_percent=float(self.decimate_percent)))
+                count += 1
+
+        current.selectOne()
+        cleanup_after_mesh_operation()
+        show_message(
+            f"Decimated {count} objects by {self.decimate_percent}%", 2000)
+
+    # ==================== AUTOPO HANDLERS ====================
+
+    def RunAutopo(self) -> None:
         """Run autopo with current settings."""
-        from _utils.autopo_utils import run_autopo_with_settings
-        # Update settings before running
-        settings = get_settings()
-        settings.autopo_density = self.autopo_density
-        save_settings()
-        run_autopo_with_settings()
+        from _utils.autopo_utils import AutopoParams, execute_autopo
+        self._save_autopo_settings()
+        params = AutopoParams(target_polycount=self.autopo_density)
+        execute_autopo(params)
 
-    def AutopoToSculpt(self):
+    def AutopoToSculpt(self) -> None:
         """Run autopo and import result to sculpt."""
-        from _utils.autopo_utils import autopo_to_sculpt
-        settings = get_settings()
-        settings.autopo_density = self.autopo_density
-        save_settings()
-        autopo_to_sculpt()
+        from _utils.autopo_utils import autopo_to_sculpt, AutopoParams
+        self._save_autopo_settings()
+        params = AutopoParams(target_polycount=self.autopo_density)
+        autopo_to_sculpt(params)
 
-    def AutopoToMultires(self):
+    def AutopoToMultires(self) -> None:
         """Run autopo and import as multiresolution."""
-        from _utils.autopo_utils import autopo_to_multiresolution
+        from _utils.autopo_utils import autopo_to_multiresolution, AutopoParams
+        self._save_autopo_settings()
+        params = AutopoParams(target_polycount=self.autopo_density)
+        autopo_to_multiresolution(params)
+
+    def _save_autopo_settings(self) -> None:
+        """Helper to save autopo settings."""
         settings = get_settings()
         settings.autopo_density = self.autopo_density
         save_settings()
-        autopo_to_multiresolution()
 
-    def DecimateCurrent(self):
-        """Decimate current selection."""
-        coat.ui.showInfoMessage(
-            f"Decimate {self.decimate_percent}% - TODO", 2000)
+    # ==================== SAVE HANDLER ====================
 
-    def DecimateTree(self):
-        """Decimate selection subtree."""
-        coat.ui.showInfoMessage(
-            f"Decimate Tree {self.decimate_percent}% - TODO", 2000)
-
-    def SaveSettings(self):
+    def SaveSettings(self) -> None:
         """Save current settings to disk."""
         settings = get_settings()
         settings.auto_subdivide = self.auto_subdivide
@@ -158,10 +331,10 @@ class LKSToolsConfig:
         settings.remove_stretching = self.remove_stretching
         settings.autopo_density = self.autopo_density
         save_settings()
-        coat.ui.showInfoMessage("Settings saved", 2000)
+        show_message("Settings saved", 2000)
 
 
-def show_lks_tools_panel():
+def show_lks_tools_panel() -> None:
     """
     Show the LKS Tools configuration panel.
 
@@ -171,12 +344,12 @@ def show_lks_tools_panel():
     config = LKSToolsConfig()
 
     # Load any persisted settings
-    settings_path = "UserPrefs/Addons/LKS/lks_panel_state.json"
+    settings_path: str = "UserPrefs/Addons/LKS/lks_panel_state.json"
     if coat.io.fileExists(settings_path):
         coat.io.fromJsonFile(config, settings_path)
 
     # Show non-modal dialog at top-right
-    result = coat.dialog() \
+    coat.dialog() \
         .caption("LKS Tools") \
         .noModal() \
         .topRight() \

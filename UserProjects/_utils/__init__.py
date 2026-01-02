@@ -93,11 +93,37 @@ from _utils.object_utils import (
     scale_elements,
 )
 
+# Mesh utilities (primary module for mesh operations)
+from _utils.mesh_utils import (
+    # Dataclasses
+    ResampleParams,
+    DecimateParams,
+    VoxelizeParams,
+    # Configurators
+    configure_resample_dialog,
+    configure_decimate_dialog,
+    configure_voxelize_dialog,
+    # Execute functions
+    execute_resample,
+    execute_decimate,
+    execute_voxelize,
+    # Convenience functions
+    resample_to_half,
+    resample_to_target,
+    decimate_by_percent,
+    decimate_to_target,
+    decimate_to_half,
+    decimate_16x,
+    subdivide_once,
+    voxelize_to_polycount,
+    convert_to_surface,
+    convert_to_voxels,
+    ensure_surface_mode,
+    cleanup_after_mesh_operation,
+)
+
 # Scene iteration utilities (legacy, prefer SceneAPI)
 from _utils.scene_iteration_utils import SceneIterationUtils
 
 # Brush settings utilities
 from _utils.brush_settings_utils import BrushSettingsUtils
-
-# UI dialog utilities
-from _utils.ui_dialog_utils import UIDialogUtils

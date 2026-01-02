@@ -161,6 +161,17 @@ class ObjectUtils:
         message: str = f"{operation}: {polycount:,} polys"
         show_message(message, duration_ms)
 
+    @staticmethod
+    def scale_selected_element(element: coat.SceneElement, scale_factor: float) -> None:
+        """
+        Select and scale an element by factor.
+
+        Args:
+            element: The element to scale
+            scale_factor: Factor to multiply current scale by
+        """
+        scale_element_with_select(element, scale_factor)
+
 
 # =============================================================================
 # ELEMENT TRANSFORM OPERATIONS (Pure functions)

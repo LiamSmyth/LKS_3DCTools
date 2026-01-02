@@ -24,6 +24,10 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 
 6. **Only document verified truth.** Instruction files must contain ONLY correct, verified information. Never document things that don't exist. When discovering hallucinated API, research the correct approach via `coat.pyi` and document what DOES work.
 
+7. **No shims or compatibility layers.** When deprecating code, DELETE the deprecated file entirely. Do not create re-export shims or adapter code. Reroute users to the new location.
+
+8. **Maintain todo list continuously.** Throughout the conversation, always keep a todo list updated. Work incrementally—mark tasks in-progress before starting, completed immediately after finishing. One task at a time.
+
 ---
 
 ## 1. Purpose and Scope
@@ -75,12 +79,21 @@ UserProjects/
 
 **Location:** `UserProjects/*.py`
 **Purpose:** Minimal invokers exposed to 3DCoat's script browser
-**Naming:** `<Context>_<Action>_<Variant>.py`
+**Naming:** `<Context>_<Action>_<Config>_<Scope>.py`
+
+**Naming components:**
+- **Context:** What type of object/domain (e.g., `SculptObject`, `Brush`, `Layer`, `Scene`, `Autopo`, `Export`)
+- **Action:** What operation is performed (e.g., `Decimate`, `Scale`, `Ghost`, `ToSurface`)
+- **Config:** Configuration/variant (e.g., `Half`, `100x`, `16x`, `PreserveParts`)
+- **Scope:** What elements are affected (e.g., `Selected`, `Subtree`, `All`)
 
 Examples:
-- `SculptObject_Scale_Half.py`
-- `Brush_IncrementDetailsLevel.py`
-- `Layer_SetOpacity_Zero.py`
+- `SculptObject_Decimate_Half_Selected.py` - Decimate 50% on selected object
+- `SculptObject_Scale_Down100x_Selected.py` - Scale down 100x on selected
+- `SculptObject_Ghost_Toggle_Subtree.py` - Toggle ghost on subtree
+- `SculptObject_ToSurface_All.py` - Convert all to surface mode
+- `Brush_IncrementDetailsLevel.py` - Increment brush detail level
+- `Autopo_ToSculpt.py` - Run autopo and import to sculpt
 
 **Pattern:**
 ```python
@@ -102,9 +115,24 @@ some_function(param1=value1)
 **Purpose:** Reusable logic, 3DCoat API abstraction, shared state
 **Pattern:** Static functions with configuration parameters
 
+**Naming Convention:** `<ObjectType>_<category>_utils.py`
+- **ObjectType:** The 3DCoat type the utils operate on (matches coat.pyi exactly)
+  - `SceneElement` - Scene tree elements
+  - `Volume` - Sculpt volumes/objects  
+  - `Scene` - Global scene operations
+  - Omit if utilities are generic (e.g., `coat_ui_utils.py`)
+- **Category:** What the utilities do (e.g., `mesh`, `visibility`, `autopo`, `transform`)
+
+Examples:
+- `Volume_mesh_utils.py` - Mesh operations on Volumes (decimate, resample, subdivide)
+- `SceneElement_visibility_utils.py` - Ghost/hide operations on SceneElements
+- `Volume_autopo_utils.py` - Autopo workflow for Volumes
+- `coat_ui_utils.py` - Generic UI command wrappers (no object type prefix)
+- `scene_api.py` - Scene context and iteration (legacy naming, acceptable)
+
 ```python
-# _utils/brush_utils.py
-"""Brush configuration utilities."""
+# _utils/Volume_mesh_utils.py
+"""Mesh modification operations for Volumes."""
 
 import coat
 

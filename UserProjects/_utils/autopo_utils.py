@@ -14,6 +14,7 @@ from typing import Callable
 
 from _utils.coat_ui_utils import (
     switch_to_room,
+    ensure_sculpt_room,
     show_message,
     show_error,
     wait_frames,
@@ -114,11 +115,8 @@ def execute_autopo(params: AutopoParams) -> bool:
     Returns:
         True if autopo started successfully, False on error
     """
-    # Validate we're in the right room
-    current_room: str = coat.ui.currentRoom()
-    if current_room != ROOM_SCULPT:
-        show_error("Autopo requires Sculpt room", 3000)
-        return False
+    # Ensure we're in Sculpt room (switch if needed)
+    ensure_sculpt_room()
 
     # Validate we have something selected
     current = coat.Scene.current()

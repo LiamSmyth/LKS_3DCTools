@@ -26,12 +26,15 @@ UserProjects/
 ├── LKS_Tools_Panel.py         # Main tools panel with all functionality
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
 │   ├── __init__.py            # Package exports
-│   ├── scene_api.py           # 🆕 Thin wrappers for coat iterators
+│   ├── scene_api.py           # Thin wrappers for coat iterators
 │   ├── scope_utils.py         # Scope enum and resolution
-│   ├── visibility_utils.py    # 🆕 Pure visibility/ghost functions
+│   ├── visibility_utils.py    # Pure visibility/ghost functions
 │   ├── layer_utils.py         # Layer management
 │   ├── coat_ui_utils.py       # UI command abstractions
 │   ├── object_utils.py        # Object manipulation
+│   ├── mesh_utils.py          # Mesh operations (decimate, resample, etc.)
+│   ├── SceneElement_boolean_utils.py # 🆕 Live boolean operations
+│   ├── Scene_tiling_utils.py  # 🆕 Tiling grid setup
 │   ├── lks_settings.py        # Persistent settings singleton
 │   ├── brush_settings_utils.py # Brush configuration
 │   ├── autopo_utils.py        # Autopo workflow automation
@@ -48,22 +51,41 @@ UserProjects/
 
 ## 🧩 Action Scripts (Root Level)
 
-Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Variant>.py`
+Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 
 ### Brush/Dynamic Subdiv
-- `Brush_IncrementDetailsLevel.py` - Increment dynamic subdiv detail level by 1
-- `Brush_DecrementDetailsLevel.py` - Decrement dynamic subdiv detail level by 1
-- `Brush_ApplyDynamicSubdivSettings.py` - Apply cached subdiv settings to all brushes
+- `Brush_IncrementDetailsLevel.py` - Increment dynamic subdiv detail level
+- `Brush_DecrementDetailsLevel.py` - Decrement dynamic subdiv detail level
+- `Brush_ApplyDynamicSubdivSettings.py` - Apply settings to all brushes
 
 ### Autopo
 - `Autopo_Run.py` - Run autopo with cached settings
-- `Autopo_ToSculpt.py` - Run autopo and import result to sculpt
+- `Autopo_ToSculpt.py` - Run autopo and import to sculpt
 - `Autopo_ToMultires.py` - Run autopo and import as multiresolution
 
-### Object Operations
-- `SculptObject_Scale_Half.py` - Scale selected object to 50%
-- `SculptObject_Scale_Double.py` - Scale selected object to 200%
-- _(add more as created)_
+### SculptObject Operations
+- `SculptObject_Decimate_Half_Selected.py` - Decimate selected 50%
+- `SculptObject_Decimate_Half_Subtree.py` - Decimate subtree 50%
+- `SculptObject_Decimate_16x_Toggle.py` - Toggle 16x decimate proxy
+- `SculptObject_Scale_Down100x_Selected.py` - Scale down 100x
+- `SculptObject_Scale_Up100x_Selected.py` - Scale up 100x
+- `SculptObject_ToSurface_All.py` - Convert all to surface
+- `SculptObject_ToVoxel_All.py` - Convert all to voxels
+- `SculptObject_Ghost_Toggle_Subtree.py` - Toggle ghost on subtree
+- `SculptObject_Ghost_Invert_All.py` - Invert all ghost states
+- `SculptObject_Ghost_Isolate_Selected.py` - Ghost all except selected
+- `SculptObject_Unghost_All.py` - Unghost all objects
+- `SculptObject_Subdivide_Double_Subtree.py` - Subdivide subtree
+- `SculptObject_Resample_Half_Subtree.py` - Resample subtree to half
+- `SculptObject_Remesh_Half_Selected.py` - Remesh selected to half
+- `SculptObject_VoxBool_Intersect.py` - Voxel boolean intersect
+- `SculptObject_VoxBool_Subtract.py` - Voxel boolean subtract
+- `SculptObject_VoxBool_Union.py` - Voxel boolean union
+
+### Scene/Export
+- `Scene_SetupTiling_BoxGrid.py` - Setup box grid tiling
+- `Scene_SetupTiling_PlaneGrid.py` - Setup plane grid tiling
+- `Export_ScaleSave_Meshes.py` - Scale and save meshes
 
 ## 🛠️ Utility Modules (`_utils/`)
 
@@ -173,30 +195,80 @@ Persistent settings cache with singleton pattern.
 - `get_settings()` - Get singleton settings instance
 - `save_settings()` - Persist to JSON file
 
-### `ui_dialog_utils.py` 🔄
-Dialog operations with dataclass/configurator pattern.
+### `mesh_utils.py` 🆕
+**Primary module for mesh modification operations (resample, decimate, voxelize, subdivide).**
+Uses dataclass + configurator pattern.
 
 **Dataclasses:**
-- `ResampleParams(target_polycount, scale)` - Resample dialog parameters
-- `DecimateParams(target_polycount?, reduction_percent?)` - Decimate dialog parameters
-- `VoxelizeParams(suggested_polycount)` - Voxelize dialog parameters
+- `ResampleParams(target_polycount, scale)` - Resample parameters
+- `DecimateParams(target_polycount?, reduction_percent?)` - Decimate parameters
+- `VoxelizeParams(suggested_polycount)` - Voxelize parameters
 
 **Configurators:**
-- `configure_resample_dialog(params)` → `Callable` - Returns closure for resample
-- `configure_decimate_dialog(params)` → `Callable` - Returns closure for decimate
-- `configure_voxelize_dialog(params)` → `Callable` - Returns closure for voxelize
+- `configure_resample_dialog(params)` → `Callable`
+- `configure_decimate_dialog(params)` → `Callable`
+- `configure_voxelize_dialog(params)` → `Callable`
 
 **Execute Functions:**
 - `execute_resample(params)` - Run resample with params
 - `execute_decimate(params)` - Run decimate with params
 - `execute_voxelize(params)` - Run voxelize with params
 
-**Convenience:**
+**Convenience Functions:**
 - `resample_to_half(current_polycount)`
 - `resample_to_target(initial, target)`
 - `decimate_by_percent(percent)`
 - `decimate_to_target(polycount)`
 - `decimate_to_half()`
+- `decimate_16x()` - Quick 1/16 proxy
+- `subdivide_once()` - Double polycount
+
+**Conversion Functions:**
+- `convert_to_surface(volume)` - Voxels → surface
+- `convert_to_voxels(volume, polycount?)` - Surface → voxels
+- `ensure_surface_mode(volume)` - Ensure surface mode
+- `voxelize_to_polycount(target)`
+
+**Cleanup:**
+- `cleanup_after_mesh_operation()` - Remove empty layers, reset active layer
+
+### `SceneElement_boolean_utils.py` 🆕
+**Live boolean operations on SceneElements (voxel mode required).**
+
+**Enum:**
+- `BooleanMode` - NONE=0, SUBTRACT=1, INTERSECT=2, UNION=3
+
+**Core Function:**
+- `create_boolean_child(parent, mode, name?, apply_extrusion?, extrusion_amount?)` → `coat.SceneElement`
+
+**Convenience Functions:**
+- `create_subtract_child(parent)` → `coat.SceneElement`
+- `create_intersect_child(parent)` → `coat.SceneElement`
+- `create_union_child(parent)` → `coat.SceneElement`
+
+### `Scene_tiling_utils.py` 🆕
+**Tiling grid setup with instances and translational symmetry.**
+
+**Enum:**
+- `PrimitiveType` - PLANE, BOX
+
+**Dataclass:**
+- `TilingParams(base_size, thickness, border_ratio, primitive_type)`
+
+**Instance Functions:**
+- `duplicate_as_instance(source, location)` → `coat.SceneElement`
+- `create_grid_instance_locations(base_size)` → `list[vec3]`
+
+**Symmetry Functions:**
+- `disable_symmetry()` - Disable symmetry mode
+- `setup_translation_symmetry(step_x, step_z)` - Configure translation symmetry
+
+**Primitive Functions:**
+- `create_plane_mesh(size, divisions)` → `Mesh`
+- `create_box_mesh(size, thickness)` → `Mesh`
+
+**Main Function:**
+- `setup_tiling_grid(params)` → `coat.SceneElement` - Full tiling setup
 
 ### `brush_settings_utils.py` 🔄
 Brush configuration with dataclass pattern.
@@ -240,11 +312,12 @@ Autopo workflow with dataclass/configurator pattern.
 
 ### `LKS_Tools_Panel.py`
 Main comprehensive tools panel containing:
-- Decimate section (reduction slider, actions)
-- Object operations section (scale, etc.)
-- Layer utilities section
-- Dynamic Subdiv section (auto_subdivide, details_level, remove_stretching)
-- Autopo section (density, options, run/import actions)
+- **Dynamic Subdiv section:** auto_subdivide, details_level, remove_stretching
+- **Object Operations section:** scale 100x up/down, convert to surface/voxel
+- **Visibility section:** ghost toggle, unghost all, isolate, invert ghost
+- **Decimate section:** reduction percent slider, decimate current/tree
+- **Autopo section:** density, run autopo, import to sculpt/multires
+- **Settings:** save/load persistent settings
 
 ## 📄 Documentation
 
