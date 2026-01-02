@@ -1,0 +1,404 @@
+---
+applyTo: '**'
+---
+
+# 3DCoat Python Scripting Guidelines
+
+This document describes the conventions, constraints, and patterns specific to Python scripting within the 3DCoat addon environment. Use in conjunction with `copilot_style_guide.instructions.md` (general patterns) and `copilot_3dcoat_api.instructions.md` (API reference).
+
+---
+
+## ⚠️ Critical Constraints
+
+### 1. Self-Contained Environment (MANDATORY)
+- **No external dependencies.** This workspace cannot use pip, cannot install packages, and cannot reference external repos.
+- All code must be self-contained within this workspace.
+- All utilities must live in `_utils/` within the workspace.
+
+### 2. 3DCoat's Embedded Python
+- 3DCoat embeds its own Python interpreter.
+- The `coat` module is provided by 3DCoat at runtime.
+
+### 3. Folder Visibility to 3DCoat
+- **Root `UserProjects/` folder** is exposed directly to 3DCoat's script browser.
+- Any `.py` file in root becomes a runnable script in 3DCoat.
+- Subfolders starting with `_` (e.g., `_utils/`, `_archive/`) are hidden from 3DCoat's UI but still importable.
+- Subfolders without `_` prefix appear as script categories in 3DCoat.
+
+---
+
+## 🏗️ Architecture Overview
+
+### Folder Structure
+```
+UserProjects/
+├── <ActionScript>.py          # Exposed to 3DCoat - minimal action invokers
+├── _utils/                    # Hidden from 3DCoat - shared utilities
+│   ├── __init__.py
+│   ├── coat_ui_utils.py       # 3DCoat UI abstraction layer
+│   ├── coat_scene_utils.py    # Scene/object manipulation
+│   ├── lks_settings.py        # Persistent settings cache
+│   ├── brush_settings_utils.py # Brush configuration
+│   ├── autopo_utils.py        # Autopo workflow automation
+│   └── ...
+├── _archive/                  # Old/deprecated scripts
+├── _example_code/             # Reference implementations
+└── <Category>/                # Visible subfolders become categories
+    └── <Script>.py
+```
+
+### Script Types
+
+#### 1. Action Scripts (Root Level)
+- **Location:** `UserProjects/*.py`
+- **Purpose:** Minimal invokers that configure and call utility functions
+- **Naming:** `<Context>_<Action>_<Variant>.py`
+  - Context: Object type or room (e.g., `SculptObject`, `Brush`, `Layer`)
+  - Action: What it does (e.g., `Scale`, `SetOpacity`, `Decimate`)
+  - Variant: Specific configuration (e.g., `Half`, `Double`, `Zero`)
+- **Examples:**
+  - `SculptObject_Scale_Half.py`
+  - `Brush_IncrementDetailsLevel.py`
+  - `Layer_SetOpacity_Zero.py`
+  - `Autopo_ToSculpt.py`
+- **Pattern:**
+  ```python
+  """
+  Brief description of what this script does.
+  
+  Room: Sculpt/Retopo/Paint
+  Action: One-line description
+  """
+  from _utils.some_utils import some_function
+  import coat
+  
+  # Minimal logic - just configure and invoke
+  some_function(param1=value1, param2=value2)
+  ```
+
+#### 2. Utility Modules (`_utils/`)
+- **Location:** `UserProjects/_utils/*.py`
+- **Purpose:** Reusable logic, 3DCoat API abstraction, shared state
+- **Pattern:** Static functions that take configuration parameters
+- **Goal:** Abstract away 3DCoat's "magic strings" and UI quirks
+
+#### 3. Panel Scripts
+- **Location:** Can be root or subfolder
+- **Purpose:** Complex UI panels with multiple controls
+- **Pattern:** Class inheriting from `coat.scripted_panel`
+
+---
+
+## 🎮 3DCoat API Patterns
+
+### The `coat` Module
+3DCoat exposes a `coat` module with these key namespaces:
+
+```python
+import coat
+
+# UI operations
+coat.ui.cmd("$CommandName")              # Execute UI command
+coat.ui.cmd("$Command", callback)        # Execute with callback for dialogs
+coat.ui.setBoolValue("$Setting", True)   # Set boolean UI value
+coat.ui.setIntValue("$Setting", 42)      # Set integer UI value
+coat.ui.setEditBoxValue("$Field", "text") # Set text field
+coat.ui.toRoom("Sculpt")                 # Switch rooms
+coat.ui.currentRoom()                    # Get current room name
+coat.ui.showInfoMessage("msg", 2000)     # Toast message (ms duration)
+
+# Scene operations
+coat.Scene.current()                     # Current scene
+coat.Scene.sculptRoot()                  # Root of sculpt tree
+coat.Scene.current().Volume()            # Current volume/object
+
+# Settings persistence
+coat.settings.getBool("SettingName")
+coat.settings.setBool("SettingName", True)
+coat.settings.getString("SettingName")
+coat.settings.setString("SettingName", "value")
+
+# File I/O
+coat.io.toJson(obj, "path.json")         # Save object to JSON
+coat.io.fromJsonFile(obj, "path.json")   # Load object from JSON
+coat.io.fileExists("path")               # Check file exists
+coat.io.step(n)                          # Wait n frames (UI refresh)
+
+# Dialogs
+coat.dialog().ok().cancel().text("msg").caption("title").params(obj).show()
+```
+
+### Magic Strings
+3DCoat uses internal string identifiers for UI elements. These are fragile and undocumented.
+
+**Common patterns:**
+- `$CommandName` - UI commands/buttons
+- `$Setting::SubSetting` - Nested settings
+- `$DialogButton#1` - Dialog OK button
+- `$DialogButton#2` - Dialog Cancel button
+- `$BrushConstructor::Setting[BrushType]` - Per-brush-type settings
+
+**Abstraction strategy:**
+Create wrapper functions in `_utils/coat_ui_utils.py` that hide magic strings:
+
+```python
+# BAD - magic string in action script
+coat.ui.cmd("$DecimateToRetopo", lambda: coat.ui.cmd("$DialogButton#1"))
+
+# GOOD - abstracted in utility
+def decimate_to_retopo_with_confirm():
+    """Decimate current object to retopo with auto-confirm."""
+    coat.ui.cmd("$DecimateToRetopo", lambda: coat.ui.cmd("$DialogButton#1"))
+```
+
+### Dialog Auto-Confirm Pattern
+Many 3DCoat commands open dialogs. Use callbacks to auto-confirm:
+
+```python
+coat.ui.cmd("$SomeCommand", lambda: coat.ui.cmd("$DialogButton#1"))
+```
+
+### Room Switching
+Always verify room before room-specific operations:
+
+```python
+def ensure_sculpt_room():
+    if coat.ui.currentRoom() != "Sculpt":
+        coat.ui.toRoom("Sculpt")
+        coat.io.step(2)  # Wait for room transition
+```
+
+### Timing and Synchronization
+3DCoat operations are often asynchronous. Use `coat.io.step(n)` to wait:
+
+```python
+coat.ui.cmd("$SomeOperation")
+coat.io.step(4)  # Wait 4 frames for operation to complete
+# Now safe to proceed
+```
+
+---
+
+## 📦 Settings Persistence
+
+### LKS Settings System
+Use a centralized settings cache for persistent configuration:
+
+```python
+# _utils/lks_settings.py
+SETTINGS_FILE = "UserPrefs/Addons/LKS/lks_settings.json"
+
+DEFAULTS = {
+    "details_level": 1,
+    "auto_subdivide": True,
+    "remove_stretching": True,
+    "autopo_density": 10000,
+    # ... etc
+}
+
+class LKSSettings:
+    """Cached settings with attribute access."""
+    _instance = None
+    
+    def __init__(self):
+        self._data = dict(DEFAULTS)
+        self._load()
+    
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            return super().__getattribute__(name)
+        return self._data.get(name, DEFAULTS.get(name))
+    
+    def __setattr__(self, name, value):
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+
+def get_settings() -> LKSSettings:
+    """Get or create the singleton settings instance."""
+    if LKSSettings._instance is None:
+        LKSSettings._instance = LKSSettings()
+    return LKSSettings._instance
+
+def save_settings():
+    """Persist current settings to disk."""
+    settings = get_settings()
+    coat.io.toJson(settings._data, SETTINGS_FILE)
+```
+
+---
+
+## 🖼️ Panel Development
+
+### Scripted Panel Pattern
+```python
+import coat
+
+class MyPanel(coat.scripted_panel):
+    caption = "My Panel"         # Panel title
+    docking = "right"            # left, right, floating
+    min_width = 250
+    min_height = 400
+    
+    def __init__(self):
+        # Initialize properties that become UI controls
+        self.some_checkbox = True
+        self.some_slider = 50
+        self.some_text = "default"
+    
+    def ui(self):
+        """Define UI layout. Returns list of control definitions."""
+        return [
+            "#Section Header",           # Section header
+            "some_checkbox",             # Checkbox (bool property)
+            "some_slider,[0,100]",       # Slider with range
+            "some_text",                 # Text field
+            "---",                       # Separator
+            "MyAction",                  # Button (calls self.MyAction())
+        ]
+    
+    def MyAction(self):
+        """Called when MyAction button clicked."""
+        # Sync UI state to cache if needed
+        self._sync_to_cache()
+        # Do the action
+        from _utils import some_utils
+        some_utils.do_something(self.some_checkbox, self.some_slider)
+
+# Instantiate the panel
+MyPanel()
+```
+
+### UI Layout Syntax
+- `"property_name"` - Auto-creates control based on property type
+- `"property,[min,max]"` - Slider with range
+- `"property,[#opt1|#opt2|#opt3]"` - Dropdown
+- `"#Header Text"` - Section header
+- `"---"` - Horizontal separator
+- `"MethodName"` - Button that calls `self.MethodName()`
+- `"[2 1]"` - Column layout (2 units, 1 unit)
+
+---
+
+## 🔄 Module Reloading
+
+During development, use `importlib.reload()` to pick up changes without restarting 3DCoat:
+
+```python
+import importlib
+from _utils import some_module
+importlib.reload(some_module)
+from _utils.some_module import some_function
+
+some_function()
+```
+
+**Note:** This is a development convenience. Production scripts may omit reloading.
+
+---
+
+## 🎯 Best Practices
+
+### 1. Minimize Action Script Logic
+Action scripts should be thin wrappers:
+```python
+# GOOD
+from _utils.brush_utils import increment_details_level
+increment_details_level()
+
+# BAD - too much logic in action script
+settings = get_settings()
+current = settings.details_level
+new_value = current + 1
+# ... etc
+```
+
+### 2. Abstract Magic Strings
+Never use magic strings directly in action scripts:
+```python
+# GOOD
+from _utils.coat_ui_utils import confirm_dialog
+confirm_dialog()
+
+# BAD
+coat.ui.cmd("$DialogButton#1")
+```
+
+### 3. Use Constants for Repeated Strings
+```python
+# In utility module
+CMD_DECIMATE_TO_RETOPO = "$DecimateToRetopo"
+CMD_DIALOG_OK = "$DialogButton#1"
+SETTING_AUTO_SUBDIVIDE = "$BrushConstructor::AutoSubdivide"
+```
+
+### 4. Document Room Requirements
+Always note which room a script requires:
+```python
+"""
+Scale object to half size.
+
+Room: Sculpt
+Requires: Active sculpt object selected
+"""
+```
+
+### 5. Handle Timing Carefully
+3DCoat operations need frame delays:
+```python
+coat.ui.toRoom("Retopo")
+coat.io.step(4)  # REQUIRED - wait for room switch
+coat.ui.cmd("$SomeRetopoCommand")
+```
+
+---
+
+## ⚡ Quick Reference
+
+### Common Brush Types
+```python
+BRUSH_TYPES = [
+    "carve", "flatten", "clay", "build", "draw", "smooth",
+    "pinch", "inflate", "layer", "shift", "scrape", "fill",
+    # ... many more
+]
+```
+
+### Common Rooms
+```python
+ROOMS = ["Sculpt", "Retopo", "Paint", "Tweak", "UV", "Render"]
+```
+
+### Common Settings Paths
+```python
+# Per-brush-type setting
+f"$BrushConstructor::AutoSubdivide[{brush_type}]"
+f"$BrushConstructor::DetailsLevel[{brush_type}]"
+f"$BrushConstructor::RemoveStretching[{brush_type}]"
+
+# Global settings
+"$RemoveStretching"  # Global remove stretching toggle
+```
+
+---
+
+## 🚫 What NOT to Do
+
+1. **Don't use pip or external packages** - Not available in 3DCoat Python
+2. **Don't create .venv** - 3DCoat has its own interpreter
+3. **Don't put complex logic in root scripts** - Keep them as thin invokers
+4. **Don't hardcode magic strings in action scripts** - Abstract to utilities
+5. **Don't assume synchronous execution** - Use `coat.io.step()` for timing
+6. **Don't forget to reload modules during dev** - Use `importlib.reload()`
+
+---
+
+## 📝 Keeping This Document Updated
+
+Update this document when you discover:
+- New magic strings or command patterns
+- New 3DCoat API methods
+- Timing/synchronization quirks
+- Panel UI syntax patterns
+- Common error patterns and solutions
