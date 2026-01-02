@@ -1,130 +1,284 @@
 """
 Autopo Utilities - Workflow automation for autopo operations.
 
-Provides functions to run autopo with cached settings and import
-results back to sculpt room in various configurations.
+Provides dataclasses and functions to run autopo with typed parameters
+and import results back to sculpt room in various configurations.
+
+Pattern:
+    params = AutopoParams(target_polycount=10000, bypass_density_modal=True)
+    execute_autopo(params)
 """
 import coat
-from _utils.lks_settings import get_settings
+from dataclasses import dataclass
+from typing import Callable
+
 from _utils.coat_ui_utils import (
     switch_to_room,
-    command_with_confirm,
     show_message,
+    show_error,
     wait_frames,
     ROOM_SCULPT,
     ROOM_RETOPO,
+    CMD_DIALOG_OK,
 )
 
 # =============================================================================
-# AUTOPO COMMANDS
+# AUTOPO MAGIC UI STRINGS (NOT in coat.pyi - discovered experimentally)
 # =============================================================================
 
-CMD_AUTOPO = "$AutoRetopo"
-CMD_IMPORT_MULTIRES = "$RetopoBuildMR"
-CMD_RETOPO_TO_SCULPT = "$RetopoToSculpt"
+# Command to execute autopo
+CMD_AUTOPO: str = "$AutoRetopo"
 
-# Autopo setting paths (discovered through experimentation)
-SETTING_AUTOPO_DENSITY = "$AutoRetopo::TargetPolycount"
-SETTING_AUTOPO_OPTIMIZE = "$AutoRetopo::OptimizeMesh"
-SETTING_AUTOPO_KEEP_CREASES = "$AutoRetopo::KeepCreases"
-SETTING_AUTOPO_ADD_TO_SCENE = "$AutoRetopo::AddToScene"
+# Import commands
+CMD_RETOPO_TO_SCULPT: str = "$RetopoToSculpt"
+CMD_IMPORT_MULTIRES: str = "$AddLowestLevelFromRetopo"
+CMD_CLEAR_RETOPO: str = "$ClearTM"
+
+# Autopo parameter settings (QuadragulationTask namespace)
+SETTING_REQUIRED_POLYCOUNT: str = "$QuadragulationTask::RequiredPolycount"
+SETTING_CAPTURE_DETAILS: str = "$QuadragulationTask::CaptureDetails"
+SETTING_HARDSURFACE: str = "$QuadragulationTask::HardsurfaceRetopology"
+SETTING_AUTO_DENSITY: str = "$QuadragulationTask::AutoDensityInfluence"
+SETTING_VOXELIZE: str = "$QuadragulationTask::Voxelize"
+SETTING_DECIMATION_LIMIT: str = "$QuadragulationTask::DecimationLimit1"
+SETTING_TANGENT_SMOOTH: str = "$QuadragulationTask::TangentSmoothRes"
+SETTING_BYPASS_DENSITY_MODAL: str = "$QuadragulationTask::BypassDensityAndStrokes"
+
+# =============================================================================
+# DEFAULTS
+# =============================================================================
+
+DEFAULT_TARGET_POLYCOUNT: int = 10000
+DEFAULT_CAPTURE_DETAILS: float = 100.0
+DEFAULT_AUTO_DENSITY: float = 0.5
+DEFAULT_DECIMATION_LIMIT: int = 1000
+DEFAULT_HARDSURFACE: bool = False
+DEFAULT_VOXELIZE: bool = False
+DEFAULT_TANGENT_SMOOTH: bool = True
+DEFAULT_BYPASS_DENSITY_MODAL: bool = True
+
+# Timing defaults
+AUTOPO_WAIT_FRAMES: int = 8
+IMPORT_WAIT_FRAMES: int = 4
 
 
 # =============================================================================
-# AUTOPO FUNCTIONS
+# AUTOPO DATACLASS & CONFIGURATOR
 # =============================================================================
 
-def run_autopo_with_settings() -> None:
+@dataclass
+class AutopoParams:
     """
-    Run autopo using cached LKS settings.
+    Parameters for autopo (automatic retopology) operation.
 
-    Reads autopo_density, autopo_optimize_mesh, autopo_keep_creases,
-    and autopo_add_to_scene from the settings cache.
+    Users don't need to know magic strings - just set these typed fields.
     """
-    settings = get_settings()
-
-    # Set autopo parameters from cache
-    # Note: setEditBoxValue works for int/float/str values
-    coat.ui.setEditBoxValue(SETTING_AUTOPO_DENSITY, settings.autopo_density)
-    coat.ui.setBoolValue(SETTING_AUTOPO_OPTIMIZE,
-                         settings.autopo_optimize_mesh)
-    coat.ui.setBoolValue(SETTING_AUTOPO_KEEP_CREASES,
-                         settings.autopo_keep_creases)
-    coat.ui.setBoolValue(SETTING_AUTOPO_ADD_TO_SCENE,
-                         settings.autopo_add_to_scene)
-
-    # Run autopo with auto-confirm
-    command_with_confirm(CMD_AUTOPO)
-
-    show_message(
-        f"Autopo started (target: {settings.autopo_density} polys)", 2000)
+    target_polycount: int = DEFAULT_TARGET_POLYCOUNT
+    capture_details: float = DEFAULT_CAPTURE_DETAILS
+    auto_density: float = DEFAULT_AUTO_DENSITY
+    decimation_limit: int = DEFAULT_DECIMATION_LIMIT
+    hardsurface: bool = DEFAULT_HARDSURFACE
+    voxelize: bool = DEFAULT_VOXELIZE
+    tangent_smooth: bool = DEFAULT_TANGENT_SMOOTH
+    bypass_density_modal: bool = DEFAULT_BYPASS_DENSITY_MODAL
 
 
-def autopo_to_sculpt() -> None:
+def configure_autopo(params: AutopoParams) -> None:
     """
-    Run autopo, import result to sculpt, and hide original.
+    Configure autopo settings before execution.
 
-    Workflow:
-    1. Cache original object info
-    2. Run autopo with settings
-    3. Switch to retopo, then sculpt
-    4. Import retopo to sculpt
-    5. Ghost (hide) original object
+    This sets all the UI values without executing the command.
+
+    Args:
+        params: AutopoParams with all settings
     """
-    # Cache original object info
-    try:
-        original = coat.Scene.current().Volume()
-        original_element = original.inScene()
-        original_name = original_element.name()
-    except Exception:
-        show_message("Error: No valid sculpt object selected", 3000)
-        return
-
-    # Run autopo
-    run_autopo_with_settings()
-    wait_frames(4)
-
-    # Switch to retopo, then back to sculpt
-    switch_to_room(ROOM_RETOPO, 4)
-    switch_to_room(ROOM_SCULPT, 4)
-
-    # Import retopo to sculpt
-    command_with_confirm(CMD_RETOPO_TO_SCULPT)
-    wait_frames(4)
-
-    # Hide original (ghost it)
-    try:
-        original_element.ghost(True)
-        show_message(f"Imported retopo, hid '{original_name}'", 3000)
-    except Exception:
-        show_message("Imported retopo (could not hide original)", 3000)
+    coat.ui.setEditBoxValue(SETTING_REQUIRED_POLYCOUNT,
+                            params.target_polycount)
+    coat.ui.setSliderValue(SETTING_CAPTURE_DETAILS, params.capture_details)
+    coat.ui.setSliderValue(SETTING_AUTO_DENSITY, params.auto_density)
+    coat.ui.setEditBoxValue(SETTING_DECIMATION_LIMIT, params.decimation_limit)
+    coat.ui.setBoolValue(SETTING_HARDSURFACE, params.hardsurface)
+    coat.ui.setBoolValue(SETTING_VOXELIZE, params.voxelize)
+    coat.ui.setBoolValue(SETTING_TANGENT_SMOOTH, params.tangent_smooth)
+    coat.ui.setBoolValue(SETTING_BYPASS_DENSITY_MODAL,
+                         params.bypass_density_modal)
 
 
-def autopo_to_multiresolution() -> None:
+def execute_autopo(params: AutopoParams) -> bool:
     """
-    Run autopo and import as multiresolution lowest level.
+    Execute autopo with given parameters.
 
-    Workflow:
-    1. Run autopo with settings
-    2. Ensure we're in Sculpt room
-    3. Import as multiresolution
+    Args:
+        params: AutopoParams dataclass with all settings
+
+    Returns:
+        True if autopo started successfully, False on error
     """
-    # Run autopo
-    run_autopo_with_settings()
-    wait_frames(4)
+    # Validate we're in the right room
+    current_room: str = coat.ui.currentRoom()
+    if current_room != ROOM_SCULPT:
+        show_error("Autopo requires Sculpt room", 3000)
+        return False
 
-    # Must be in Sculpt room for multires import
-    switch_to_room(ROOM_SCULPT, 4)
+    # Validate we have something selected
+    current = coat.Scene.current()
+    if not current:
+        show_error("No object selected for autopo", 3000)
+        return False
 
-    # Import as multiresolution
-    command_with_confirm(CMD_IMPORT_MULTIRES)
-    wait_frames(4)
+    # Configure all parameters
+    configure_autopo(params)
 
-    show_message("Imported as multiresolution", 3000)
+    # Execute autopo
+    result: bool = coat.ui.cmd(CMD_AUTOPO)
+
+    if result:
+        show_message(
+            f"Autopo started (target: {params.target_polycount:,} polys)", 2000)
+    else:
+        show_error("Failed to start autopo", 3000)
+
+    return result
+
+
+# =============================================================================
+# IMPORT CONFIGURATORS
+# =============================================================================
+
+def configure_import_dialog() -> Callable[[], None]:
+    """Create a callback to confirm import dialog."""
+    def configurator() -> None:
+        coat.ui.cmd(CMD_DIALOG_OK)
+    return configurator
+
+
+def import_retopo_to_sculpt() -> bool:
+    """
+    Import retopo mesh to sculpt room.
+
+    Returns:
+        True if successful
+    """
+    switch_to_room(ROOM_SCULPT, IMPORT_WAIT_FRAMES)
+    result: bool = coat.ui.cmd(CMD_RETOPO_TO_SCULPT, configure_import_dialog())
+    wait_frames(IMPORT_WAIT_FRAMES)
+    return result
+
+
+def import_as_multiresolution() -> bool:
+    """
+    Import retopo mesh as multiresolution lowest level.
+
+    Returns:
+        True if successful
+    """
+    switch_to_room(ROOM_SCULPT, IMPORT_WAIT_FRAMES)
+    result: bool = coat.ui.cmd(CMD_IMPORT_MULTIRES, configure_import_dialog())
+    wait_frames(IMPORT_WAIT_FRAMES)
+    return result
 
 
 def clear_retopo_mesh() -> None:
     """Clear all retopo mesh data."""
-    switch_to_room(ROOM_RETOPO, 4)
-    coat.ui.cmd("$ClearTM")
+    switch_to_room(ROOM_RETOPO, IMPORT_WAIT_FRAMES)
+    coat.ui.cmd(CMD_CLEAR_RETOPO)
     show_message("Retopo mesh cleared", 2000)
+
+
+# =============================================================================
+# HIGH-LEVEL WORKFLOW FUNCTIONS
+# =============================================================================
+
+def autopo_to_sculpt(params: AutopoParams | None = None) -> bool:
+    """
+    Run autopo, import result to sculpt, and ghost original.
+
+    Args:
+        params: AutopoParams (uses defaults if None)
+
+    Returns:
+        True if successful, False on error
+    """
+    if params is None:
+        params = AutopoParams()
+
+    # Cache original object info
+    current = coat.Scene.current()
+    if not current:
+        show_error("No object selected", 3000)
+        return False
+
+    original_element: coat.SceneElement = current
+    original_name: str = original_element.name()
+
+    # Run autopo
+    if not execute_autopo(params):
+        return False
+
+    # Wait for autopo to complete
+    wait_frames(AUTOPO_WAIT_FRAMES)
+
+    # Switch to retopo to access the result, then back to sculpt
+    switch_to_room(ROOM_RETOPO, IMPORT_WAIT_FRAMES)
+
+    # Import to sculpt
+    if not import_retopo_to_sculpt():
+        show_error("Failed to import retopo to sculpt", 3000)
+        return False
+
+    # Ghost the original object
+    try:
+        original_element.setGhost(True)
+        show_message(f"Imported retopo, ghosted '{original_name}'", 3000)
+    except Exception:
+        show_message("Imported retopo (could not ghost original)", 3000)
+
+    return True
+
+
+def autopo_to_multiresolution(params: AutopoParams | None = None) -> bool:
+    """
+    Run autopo and import as multiresolution lowest level.
+
+    Args:
+        params: AutopoParams (uses defaults if None)
+
+    Returns:
+        True if successful, False on error
+    """
+    if params is None:
+        params = AutopoParams()
+
+    # Run autopo
+    if not execute_autopo(params):
+        return False
+
+    wait_frames(AUTOPO_WAIT_FRAMES)
+
+    # Import as multiresolution
+    if not import_as_multiresolution():
+        show_error("Failed to import as multiresolution", 3000)
+        return False
+
+    show_message("Imported as multiresolution", 3000)
+    return True
+
+
+# =============================================================================
+# LEGACY FUNCTION (for backward compatibility with lks_settings)
+# =============================================================================
+
+def run_autopo_with_settings() -> bool:
+    """
+    Run autopo using cached LKS settings.
+
+    Legacy function - prefer using execute_autopo(AutopoParams(...)) directly.
+    """
+    from _utils.lks_settings import get_settings
+    settings = get_settings()
+
+    params = AutopoParams(
+        target_polycount=settings.autopo_density,
+        bypass_density_modal=DEFAULT_BYPASS_DENSITY_MODAL
+    )
+    return execute_autopo(params)

@@ -31,10 +31,10 @@ CMD_APPLY_SMOOTH: str = "$ApplyTSm"
 CMD_EXPORT_OBJECT: str = "$EXPORTOBJECT"
 CMD_BLENDER_EXPORT: str = "$Blender"
 
-# Autopo commands
+# Autopo commands (see autopo_utils.py for full autopo magic strings)
 CMD_AUTOPO: str = "$AutoRetopo"
-CMD_AUTOPO_IMPORT_MULTIRES: str = "$RetopoBuildMR"
 CMD_RETOPO_TO_SCULPT: str = "$RetopoToSculpt"
+CMD_IMPORT_MULTIRES: str = "$AddLowestLevelFromRetopo"
 
 # Baking commands
 CMD_BAKE_NORMAL_FLAT_DISP: str = "$MergeForDPNM_flatdisp"

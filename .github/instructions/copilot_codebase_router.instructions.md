@@ -173,15 +173,64 @@ Persistent settings cache with singleton pattern.
 - `get_settings()` - Get singleton settings instance
 - `save_settings()` - Persist to JSON file
 
-### `brush_settings_utils.py`
-Brush configuration for all brush types.
-- `BrushSettingsUtils.apply_global_brush_settings(auto_sub, detail, stretch)`
+### `ui_dialog_utils.py` 🔄
+Dialog operations with dataclass/configurator pattern.
 
-### `autopo_utils.py`
-Autopo workflow automation.
-- `run_autopo_with_settings()` - Run autopo using cached settings
-- `autopo_to_sculpt()` - Autopo + import to sculpt
-- `autopo_to_multiresolution()` - Autopo + import as multires
+**Dataclasses:**
+- `ResampleParams(target_polycount, scale)` - Resample dialog parameters
+- `DecimateParams(target_polycount?, reduction_percent?)` - Decimate dialog parameters
+- `VoxelizeParams(suggested_polycount)` - Voxelize dialog parameters
+
+**Configurators:**
+- `configure_resample_dialog(params)` → `Callable` - Returns closure for resample
+- `configure_decimate_dialog(params)` → `Callable` - Returns closure for decimate
+- `configure_voxelize_dialog(params)` → `Callable` - Returns closure for voxelize
+
+**Execute Functions:**
+- `execute_resample(params)` - Run resample with params
+- `execute_decimate(params)` - Run decimate with params
+- `execute_voxelize(params)` - Run voxelize with params
+
+**Convenience:**
+- `resample_to_half(current_polycount)`
+- `resample_to_target(initial, target)`
+- `decimate_by_percent(percent)`
+- `decimate_to_target(polycount)`
+- `decimate_to_half()`
+
+### `brush_settings_utils.py` 🔄
+Brush configuration with dataclass pattern.
+
+**Dataclass:**
+- `BrushDynamicSubdivParams(auto_subdivide, details_level, remove_stretching)`
+
+**Apply Functions:**
+- `apply_brush_settings(params)` - Apply to all brush types
+- `apply_auto_subdivide_all(enabled)` - Set auto subdivide on all
+- `apply_details_level_all(level)` - Set details level on all
+- `apply_remove_stretching_all(enabled)` - Set remove stretching on all
+- `apply_auto_subdivide(brush_type, enabled)` - Set for single brush
+- `apply_details_level(brush_type, level)` - Set for single brush
+- `apply_remove_stretching(brush_type, enabled)` - Set for single brush
+
+### `autopo_utils.py` 🔄
+Autopo workflow with dataclass/configurator pattern.
+
+**Dataclass:**
+- `AutopoParams(target_polycount, capture_details, auto_density, ...)` - All autopo settings
+
+**Configure/Execute:**
+- `configure_autopo(params)` - Set all UI values without executing
+- `execute_autopo(params)` → `bool` - Run autopo with params
+
+**Import Functions:**
+- `import_retopo_to_sculpt()` → `bool` - Import retopo mesh
+- `import_as_multiresolution()` → `bool` - Import as multires
+- `clear_retopo_mesh()` - Clear retopo data
+
+**High-Level Workflows:**
+- `autopo_to_sculpt(params?)` → `bool` - Full workflow: autopo + import + ghost
+- `autopo_to_multiresolution(params?)` → `bool` - Autopo + multires import
 
 ### `scene_iteration_utils.py` (Legacy)
 **Prefer `scene_api.py` for new code.**
@@ -199,10 +248,14 @@ Main comprehensive tools panel containing:
 
 ## 📄 Documentation
 
+### Instruction Files (Always Loaded)
 - `.github/instructions/copilot_style_guide.instructions.md` - Style conventions
 - `.github/instructions/copilot_3dcoat.instructions.md` - 3DCoat patterns
-- `.github/instructions/copilot_3dcoat_api.instructions.md` - API reference
+- `.github/instructions/copilot_3dcoat_api.instructions.md` - API gotchas (slim)
 - `.github/instructions/copilot_codebase_router.instructions.md` - This file
+
+### Reference Docs (`_docs/` - Load on Demand)
+- `_docs/magic_ui_strings.md` - **Comprehensive registry of all magic UI strings**
 - `_docs/session_recovery.md` - Recovery doc for rebuilding lost work
 
 ---

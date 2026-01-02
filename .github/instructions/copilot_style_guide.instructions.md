@@ -16,7 +16,7 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 
 2. **Verify API before use.** Always search `coat.pyi` to confirm methods exist before using them. Never assume.
 
-3. **Abstract magic strings.** 3DCoat uses undocumented internal string identifiers. Always wrap them in utility functions in `_utils/`.
+3. **Abstract magic strings.** 3DCoat uses undocumented internal string identifiers. Store as typed constants at the top of utility modules and reference `_docs/magic_ui_strings.md` for the full registry.
 
 4. **Thin action scripts.** Root-level `.py` files are exposed to 3DCoat. Keep them minimal—just import and invoke utilities.
 
@@ -188,22 +188,40 @@ items: list[str] = []          # Not List[str]
 callback: Callable[[coat.SceneElement], bool]  # Typed callbacks
 ```
 
-### 6.3 Constants
+### 6.3 Constants & Magic UI Strings
 
 Use UPPER_SNAKE_CASE for module-level constants. **Always include type annotation.**
 
+**Magic UI String Constants (Canonical Pattern):**
+
+When a utility module uses magic UI strings, declare them in a dedicated header section:
+
 ```python
-# 3DCoat Commands (always typed)
-CMD_DECIMATE_TO_RETOPO: str = "$DecimateToRetopo"
+# =============================================================================
+# OPERATION MAGIC UI STRINGS (NOT in coat.pyi - discovered experimentally)
+# =============================================================================
+
+# Commands
+CMD_MY_COMMAND: str = "$MyCommand"
 CMD_DIALOG_OK: str = "$DialogButton#1"
-CMD_DIALOG_CANCEL: str = "$DialogButton#2"
 
-# Settings paths
-SETTING_AUTO_SUBDIVIDE: str = "$BrushConstructor::AutoSubdivide"
+# Settings
+SETTING_MY_PARAM: str = "$MyParams::Value"
+SETTING_PER_TYPE: str = "$Category::Setting[{type}]"  # For templated strings
+```
 
+See `_utils/autopo_utils.py` for the canonical example. Update `_docs/magic_ui_strings.md` when adding new discoveries.
+
+**Other Constants:**
+
+```python
 # Numeric constants
 DEFAULT_WAIT_FRAMES: int = 4
 MAX_DETAILS_LEVEL: float = 8.0
+
+# String constants
+ROOM_SCULPT: str = "Sculpt"
+ROOM_RETOPO: str = "Retopo"
 ```
 
 ### 6.4 Prefer Static Functions with Explicit Arguments
@@ -276,6 +294,60 @@ from _utils import some_module
 importlib.reload(some_module)
 from _utils.some_module import some_function
 ```
+
+### 6.6 UI Panel Data Injection Pattern
+
+When injecting data into UI panels/dialogs:
+
+1. **Create a dataclass** to represent the panel's data contents
+2. **Create a configurator function** to pass into the panel's callback context
+3. **Use constants for defaults** at the top of the module
+
+```python
+from dataclasses import dataclass
+
+# =============================================================================
+# DEFAULTS
+# =============================================================================
+
+DEFAULT_TARGET_POLYCOUNT: int = 10000
+DEFAULT_REDUCTION_PERCENT: float = 50.0
+DEFAULT_PRESERVE_UVS: bool = True
+
+# =============================================================================
+# DATA CLASS
+# =============================================================================
+
+@dataclass
+class DecimateParams:
+    """Parameters for decimate operation."""
+    target_polycount: int = DEFAULT_TARGET_POLYCOUNT
+    reduction_percent: float = DEFAULT_REDUCTION_PERCENT
+    preserve_uvs: bool = DEFAULT_PRESERVE_UVS
+
+# =============================================================================
+# CONFIGURATOR FUNCTION
+# =============================================================================
+
+def configure_decimate_dialog(params: DecimateParams) -> Callable[[], None]:
+    """Create a callback to configure the decimate dialog."""
+    def configurator() -> None:
+        coat.ui.setEditBoxValue(SETTING_TARGET_POLYCOUNT, params.target_polycount)
+        coat.ui.setSliderValue(SETTING_REDUCTION_PERCENT, params.reduction_percent)
+        coat.ui.setBoolValue(SETTING_PRESERVE_UVS, params.preserve_uvs)
+        coat.ui.cmd(CMD_DIALOG_OK)
+    return configurator
+
+# Usage:
+params = DecimateParams(target_polycount=5000)
+coat.ui.cmd(CMD_DECIMATE, configure_decimate_dialog(params))
+```
+
+**Key principles:**
+- Defaults live as constants at the top, not scattered in code
+- Dataclass provides typed, documented parameter grouping
+- Configurator returns a closure that captures the params
+- Easy to test and reuse
 
 ## 7. Settings Persistence
 
@@ -408,3 +480,4 @@ LLM agents should maintain todo lists for multi-step tasks.
 4. **Don't hardcode magic strings in action scripts** - Abstract to utilities
 5. **Don't assume synchronous execution** - Use `coat.io.step()`
 6. **Don't forget to reload modules during dev** - Use `importlib.reload()`
+7. **Don't scatter default values in code** - Use constants at top of module

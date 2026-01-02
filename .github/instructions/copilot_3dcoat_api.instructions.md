@@ -112,14 +112,30 @@ Decimate and similar operations often create unwanted layers:
 
 ---
 
-## �📋 Adding to This Document
+## 🔮 Magic UI Strings Reference
 
-**Only add entries that are:**
-1. ✅ Verified to be true (tested or confirmed in coat.pyi)
-2. ✅ Non-obvious behavior that could trip someone up
-3. ✅ Documents what EXISTS and how to use it correctly
+> **Full registry:** See `_docs/magic_ui_strings.md`
 
-**Do NOT add:**
-- ❌ References to methods/classes that don't exist
-- ❌ Unverified assumptions
-- ❌ Standard behavior that's obvious from coat.pyi
+Magic strings are UI element IDs passed to `coat.ui.cmd()`, `coat.ui.setEditBoxValue()`, 
+`coat.ui.setBoolValue()`, etc. They are **NOT exposed in Python** and are undocumented.
+
+**Discovery method:** RMB+MMB on UI element copies ID to clipboard
+
+**Store as constants** at top of utility modules (see `_utils/autopo_utils.py`):
+
+```python
+CMD_MY_COMMAND: str = "$MyCommand"
+SETTING_MY_PARAM: str = "$MyParams::Value"
+```
+
+---
+
+## 📋 Adding to This Document
+
+**Keep this file lean.** Only add:
+- ✅ Non-obvious gotchas that could trip someone up
+- ✅ Critical patterns needed during development
+
+**Move to `_docs/magic_ui_strings.md`:**
+- Comprehensive magic string tables
+- Detailed parameter lists
