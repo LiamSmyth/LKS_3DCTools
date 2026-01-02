@@ -69,7 +69,50 @@ coat.ui.setBoolValue(f"$BrushConstructor::RemoveStretching[{brush}]", True)  # P
 
 ---
 
-## 📋 Adding to This Document
+## �️ Dialogs Block Viewport Input
+
+`coat.dialog().noModal()` does NOT make the dialog truly non-blocking:
+- Execution continues after `.show()`, but...
+- **The dialog still captures mouse/keyboard input**
+- You cannot sculpt/paint while any dialog is open
+
+**Correct workflow:**
+1. Open panel to configure settings
+2. Close panel
+3. Sculpt normally
+4. Use hotkeys to apply tools
+
+---
+
+## 📦 Selection Preservation Pattern
+
+Operations that change selection should restore it:
+
+```python
+# Cache selection
+selected = root.collectSelected()
+
+# Do operation (may change selection)
+do_something()
+
+# Restore
+if selected:
+    selected[0].selectOne()
+    for el in selected[1:]:
+        el.select()
+```
+
+---
+
+## 🎨 Layer Operations Auto-Create Layers
+
+Decimate and similar operations often create unwanted layers:
+- Call `coat.Scene.removeEmptyLayers()` after destructive operations
+- Re-activate the correct layer with `coat.Scene.setActiveLayer(id)`
+
+---
+
+## �📋 Adding to This Document
 
 **Only add entries that are:**
 1. ✅ Verified to be true (tested or confirmed in coat.pyi)
