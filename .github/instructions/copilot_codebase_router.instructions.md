@@ -25,13 +25,17 @@ UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
 ├── LKS_Tools_Panel.py         # Main tools panel with all functionality
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
-│   ├── __init__.py
-│   ├── lks_settings.py        # Persistent settings singleton
+│   ├── __init__.py            # Package exports
+│   ├── scene_api.py           # 🆕 Thin wrappers for coat iterators
+│   ├── scope_utils.py         # Scope enum and resolution
+│   ├── visibility_utils.py    # 🆕 Pure visibility/ghost functions
+│   ├── layer_utils.py         # Layer management
 │   ├── coat_ui_utils.py       # UI command abstractions
+│   ├── object_utils.py        # Object manipulation
+│   ├── lks_settings.py        # Persistent settings singleton
 │   ├── brush_settings_utils.py # Brush configuration
 │   ├── autopo_utils.py        # Autopo workflow automation
-│   ├── object_utils.py        # Object manipulation
-│   └── scene_iteration_utils.py # Scene tree traversal
+│   └── scene_iteration_utils.py # Legacy - prefer scene_api.py
 ├── _archive/                  # Old/deprecated scripts
 ├── _example_code/             # Reference implementations
 └── <Category>/                # Visible subfolders become categories
@@ -63,48 +67,125 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Variant>.py`
 
 ## 🛠️ Utility Modules (`_utils/`)
 
+### `scene_api.py` 🆕
+**Primary interface for 3DCoat scene context and iteration.**
+Wraps callback-based iterators into list-returning functions.
+
+**Classes:**
+- `SceneAPI` - Static methods for scene element collection
+  - `get_sculpt_root()` → `coat.SceneElement | None`
+  - `get_current_element()` → `coat.SceneElement | None`
+  - `get_current_volume()` → `coat.Volume | None`
+  - `get_selected_elements()` → `list[coat.SceneElement]`
+  - `collect_subtree(root)` → `list[coat.SceneElement]`
+  - `collect_all_sculpt_objects()` → `list[coat.SceneElement]`
+
+- `SelectionAPI` - Static methods for selection state
+  - `save_selection()` → `list[coat.SceneElement]`
+  - `restore_selection(elements)` → `None`
+  - `select_one(element)` → `None`
+  - `select_add(element)` → `None`
+
+**Pure functions:**
+- `apply_to_elements(elements, operation)` → `int`
+- `filter_elements(elements, predicate)` → `list`
+- `filter_sculpt_objects(elements)` → `list`
+- `deduplicate_elements(elements)` → `list`
+
+### `scope_utils.py`
+Scope enum and resolution for batch operations.
+
+**Enum:**
+- `Scope.CURRENT` - Selected object(s) only
+- `Scope.TREE` - Selection + all children
+- `Scope.OTHER` - Everything except selection subtree
+- `Scope.ALL` - Entire sculpt tree
+
+**Functions:**
+- `resolve_scope(scope, selected?)` → `list[coat.SceneElement]`
+- `apply_to_scope(scope, operation, preserve_selection?)` → `int`
+
+### `visibility_utils.py` 🆕
+Pure functions for visibility/ghost manipulation.
+All functions receive elements as arguments - no context fetching.
+
+- `set_visibility(elements, visible)` → `int`
+- `hide_elements(elements)` → `int`
+- `show_elements(elements)` → `int`
+- `set_ghost(elements, ghosted)` → `int`
+- `ghost_elements(elements)` → `int`
+- `unghost_elements(elements)` → `int`
+- `invert_visibility_on_elements(elements)` → `int`
+- `invert_ghost_on_elements(elements)` → `int`
+- `hide_except(all_elements, keep_visible)` → `int`
+- `ghost_except(all_elements, keep_unghosted)` → `int`
+
+### `layer_utils.py`
+Layer management for standard 2-layer setup.
+
+**Constants:**
+- `LAYER_SCULPT: str` - "Sculpt" (Layer 0, depth only)
+- `LAYER_COLOR: str` - "Color" (Layer 1, color only)
+
+**Functions:**
+- `ensure_standard_layers()` - Setup standard layers
+- `activate_sculpt_layer()` - Activate Layer 0
+- `activate_color_layer()` - Activate Layer 1
+- `cleanup_after_destructive_op()` - Clean up after decimate etc.
+
+### `coat_ui_utils.py`
+UI command abstractions hiding magic strings.
+
+**Constants (all typed `str`):**
+- `CMD_DIALOG_OK`, `CMD_DIALOG_CANCEL`
+- `ROOM_SCULPT`, `ROOM_RETOPO`, `ROOM_PAINT`, etc.
+- `CMD_DECIMATE_TO_RETOPO`, `CMD_AUTOPO`, etc.
+- `DEFAULT_WAIT_FRAMES: int`, `DEFAULT_MESSAGE_DURATION_MS: int`
+
+**Functions:**
+- `confirm_dialog()` - Click OK on current dialog
+- `cancel_dialog()` - Click Cancel on current dialog
+- `command_with_confirm(cmd)` - Execute and auto-confirm
+- `switch_to_room(room, wait_frames?)` - Switch room with wait
+- `ensure_sculpt_room()`, `ensure_retopo_room()`, `ensure_paint_room()`
+- `show_message(text, duration_ms?)`, `show_error(text, duration_ms?)`
+- `wait_frames(n)` - Wait for async operations
+
+### `object_utils.py`
+Object validation and manipulation.
+
+**Class `ObjectUtils`:**
+- `get_current_sculpt_object()` → `coat.SceneElement | None`
+- `get_volume_from_element(element)` → `coat.Volume | None`
+- `validate_volume_has_polygons(vol)` → `bool`
+- `get_current_sculpt_volume()` → `tuple | None`
+- `ensure_surface_mode(vol)` - Convert from voxels if needed
+- `print_polycount_info(name, before, after)`
+- `show_polycount_message(operation, polycount)`
+
+**Pure functions:**
+- `scale_element(element, scale_factor)` - Scale without selection
+- `scale_element_with_select(element, scale_factor)` - Select and scale
+- `scale_elements(elements, scale_factor)` → `int`
+
 ### `lks_settings.py`
 Persistent settings cache with singleton pattern.
 - `get_settings()` - Get singleton settings instance
 - `save_settings()` - Persist to JSON file
-- `LKSSettings` class with attribute access
-
-**Current settings:**
-- `details_level: int` - Dynamic subdiv detail level
-- `auto_subdivide: bool` - Enable auto subdivision
-- `remove_stretching: bool` - Enable remove stretching
-- `autopo_density: int` - Target poly count for autopo
-- `autopo_optimize_mesh: bool` - Mesh optimization toggle
-- `autopo_keep_creases: bool` - Keep hard edges toggle
-- `autopo_add_to_scene: bool` - Add retopo to scene
-
-### `coat_ui_utils.py`
-UI command abstractions hiding magic strings.
-- `confirm_dialog()` - Click OK on current dialog
-- `cancel_dialog()` - Click Cancel on current dialog
-- `switch_to_room(room, wait=4)` - Switch room with wait
-- `show_message(text, duration_ms)` - Show toast message
 
 ### `brush_settings_utils.py`
 Brush configuration for all brush types.
 - `BrushSettingsUtils.apply_global_brush_settings(auto_sub, detail, stretch)`
-- `set_auto_subdivide_all(enabled)` - Set auto subdivide on all brushes
-- `set_details_level_all(level)` - Set detail level on all brushes
-- `set_remove_stretching_all(enabled)` - Set remove stretching globally
 
 ### `autopo_utils.py`
 Autopo workflow automation.
 - `run_autopo_with_settings()` - Run autopo using cached settings
-- `autopo_to_sculpt()` - Autopo + import to sculpt, hide original
+- `autopo_to_sculpt()` - Autopo + import to sculpt
 - `autopo_to_multiresolution()` - Autopo + import as multires
 
-### `object_utils.py`
-Object manipulation utilities.
-- _(document as created)_
-
-### `scene_iteration_utils.py`
-Scene tree traversal utilities.
-- _(document as created)_
+### `scene_iteration_utils.py` (Legacy)
+**Prefer `scene_api.py` for new code.**
+- `SceneIterationUtils` - Static methods for iteration
 
 ## 🖼️ Panels
 

@@ -153,35 +153,117 @@ MyPanel()
 
 - Add module-level docstring summarizing purpose
 - Keep functions short (≤80 lines)
-- Use type hints for all function parameters and return types
+- Use type hints for all function parameters, return types, AND local variables
 
-### 6.2 Type Hints
+### 6.2 Type Hints (MANDATORY)
 
-Type hints are mandatory:
+**Explicit typing is mandatory for ALL of the following:**
+- Function parameters
+- Function return types
+- Module-level constants
+- Class attributes
+- Local variables (when type is not obvious from assignment)
 
 ```python
+# GOOD - explicit types everywhere
+MY_CONSTANT: str = "value"
+DEFAULT_COUNT: int = 10
+BRUSH_TYPES: list[str] = ["carve", "flatten", "clay"]
+
 def process_objects(names: list[str], scale: float = 1.0) -> bool:
+    result: bool = False
+    count: int = len(names)
     ...
+
+# BAD - missing types
+MY_CONSTANT = "value"
+def process_objects(names, scale=1.0):
+    result = False
 ```
 
 Use modern Python 3.10+ syntax:
 ```python
 result: str | None = None      # Not Optional[str]
 items: list[str] = []          # Not List[str]
+callback: Callable[[coat.SceneElement], bool]  # Typed callbacks
 ```
 
 ### 6.3 Constants
 
-Use UPPER_SNAKE_CASE for module-level constants. Group magic strings:
+Use UPPER_SNAKE_CASE for module-level constants. **Always include type annotation.**
 
 ```python
-# 3DCoat Commands
-CMD_DECIMATE_TO_RETOPO = "$DecimateToRetopo"
-CMD_DIALOG_OK = "$DialogButton#1"
-CMD_DIALOG_CANCEL = "$DialogButton#2"
+# 3DCoat Commands (always typed)
+CMD_DECIMATE_TO_RETOPO: str = "$DecimateToRetopo"
+CMD_DIALOG_OK: str = "$DialogButton#1"
+CMD_DIALOG_CANCEL: str = "$DialogButton#2"
 
 # Settings paths
-SETTING_AUTO_SUBDIVIDE = "$BrushConstructor::AutoSubdivide"
+SETTING_AUTO_SUBDIVIDE: str = "$BrushConstructor::AutoSubdivide"
+
+# Numeric constants
+DEFAULT_WAIT_FRAMES: int = 4
+MAX_DETAILS_LEVEL: float = 8.0
+```
+
+### 6.4 Prefer Static Functions with Explicit Arguments
+
+**Reduce context/UI operations by passing data explicitly:**
+
+```python
+# GOOD - data passed explicitly, no hidden context fetching
+def apply_operation_to_elements(
+    elements: list[coat.SceneElement],
+    operation: Callable[[coat.SceneElement], None]
+) -> int:
+    count: int = 0
+    for el in elements:
+        operation(el)
+        count += 1
+    return count
+
+# BAD - function fetches its own context (magic, harder to test)
+def apply_operation_to_selection():
+    elements = coat.Scene.sculptRoot().collectSelected()
+    for el in elements:
+        do_thing(el)
+```
+
+**Context should be fetched once at entry points (action scripts) and passed down:**
+
+```python
+# Action script (entry point) - OK to fetch context here
+from _utils.scene_api import SceneAPI
+from _utils.object_ops import scale_elements
+
+elements: list[coat.SceneElement] = SceneAPI.get_selected_elements()
+scale_elements(elements, scale_factor=0.5)
+```
+
+### 6.5 Wrap 3DCoat Iterators
+
+Create thin wrappers around 3DCoat's native iterators that return Python lists:
+
+```python
+# _utils/scene_api.py - wraps coat iteration patterns
+class SceneAPI:
+    @staticmethod
+    def get_selected_elements() -> list[coat.SceneElement]:
+        """Get currently selected elements as a list."""
+        root: coat.SceneElement | None = coat.Scene.sculptRoot()
+        if not root:
+            return []
+        return root.collectSelected()
+    
+    @staticmethod
+    def collect_subtree(root: coat.SceneElement) -> list[coat.SceneElement]:
+        """Collect all elements in subtree as a list."""
+        elements: list[coat.SceneElement] = [root]
+        def collector(el: coat.SceneElement) -> bool:
+            elements.append(el)
+            return False  # continue
+        root.iterateVisibleSubtree(collector)
+        return elements
 ```
 
 ### 6.4 Module Reloading

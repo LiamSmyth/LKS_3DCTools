@@ -4,60 +4,78 @@ Object Utilities
 Common utility functions for 3DCoat object validation and manipulation.
 This module provides static functions for repetitive object operations.
 
+Design Principles:
+- Static functions that receive data as arguments
+- Use SceneAPI for context fetching (localized at entry points)
+- Explicit type annotations everywhere
+
 Note: Files starting with "_" are hidden from the Addons menu per 3DCoat convention.
 """
 import coat
-from typing import Optional, Tuple
+
+from _utils.scene_api import SceneAPI, SelectionAPI
+from _utils.coat_ui_utils import show_message, show_error
+
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+MESSAGE_NO_OBJECT: str = "No object selected"
+MESSAGE_NOT_SCULPT_OBJECT: str = "Selected object is not a sculpt object"
+MESSAGE_NO_VOLUME: str = "No volume found on selected object"
+MESSAGE_NO_POLYGONS: str = "Object has no polygons"
+
+DEFAULT_MESSAGE_DURATION_MS: int = 3000
 
 
 class ObjectUtils:
-    """Static utility functions for 3DCoat object operations"""
+    """Static utility functions for 3DCoat object operations."""
 
     @staticmethod
-    def get_current_sculpt_object() -> Optional[coat.SceneElement]:
+    def get_current_sculpt_object() -> coat.SceneElement | None:
         """
         Get the current sculpt object with validation.
 
         Returns:
             The current sculpt object, or None if invalid
         """
-        current_object: coat.SceneElement = coat.Scene.current()
+        current_object: coat.SceneElement | None = SceneAPI.get_current_element()
 
         if not current_object:
-            coat.ui.showInfoMessage("No object selected", 3000)
+            show_error(MESSAGE_NO_OBJECT, DEFAULT_MESSAGE_DURATION_MS)
             return None
 
         if not current_object.isSculptObject():
-            coat.ui.showInfoMessage(
-                "Selected object is not a sculpt object", 3000)
+            show_error(MESSAGE_NOT_SCULPT_OBJECT, DEFAULT_MESSAGE_DURATION_MS)
             return None
 
         return current_object
 
     @staticmethod
-    def get_volume_from_object(obj: coat.SceneElement) -> Optional[coat.Volume]:
+    def get_volume_from_element(element: coat.SceneElement) -> coat.Volume | None:
         """
         Get volume from a scene element with validation.
 
         Args:
-            obj: The scene element to get volume from
+            element: The scene element to get volume from
 
         Returns:
             The volume object, or None if invalid
         """
-        if not obj:
+        if not element:
             return None
 
-        vol: coat.Volume = obj.Volume()
+        vol: coat.Volume | None = element.Volume()
 
         if not vol:
-            coat.ui.showInfoMessage("No volume found on selected object", 3000)
+            show_error(MESSAGE_NO_VOLUME, DEFAULT_MESSAGE_DURATION_MS)
             return None
 
         return vol
 
     @staticmethod
-    def validate_object_has_polygons(vol: coat.Volume) -> bool:
+    def validate_volume_has_polygons(vol: coat.Volume) -> bool:
         """
         Validate that a volume has polygons.
 
@@ -70,33 +88,33 @@ class ObjectUtils:
         if not vol:
             return False
 
-        polycount = vol.getPolycount()
+        polycount: int = vol.getPolycount()
         if polycount == 0:
-            coat.ui.showInfoMessage("Object has no polygons", 3000)
+            show_error(MESSAGE_NO_POLYGONS, DEFAULT_MESSAGE_DURATION_MS)
             return False
 
         return True
 
     @staticmethod
-    def get_current_sculpt_volume() -> Optional[Tuple[coat.SceneElement, coat.Volume]]:
+    def get_current_sculpt_volume() -> tuple[coat.SceneElement, coat.Volume] | None:
         """
         Get current sculpt object and its volume with full validation.
 
         Returns:
-            Tuple of (object, volume) if valid, None otherwise
+            Tuple of (element, volume) if valid, None otherwise
         """
-        obj = ObjectUtils.get_current_sculpt_object()
-        if not obj:
+        element: coat.SceneElement | None = ObjectUtils.get_current_sculpt_object()
+        if not element:
             return None
 
         # Ensure the object is selected
-        obj.selectOne()
+        SelectionAPI.select_one(element)
 
-        vol = ObjectUtils.get_volume_from_object(obj)
+        vol: coat.Volume | None = ObjectUtils.get_volume_from_element(element)
         if not vol:
             return None
 
-        return (obj, vol)
+        return (element, vol)
 
     @staticmethod
     def ensure_surface_mode(vol: coat.Volume) -> None:
@@ -119,31 +137,79 @@ class ObjectUtils:
             before: Polycount before operation
             after: Polycount after operation
         """
-        reduction_percent = ((before - after) / before) * \
-            100 if before > 0 else 0
-        print(
-            f"{name}: {before:,} -> {after:,} polygons ({reduction_percent:.1f}% reduction)")
+        reduction_percent: float = 0.0
+        if before > 0:
+            reduction_percent = ((before - after) / before) * 100
+
+        message: str = f"{name}: {before:,} -> {after:,} polygons ({reduction_percent:.1f}% reduction)"
+        print(message)
 
     @staticmethod
-    def show_polycount_message(operation: str, polycount: int, duration: int = 3000) -> None:
+    def show_polycount_message(
+        operation: str,
+        polycount: int,
+        duration_ms: int = DEFAULT_MESSAGE_DURATION_MS
+    ) -> None:
         """
         Show a formatted polycount message to the user.
 
         Args:
             operation: The operation performed
             polycount: The resulting polycount
-            duration: Message duration in milliseconds
+            duration_ms: Message duration in milliseconds
         """
-        coat.ui.showInfoMessage(f"{operation}: {polycount:,} polys", duration)
+        message: str = f"{operation}: {polycount:,} polys"
+        show_message(message, duration_ms)
 
-    @staticmethod
-    def scale_selected_element(el: coat.SceneElement, scale_factor: float):
-        el.selectOne()
 
-        # Get the current 4x4 transformation matrix
-        transform: coat.mat4 = el.getTransform()
+# =============================================================================
+# ELEMENT TRANSFORM OPERATIONS (Pure functions)
+# =============================================================================
 
-        existing_scale: coat.vec3 = transform.GetScaling()
-        new_scale = existing_scale * scale_factor
-        transform.SetScaling(new_scale)
-        el.setTransform(transform)
+def scale_element(element: coat.SceneElement, scale_factor: float) -> None:
+    """
+    Scale a scene element by a factor.
+
+    Does NOT select the element - caller should handle selection if needed.
+
+    Args:
+        element: The element to scale
+        scale_factor: Factor to multiply current scale by
+    """
+    # Get the current 4x4 transformation matrix
+    transform: coat.mat4 = element.getTransform()
+
+    existing_scale: coat.vec3 = transform.GetScaling()
+    new_scale: coat.vec3 = existing_scale * scale_factor
+    transform.SetScaling(new_scale)
+    element.setTransform(transform)
+
+
+def scale_element_with_select(element: coat.SceneElement, scale_factor: float) -> None:
+    """
+    Select and scale a scene element by a factor.
+
+    Args:
+        element: The element to scale
+        scale_factor: Factor to multiply current scale by
+    """
+    SelectionAPI.select_one(element)
+    scale_element(element, scale_factor)
+
+
+def scale_elements(elements: list[coat.SceneElement], scale_factor: float) -> int:
+    """
+    Scale multiple elements by a factor.
+
+    Args:
+        elements: List of elements to scale
+        scale_factor: Factor to multiply current scale by
+
+    Returns:
+        Number of elements scaled
+    """
+    count: int = 0
+    for el in elements:
+        scale_element(el, scale_factor)
+        count += 1
+    return count

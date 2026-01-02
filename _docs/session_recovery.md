@@ -444,16 +444,16 @@ LKSToolsPanel()
 ## Rebuild Checklist
 
 1. ✅ Create instruction files (style guide, 3dcoat patterns, API reference)
-2. ⬜ Create `_utils/__init__.py`
-3. ⬜ Create `_utils/lks_settings.py`
-4. ⬜ Create `_utils/coat_ui_utils.py`
-5. ⬜ Create `_utils/brush_settings_utils.py`
-6. ⬜ Create `_utils/autopo_utils.py`
-7. ⬜ Create `LKS_Tools_Panel.py`
-8. ⬜ Create `Brush_IncrementDetailsLevel.py`
-9. ⬜ Create `Brush_DecrementDetailsLevel.py`
-10. ⬜ Create `Brush_ApplyDynamicSubdivSettings.py`
-11. ⬜ Create `Autopo_Run.py`
-12. ⬜ Create `Autopo_ToSculpt.py`
-13. ⬜ Create `Autopo_ToMultires.py`
-14. ⬜ Refactor existing scripts to use `_utils/`
+2. ✅ Create `_utils/__init__.py`
+3. ✅ Create `_utils/lks_settings.py`
+4. ✅ Create `_utils/coat_ui_utils.py`
+5. ✅ Create `_utils/brush_settings_utils.py`
+6. ✅ Create `_utils/autopo_utils.py`
+7. ✅ Create `LKS_Tools_Panel.py`
+8. ✅ Create `Brush_IncrementDetailsLevel.py`
+9. ✅ Create `Brush_DecrementDetailsLevel.py`
+10. ✅ Create `Brush_ApplyDynamicSubdivSettings.py`
+11. ✅ Create `Autopo_Run.py`
+12. ✅ Create `Autopo_ToSculpt.py`
+13. ✅ Create `Autopo_ToMultires.py`
+14. ⬜ Refactor existing scripts to use `_utils/` and new naming pattern
