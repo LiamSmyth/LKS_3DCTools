@@ -275,6 +275,51 @@ def subdivide_once() -> None:
 
 
 # =============================================================================
+# RESAMPLE + VOXELIZE WORKFLOW
+# =============================================================================
+
+def resample_and_voxelize(
+    volume: coat.Volume,
+    multiplier: float
+) -> int:
+    """
+    Resample a surface volume to Nx polycount, then convert to voxels.
+
+    If already voxelized, converts back to surface.
+
+    Args:
+        volume: The volume to process
+        multiplier: Polycount multiplier (2.0 = 2x, 4.0 = 4x, etc.)
+
+    Returns:
+        New polycount after operation
+    """
+    if volume.isVoxelized():
+        # Already voxel - convert to surface
+        volume.toSurface()
+        return volume.getPolycount()
+
+    # Surface mode - resample and voxelize
+    current_polycount: int = volume.getPolycount()
+    if current_polycount <= 0:
+        return 0
+
+    target_polycount: int = int(current_polycount * multiplier)
+
+    # Resample to target
+    params = ResampleParams(
+        target_polycount=target_polycount,
+        scale=multiplier
+    )
+    execute_resample(params)
+
+    # Convert to voxels
+    volume.toVoxels()
+
+    return volume.getPolycount()
+
+
+# =============================================================================
 # LAYER CLEANUP (mesh operations often create unwanted layers)
 # =============================================================================
 

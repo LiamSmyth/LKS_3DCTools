@@ -3,78 +3,44 @@ Toggle Mesh/Voxel Same Polycount
 
 This script toggles the current sculpt object between surface (mesh) and voxel modes
 while attempting to maintain approximately the same polycount.
+
+Room: Sculpt
+Action: Toggle between surface and voxel modes, preserving polycount
 """
 import coat
-from _utils.ui_dialog_utils import UIDialogUtils
-import importlib
+
+from _utils.object_utils import ObjectUtils
+from _utils.mesh_utils import resample_to_target, convert_to_surface
+from _utils.coat_ui_utils import show_message, show_error
 
 
-def toggle_mesh_voxel_same_polycount():
-    """Toggle between mesh and voxel modes while preserving polycount"""
-
-    # Get the current object
-    current_object: coat.SceneElement = coat.Scene.current()
-
-    if not current_object:
-        coat.ui.showInfoMessage("No object selected", 3000)
+def main() -> None:
+    """Toggle between mesh and voxel modes while preserving polycount."""
+    # Get current object with validation
+    result = ObjectUtils.get_current_sculpt_volume()
+    if not result:
         return
 
-    if not current_object.isSculptObject():
-        coat.ui.showInfoMessage("Selected object is not a sculpt object", 3000)
-        return
-
-    # Ensure the object is selected
-    current_object.selectOne()
-
-    # Get the volume
-    vol: coat.Volume = current_object.Volume()
-
-    if not vol:
-        coat.ui.showInfoMessage("No volume found on selected object", 3000)
-        return
-
-    # Get current polycount for reference
-    initial_polycount = vol.getPolycount()
-    object_name = current_object.name()
-
-    print(f"Processing object: {object_name}")
-    print(f"Current polycount: {initial_polycount}")
+    current_object, vol = result
+    initial_polycount: int = vol.getPolycount()
+    object_name: str = current_object.name()
 
     if vol.isSurface():
-        print("Surface Polycount before: ", vol.getPolycount())
-        # Resmaple before, and after conversion to voxel
-        UIDialogUtils.execute_resample_element_to_polycount(
-            current_object, initial_polycount)
-
-        print("Surface Resampled to polycount: ", vol.getPolycount())
+        # Surface → Voxels: resample, convert, resample again
+        print(f"Converting {object_name} to Voxels...")
+        resample_to_target(initial_polycount, initial_polycount)
         vol.toVoxels()
-        print("Converted to Voxels - polycount: ", vol.getPolycount())
-        UIDialogUtils.execute_resample_element_to_polycount(
-            current_object, initial_polycount)
+        resample_to_target(vol.getPolycount(), initial_polycount)
 
-        print("Voxels Resampled to polycount: ", vol.getPolycount())
-
-        new_polycount = vol.getPolycount()
-        print(f"Converted to voxels - new polycount: {new_polycount}")
-        coat.ui.showInfoMessage(
-            f"Converted to Voxels: {new_polycount:,} polys", 3000)
-
+        new_polycount: int = vol.getPolycount()
+        show_message(f"Converted to Voxels: {new_polycount:,} polys", 3000)
     else:
-        # Currently in voxel mode, convert to surface
-        print("Converting from Voxels to Surface...")
+        # Voxels → Surface
+        print(f"Converting {object_name} to Surface...")
+        convert_to_surface(vol)
 
-        # Convert to surface mesh
-        vol.toSurface()
-
-        new_polycount = vol.getPolycount()
-        print(f"Converted to surface - new polycount: {new_polycount}")
-        coat.ui.showInfoMessage(
-            f"Converted to Surface: {new_polycount:,} polys", 3000)
+        new_polycount: int = vol.getPolycount()
+        show_message(f"Converted to Surface: {new_polycount:,} polys", 3000)
 
 
-def main():
-    toggle_mesh_voxel_same_polycount()
-
-
-# 3DCoat executes script content directly, so call main() here
 main()

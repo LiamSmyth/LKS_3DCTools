@@ -1,74 +1,29 @@
 """
-Switch Voxel 2x Polys
+Convert surface to voxels with 2x polycount (or back to surface).
 
-This script converts a surface object to voxels with 2x the original polycount,
-or converts voxels back to surface mode.
+Room: Sculpt
+Action: Resample to 2x polycount and convert to voxels
 """
-import coat
+from _utils.object_utils import ObjectUtils
+from _utils.mesh_utils import resample_and_voxelize
+from _utils.coat_ui_utils import show_message
 
 
-def switch_vox_2x_polys():
-    """Switch between surface and voxel modes with 2x polycount"""
-
-    # Get the current object
-    current_object: coat.SceneElement = coat.Scene.current()
-
-    if not current_object:
-        coat.ui.showInfoMessage("No object selected", 3000)
+def main() -> None:
+    """Toggle between surface and voxels with 2x polycount."""
+    result = ObjectUtils.get_current_sculpt_volume()
+    if not result:
         return
 
-    if not current_object.isSculptObject():
-        coat.ui.showInfoMessage("Selected object is not a sculpt object", 3000)
-        return
-
-    # Ensure the object is selected
-    current_object.selectOne()
-
-    # Get the volume
-    vol: coat.Volume = current_object.Volume()
-
-    if not vol:
-        coat.ui.showInfoMessage("No volume found on selected object", 3000)
-        return
-
-    if vol.isVoxelized():
-        # If already voxelized, convert to surface
-        vol.toSurface()
-        polycount = vol.getPolycount()
-        print(f"Converted to surface: {polycount:,} polys")
-        coat.ui.showInfoMessage(
-            f"Converted to Surface: {polycount:,} polys", 3000)
-        return
-
-    # Get current polycount
-    current_polycount = vol.getPolycount()
-    target_polycount = current_polycount * 2
-
-    print(
-        f"Converting to voxels with 2x polycount: {current_polycount:,} -> {target_polycount:,}")
-
-    # Use resample to achieve target polycount, then convert to voxels
-    if current_polycount > 0:
-        def ui_command():
-            coat.ui.setEditBoxValue(
-                "$ResampleParams::RequiredPolycount", target_polycount)
-            coat.ui.setSliderValue("$ResampleParams::ResamplingScale", 2.0)
-            coat.ui.cmd("$DialogButton#1")
-
-        coat.ui.cmd("$Resample", ui_command)
-
-        # Now convert to voxels
-        vol.toVoxels()
-
-        new_polycount = vol.getPolycount()
-        print(f"Final voxel polycount: {new_polycount:,}")
-        coat.ui.showInfoMessage(
-            f"Converted to Voxels (2x): {new_polycount:,} polys", 3000)
+    current_object, vol = result
+    was_voxelized: bool = vol.isVoxelized()
+    
+    new_polycount: int = resample_and_voxelize(vol, multiplier=2.0)
+    
+    if was_voxelized:
+        show_message(f"Converted to Surface: {new_polycount:,} polys", 3000)
+    else:
+        show_message(f"Converted to Voxels (2x): {new_polycount:,} polys", 3000)
 
 
-def main():
-    switch_vox_2x_polys()
-
-
-# 3DCoat executes script content directly, so call main() here
 main()

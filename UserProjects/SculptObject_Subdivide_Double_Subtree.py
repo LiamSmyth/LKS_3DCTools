@@ -1,37 +1,46 @@
-# Iterate over the sculpt tree, show the basic stats - square, volume
+"""
+Subdivide selected object and all children (double polycount).
+
+Room: Sculpt
+Action: Subdivide subtree (approximately 2x polycount)
+"""
 import coat
-import math
 
-active_element: coat.SceneElement = coat.Scene.current()
+from _utils.scene_api import SceneAPI
+from _utils.mesh_utils import subdivide_once, ensure_surface_mode
+from _utils.coat_ui_utils import show_message
 
-print("Start Subdivide: ", active_element.name())
 
-
-def double_polycount(el: coat.SceneElement):
-    el.selectOne()
-    if el.isSculptObject():
-        vol: coat.Volume = el.Volume()
-        if not vol.isSurface():
-            vol.toSurface()
-
-        ratio = 2.0
-        cur_polycount: int = vol.getPolycount()
-        tgt_poylcount: int = math.floor(cur_polycount * ratio)
-
-        coat.ui.cmd("$VoxTreeBranch.IncRes_HINT.Root")
-
-        print("Divicded $s from $s polys to $s polys",
-              [el.name(), cur_polycount, tgt_poylcount])
-
+def subdivide_element(el: coat.SceneElement) -> bool:
+    """Subdivide a single element. Returns False to continue iteration."""
+    if not el.isSculptObject():
         return False
 
+    vol: coat.Volume = el.Volume()
+    ensure_surface_mode(vol)
+    el.selectOne()
+    subdivide_once()
 
-double_polycount(active_element)
+    return False  # Continue iteration
 
-active_element.iterateSubtree(double_polycount)
 
-active_element.selectOne()
+def main() -> None:
+    """Subdivide current object and subtree."""
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
+    if not current:
+        show_message("No object selected", 3000)
+        return
 
-# Show summary message to user
-coat.ui.showInfoMessage(
-    "Subtree subdivision complete (doubled polycount)", 3000)
+    # Subdivide root element
+    subdivide_element(current)
+
+    # Subdivide all children
+    current.iterateSubtree(subdivide_element)
+
+    # Restore selection
+    current.selectOne()
+
+    show_message("Subtree subdivision complete (doubled polycount)", 3000)
+
+
+main()

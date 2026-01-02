@@ -67,20 +67,27 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 - `SculptObject_Decimate_Half_Selected.py` - Decimate selected 50%
 - `SculptObject_Decimate_Half_Subtree.py` - Decimate subtree 50%
 - `SculptObject_Decimate_16x_Toggle.py` - Toggle 16x decimate proxy
+- `SculptObject_Decimate_TargetDensity_All.py` - Decimate all to target density
 - `SculptObject_Scale_Down100x_Selected.py` - Scale down 100x
 - `SculptObject_Scale_Up100x_Selected.py` - Scale up 100x
 - `SculptObject_ToSurface_All.py` - Convert all to surface
 - `SculptObject_ToVoxel_All.py` - Convert all to voxels
+- `SculptObject_ToVoxel_2x.py` - Convert to voxels with 2x polycount
+- `SculptObject_ToVoxel_4x.py` - Convert to voxels with 4x polycount
+- `SculptObject_ToVoxel_8x.py` - Convert to voxels with 8x polycount
+- `SculptObject_ToggleMeshVox_Selected.py` - Toggle mesh/voxel preserving polycount
 - `SculptObject_Ghost_Toggle_Subtree.py` - Toggle ghost on subtree
 - `SculptObject_Ghost_Invert_All.py` - Invert all ghost states
 - `SculptObject_Ghost_Isolate_Selected.py` - Ghost all except selected
 - `SculptObject_Unghost_All.py` - Unghost all objects
-- `SculptObject_Subdivide_Double_Subtree.py` - Subdivide subtree
+- `SculptObject_Visibility_Toggle_Subtree.py` - Toggle visibility on subtree
+- `SculptObject_Subdivide_Double_Subtree.py` - Subdivide subtree (2x polys)
 - `SculptObject_Resample_Half_Subtree.py` - Resample subtree to half
 - `SculptObject_Remesh_Half_Selected.py` - Remesh selected to half
 - `SculptObject_VoxBool_Intersect.py` - Voxel boolean intersect
 - `SculptObject_VoxBool_Subtract.py` - Voxel boolean subtract
 - `SculptObject_VoxBool_Union.py` - Voxel boolean union
+- `SculptObject_Instance_Tile_Selected.py` - Create tiled instances
 
 ### Scene/Export
 - `Scene_SetupTiling_BoxGrid.py` - Setup box grid tiling
@@ -217,6 +224,7 @@ Uses dataclass + configurator pattern.
 **Convenience Functions:**
 - `resample_to_half(current_polycount)`
 - `resample_to_target(initial, target)`
+- `resample_and_voxelize(volume, multiplier)` - Resample Nx and voxelize
 - `decimate_by_percent(percent)`
 - `decimate_to_target(polycount)`
 - `decimate_to_half()`

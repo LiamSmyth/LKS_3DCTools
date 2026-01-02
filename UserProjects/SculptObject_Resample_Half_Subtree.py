@@ -1,41 +1,51 @@
-# Iterate over the sculpt tree, show the basic stats - square, volume
+"""
+Resample selected object and all children to half polycount.
+
+Room: Sculpt
+Action: Resample 50% on subtree
+"""
+from _utils.scene_api import SceneAPI
+from _utils.mesh_utils import resample_to_half, ensure_surface_mode, cleanup_after_mesh_operation
+from _utils.coat_ui_utils import show_message
 import coat
-import math
-
-active_element: coat.SceneElement = coat.Scene.current()
-
-print("Start Reduce: ", active_element.name())
 
 
-def reduce_element_half(el: coat.SceneElement):
-    el.selectOne()
-    if el.isSculptObject():
-        vol: coat.Volume = el.Volume()
-        if not vol.isSurface():
-            vol.toSurface()
-
-        ratio = 0.5
-        cur_polycount: int = vol.getPolycount()
-        tgt_poylcount: int = math.floor(cur_polycount * ratio)
-
-        # Must produce the ui command ahead of time so that it can be passeed into the resample window
-        def ui_command():
-            coat.ui.setEditBoxValue(
-                "$ResampleParams::RequiredPolycount", tgt_poylcount)
-            coat.ui.setSliderValue("$ResampleParams::ResamplingScale", ratio)
-            coat.ui.cmd("$DialogButton#1")
-
-        # With the resmaple window, call ui_command (sets parms)
-        coat.ui.cmd("$Resample", ui_command)
-
-        print("Resampled $s from $s polys to $s polys",
-              [el.name(), cur_polycount, tgt_poylcount])
-
+def resample_element_half(el: coat.SceneElement) -> bool:
+    """Resample a single element to 50%. Returns False to continue iteration."""
+    if not el.isSculptObject():
         return False
 
+    vol: coat.Volume = el.Volume()
+    ensure_surface_mode(vol)
+    
+    current_polycount: int = vol.getPolycount()
+    if current_polycount <= 0:
+        return False
 
-reduce_element_half(active_element)
+    el.selectOne()
+    resample_to_half(current_polycount)
 
-active_element.iterateSubtree(reduce_element_half)
+    return False  # Continue iteration
 
-active_element.selectOne()
+
+def main() -> None:
+    """Resample current object and subtree to half polycount."""
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
+    if not current:
+        show_message("No object selected", 3000)
+        return
+
+    # Resample root element
+    resample_element_half(current)
+
+    # Resample all children
+    current.iterateSubtree(resample_element_half)
+
+    # Restore selection and cleanup
+    current.selectOne()
+    cleanup_after_mesh_operation()
+
+    show_message("Subtree resampled to 50%", 3000)
+
+
+main()

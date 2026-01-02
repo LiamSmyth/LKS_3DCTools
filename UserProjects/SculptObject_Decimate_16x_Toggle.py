@@ -1,9 +1,19 @@
-# This is just a wrapper to always cache to 16x decimation
+"""
+Toggle 16x decimation proxy for selected object.
+
+Room: Sculpt
+Action: Toggle 16x decimation cache (proxy mode)
+"""
+from _utils.mesh_utils import CMD_DECIMATE_16X
+from _utils.coat_ui_utils import show_message
 import coat
 
 
-coat.ui.cmd("$Decimate16X")
-coat.ui.cmd("$ToggleCachingVolume")
+def main() -> None:
+    """Toggle 16x decimation proxy."""
+    coat.ui.cmd(CMD_DECIMATE_16X)
+    coat.ui.cmd("$ToggleCachingVolume")
+    show_message("16x decimation proxy toggled", 3000)
 
-# Show summary message to user
-coat.ui.showInfoMessage("16x decimation proxy toggled", 3000)
+
+main()

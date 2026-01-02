@@ -1,29 +1,39 @@
+"""
+Toggle visibility for selected object and all children.
+
+Room: Sculpt
+Action: Toggle visibility on subtree (invert current state)
+"""
 import coat
-import math
 
-print("Hiding and unhiding the scene tree elements")
-def set_hidden(el: coat.SceneElement):
-    print(f"Setting visibility of {el.name()} to {el.visible()}")
-    el.selectOne()
-    el.setVisibility(new_hide)
-    return False  # To continue iteration
-
-scene_root = coat.Scene.sculptRoot()
-scene_root.selectOne()
-new_hide = not scene_root.visible()
-print(f"Scene root visibility: {scene_root.visible()}, new visibility: {new_hide}")
-print("Collecting selected elements")
-selection = coat.SceneElement.collectSelected(scene_root)
-active: coat.SceneElement = coat.Scene.current()
-print(f"Active element: {active.name()}")
-print(f"Selected elements: {[el.name() for el in selection]}")  
+from _utils.scene_api import SceneAPI
+from _utils.visibility_utils import set_visibility
+from _utils.coat_ui_utils import show_message
 
 
-print(f"Setting visibility of scene root to {new_hide}")
-set_hidden(scene_root)
-scene_root.iterateSubtree(set_hidden)
+def main() -> None:
+    """Toggle visibility state for current element and its subtree."""
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
+    if not current:
+        show_message("No object selected", 3000)
+        return
 
-for el in selection:
-    coat.SceneElement.select(el)
+    # Determine new visibility state (invert current)
+    current_visible: bool = current.visible()
+    new_visible: bool = not current_visible
 
-active.select()
+    # Collect all elements in subtree
+    elements: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+
+    # Apply visibility state to all
+    count: int = set_visibility(elements, new_visible)
+
+    # Restore selection
+    current.selectOne()
+
+    # Show summary
+    status: str = "shown" if new_visible else "hidden"
+    show_message(f"{count} objects {status}", 3000)
+
+
+main()
