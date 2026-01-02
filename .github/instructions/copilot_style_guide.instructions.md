@@ -14,13 +14,15 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 
 1. **Self-contained codebase.** No pip, no venv, no external dependencies. All code lives within this workspace.
 
-2. **Abstract magic strings.** 3DCoat uses undocumented internal string identifiers. Always wrap them in utility functions in `_utils/`.
+2. **Verify API before use.** Always search `coat.pyi` to confirm methods exist before using them. Never assume.
 
-3. **Thin action scripts.** Root-level `.py` files are exposed to 3DCoat. Keep them minimal—just import and invoke utilities.
+3. **Abstract magic strings.** 3DCoat uses undocumented internal string identifiers. Always wrap them in utility functions in `_utils/`.
 
-4. **Use `coat.io.step(n)` for timing.** 3DCoat operations are asynchronous. Wait for UI to settle before proceeding.
+4. **Thin action scripts.** Root-level `.py` files are exposed to 3DCoat. Keep them minimal—just import and invoke utilities.
 
-5. **Update router docs when changing code.** After adding/modifying scripts or utilities, update `copilot_codebase_router.instructions.md`.
+5. **Use `coat.io.step(n)` for timing.** 3DCoat operations are asynchronous. Wait for UI to settle before proceeding.
+
+6. **Only document verified truth.** Instruction files must contain ONLY correct, verified information. Never document things that don't exist. When discovering hallucinated API, research the correct approach via `coat.pyi` and document what DOES work.
 
 ---
 
