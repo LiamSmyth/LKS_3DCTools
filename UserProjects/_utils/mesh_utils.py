@@ -49,6 +49,7 @@ SETTING_VOXELIZE_POLYCOUNT: str = "$VoxelizeParams::SuggestedPolycount"
 # =============================================================================
 
 CMD_SUBDIVIDE: str = "$VoxTreeBranch.IncRes_HINT.Root"
+CMD_MAKE_SYMMETRICAL: str = "$MakeSymm"
 
 # =============================================================================
 # DEFAULTS
@@ -274,6 +275,12 @@ def subdivide_once() -> None:
     wait_frames(MESH_OP_WAIT_FRAMES)
 
 
+def make_symmetrical() -> None:
+    """Make the current SculptObject symmetrical along its symmetry axis."""
+    coat.ui.cmd(CMD_MAKE_SYMMETRICAL)
+    wait_frames(MESH_OP_WAIT_FRAMES)
+
+
 # =============================================================================
 # RESAMPLE + VOXELIZE WORKFLOW
 # =============================================================================
@@ -332,3 +339,160 @@ def cleanup_after_mesh_operation() -> None:
     """
     coat.Scene.removeEmptyLayers()
     coat.Scene.setActiveLayer(0)
+
+
+# =============================================================================
+# UNIFORM DENSITY CALCULATIONS
+# =============================================================================
+
+def calculate_target_polycount_by_scale(
+    reference_volume: coat.Volume,
+    target_volume: coat.Volume
+) -> int:
+    """
+    Calculate target polycount for a volume to match a reference's polygon density.
+
+    Uses the average bounding box dimensions to calculate scale ratio.
+    Polycount scales with the square of size (surface area).
+
+    Args:
+        reference_volume: The volume whose density to match
+        target_volume: The volume to calculate target polycount for
+
+    Returns:
+        Target polycount to match the reference density
+    """
+    import math
+
+    # Get bounding boxes
+    ref_aabb: coat.boundbox = reference_volume.calcWorldSpaceAABB()
+    tgt_aabb: coat.boundbox = target_volume.calcWorldSpaceAABB()
+
+    # Calculate average dimensions
+    ref_size: coat.vec3 = ref_aabb.GetSize()
+    ref_dimension: float = (ref_size.x + ref_size.y + ref_size.z) / 3.0
+
+    tgt_size: coat.vec3 = tgt_aabb.GetSize()
+    tgt_dimension: float = (tgt_size.x + tgt_size.y + tgt_size.z) / 3.0
+
+    # Polycount scales with square of size ratio
+    scale_ratio: float = tgt_dimension / ref_dimension
+    polycount_ratio: float = scale_ratio ** 2
+
+    ref_polycount: int = reference_volume.getPolycount()
+    target_polycount: int = math.floor(ref_polycount * polycount_ratio)
+
+    return target_polycount
+
+
+def resample_to_match_density(
+    element: coat.SceneElement,
+    reference_volume: coat.Volume
+) -> None:
+    """
+    Resample a SculptObject to match the polygon density of a reference.
+
+    The element will be selected and resampled to have similar polygon
+    size (density) as the reference volume.
+
+    Args:
+        element: The SceneElement to resample
+        reference_volume: The reference volume whose density to match
+    """
+    import math
+
+    element.selectOne()
+
+    if not element.isSculptObject():
+        return
+
+    vol: coat.Volume = element.Volume()
+
+    # Ensure surface mode
+    if not vol.isSurface():
+        vol.toSurface()
+
+    target_polycount: int = calculate_target_polycount_by_scale(
+        reference_volume, vol)
+    current_polycount: int = vol.getPolycount()
+
+    if target_polycount <= 0 or current_polycount <= 0:
+        return
+
+    # Calculate resample ratio
+    resample_ratio: float = math.sqrt(target_polycount / current_polycount)
+
+    # Resample
+    params = ResampleParams(
+        target_polycount=target_polycount,
+        scale=resample_ratio
+    )
+    execute_resample(params)
+
+    print(
+        f"Resampled '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
+
+
+def smart_match_density(
+    element: coat.SceneElement,
+    reference_volume: coat.Volume
+) -> str:
+    """
+    Smart density matching using subdivide or decimate (not resample).
+
+    Uses subdivision for increases > 2x (preserves shape better than resample)
+    and decimation for decreases. Skips objects within 2x of target.
+
+    Args:
+        element: The SceneElement to adjust
+        reference_volume: The reference volume whose density to match
+
+    Returns:
+        Action taken: "subdivided", "decimated", or "skipped"
+    """
+    import math
+
+    element.selectOne()
+
+    if not element.isSculptObject():
+        return "skipped"
+
+    vol: coat.Volume = element.Volume()
+
+    # Ensure surface mode
+    if not vol.isSurface():
+        vol.toSurface()
+
+    target_polycount: int = calculate_target_polycount_by_scale(
+        reference_volume, vol)
+    current_polycount: int = vol.getPolycount()
+
+    if target_polycount <= 0 or current_polycount <= 0:
+        return "skipped"
+
+    polycount_ratio: float = target_polycount / current_polycount
+
+    if polycount_ratio < 1.0:
+        # Need to reduce - use decimate
+        decimate_to_target(target_polycount)
+        print(
+            f"Decimated '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
+        return "decimated"
+
+    elif polycount_ratio > 2.0:
+        # Need to increase significantly - use subdivide
+        # Each subdivide roughly quadruples polycount
+        resample_ratio: float = math.sqrt(polycount_ratio)
+        subdivide_count: int = min(math.ceil(math.log2(resample_ratio)), 5)
+        subdivide_count = max(subdivide_count, 1)
+
+        for _ in range(subdivide_count):
+            subdivide_once()
+
+        print(f"Subdivided '{element.name()}' {subdivide_count}x")
+        return "subdivided"
+
+    else:
+        # Close enough - skip
+        print(f"Skipped '{element.name()}' - close to target")
+        return "skipped"

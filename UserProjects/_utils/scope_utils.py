@@ -169,7 +169,7 @@ def apply_to_scope(
 
 # =============================================================================
 # DEPRECATED - Kept for backwards compatibility
-# Use scene_api.py and visibility_utils.py for new code
+# Use scene_api.py and SceneElement_visibility_utils.py for new code
 # =============================================================================
 
 def get_selected_elements() -> list[coat.SceneElement]:

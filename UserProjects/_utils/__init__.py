@@ -6,12 +6,16 @@ Shared utilities for LKS 3DCoat addon scripts.
 Module Organization:
 - scene_api.py: Thin wrappers around 3DCoat scene iteration (SceneAPI, SelectionAPI)
 - scope_utils.py: Scope enum and resolution (CURRENT/TREE/OTHER/ALL)
-- visibility_utils.py: Pure functions for visibility/ghost manipulation
-- layer_utils.py: Layer management utilities
+- SceneElement_visibility_utils.py: Pure functions for visibility/ghost manipulation
+- Scene_layer_utils.py: Layer management utilities
 - coat_ui_utils.py: UI command abstractions (magic strings hidden here)
 - object_utils.py: Object validation and manipulation
+- mesh_utils.py: Mesh operations (resample, decimate, subdivide, etc.)
 - lks_settings.py: Persistent settings cache
 - brush_settings_utils.py: Brush configuration utilities
+- autopo_utils.py: Autopo workflow automation
+- SceneElement_boolean_utils.py: Live boolean operations
+- Scene_tiling_utils.py: Tiling grid setup
 """
 
 # Settings
@@ -40,7 +44,7 @@ from _utils.scope_utils import (
 )
 
 # Visibility utilities - Pure functions for visibility/ghost
-from _utils.visibility_utils import (
+from _utils.SceneElement_visibility_utils import (
     set_visibility,
     hide_elements,
     show_elements,
@@ -54,7 +58,7 @@ from _utils.visibility_utils import (
 )
 
 # Layer utilities
-from _utils.layer_utils import (
+from _utils.Scene_layer_utils import (
     LAYER_SCULPT,
     LAYER_COLOR,
     ensure_standard_layers,
@@ -110,16 +114,22 @@ from _utils.mesh_utils import (
     # Convenience functions
     resample_to_half,
     resample_to_target,
+    resample_and_voxelize,
     decimate_by_percent,
     decimate_to_target,
     decimate_to_half,
     decimate_16x,
     subdivide_once,
+    make_symmetrical,
     voxelize_to_polycount,
     convert_to_surface,
     convert_to_voxels,
     ensure_surface_mode,
     cleanup_after_mesh_operation,
+    # Uniform density utilities
+    calculate_target_polycount_by_scale,
+    resample_to_match_density,
+    smart_match_density,
 )
 
 # Scene iteration utilities (legacy, prefer SceneAPI)

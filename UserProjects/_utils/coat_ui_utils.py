@@ -39,6 +39,22 @@ CMD_IMPORT_MULTIRES: str = "$AddLowestLevelFromRetopo"
 # Baking commands
 CMD_BAKE_NORMAL_FLAT_DISP: str = "$MergeForDPNM_flatdisp"
 
+# Freeze/Mask commands
+CMD_HIDE_FROZEN_AREA: str = "$HideFrozenArea"
+CMD_SEPARATE_HIDDEN: str = "$SeparateHidden"
+
+# Fill/Paint commands
+CMD_FILL_LAYER: str = "$FILLLAYER1"
+SETTING_PEN_DEPTH: str = "$PEN_DEPTH"
+
+# Smooth commands
+CMD_SMOOTH_OBJECT: str = "$SmoothObject"
+SETTING_SMOOTH_DEGREE: str = "$SmoothParams::SmoothingDegree"
+
+# Transform commands
+CMD_TO_GLOBAL_SPACE: str = "$ToGlobalSpace"
+CMD_DECOMPOSE: str = "$Decompose"
+
 # Default timing constants
 DEFAULT_WAIT_FRAMES: int = 4
 DEFAULT_MESSAGE_DURATION_MS: int = 2000
@@ -96,16 +112,17 @@ def is_in_room(room: str) -> bool:
     return room in current_room
 
 
-def switch_to_room(room: str, wait_frames: int = DEFAULT_WAIT_FRAMES) -> None:
+def switch_to_room(room: str, wait_frames: int = DEFAULT_WAIT_FRAMES, force: bool = True) -> None:
     """
     Switch to specified room and wait for transition.
 
     Args:
         room: Room name ("Sculpt", "Retopo", "Paint", "Tweak", "UV", "Render")
         wait_frames: Number of frames to wait after switch (default 4)
+        force: Force room switch even if 3DCoat thinks it's not needed (default True)
     """
     if not is_in_room(room):
-        coat.ui.toRoom(room)
+        coat.ui.toRoom(room, force)
         coat.io.step(wait_frames)
 
 

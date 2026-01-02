@@ -23,18 +23,18 @@ A ledger of existing code, utilities, and resources. This file provides quick li
 ```
 UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
-├── LKS_Tools_Panel.py         # Main tools panel with all functionality
+├── LKS_Tools_Panel.py         # Main tools panel (comprehensive, all features)
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
 │   ├── __init__.py            # Package exports
 │   ├── scene_api.py           # Thin wrappers for coat iterators
 │   ├── scope_utils.py         # Scope enum and resolution
-│   ├── visibility_utils.py    # Pure visibility/ghost functions
-│   ├── layer_utils.py         # Layer management
+│   ├── SceneElement_visibility_utils.py  # Pure visibility/ghost functions
+│   ├── Scene_layer_utils.py   # Layer management
 │   ├── coat_ui_utils.py       # UI command abstractions
 │   ├── object_utils.py        # Object manipulation
 │   ├── mesh_utils.py          # Mesh operations (decimate, resample, etc.)
-│   ├── SceneElement_boolean_utils.py # 🆕 Live boolean operations
-│   ├── Scene_tiling_utils.py  # 🆕 Tiling grid setup
+│   ├── SceneElement_boolean_utils.py # Live boolean operations
+│   ├── Scene_tiling_utils.py  # Tiling grid setup
 │   ├── lks_settings.py        # Persistent settings singleton
 │   ├── brush_settings_utils.py # Brush configuration
 │   ├── autopo_utils.py        # Autopo workflow automation
@@ -84,6 +84,14 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 - `SculptObject_Subdivide_Double_Subtree.py` - Subdivide subtree (2x polys)
 - `SculptObject_Resample_Half_Subtree.py` - Resample subtree to half
 - `SculptObject_Remesh_Half_Selected.py` - Remesh selected to half
+- `SculptObject_RemeshResymm_Safe_Selected.py` - Remesh + symmetrize selected
+- `SculptObject_RemeshResymm_Safe_Subtree.py` - Remesh + symmetrize subtree
+- `SculptObject_Remesh_PreserveParts_Selected.py` - Remesh preserving parts
+- `SculptObject_Merge_PreserveParts_Subtree.py` - Merge subtree preserving parts
+- `SculptObject_Split_Masked_Selected.py` - Split frozen/masked area
+- `SculptObject_IdColors_FromParts.py` - Fill subtree with random ID colors
+- `SculptObject_UniformDensity_Resample_Subtree.py` - Resample to uniform density
+- `SculptObject_UniformDensity_Smart_Subtree.py` - Smart density matching
 - `SculptObject_VoxBool_Intersect.py` - Voxel boolean intersect
 - `SculptObject_VoxBool_Subtract.py` - Voxel boolean subtract
 - `SculptObject_VoxBool_Union.py` - Voxel boolean union
@@ -134,8 +142,8 @@ Scope enum and resolution for batch operations.
 - `resolve_scope(scope, selected?)` → `list[coat.SceneElement]`
 - `apply_to_scope(scope, operation, preserve_selection?)` → `int`
 
-### `visibility_utils.py` 🆕
-Pure functions for visibility/ghost manipulation.
+### `SceneElement_visibility_utils.py`
+Pure functions for visibility/ghost manipulation on SceneElements.
 All functions receive elements as arguments - no context fetching.
 
 - `set_visibility(elements, visible)` → `int`
@@ -149,7 +157,7 @@ All functions receive elements as arguments - no context fetching.
 - `hide_except(all_elements, keep_visible)` → `int`
 - `ghost_except(all_elements, keep_unghosted)` → `int`
 
-### `layer_utils.py`
+### `Scene_layer_utils.py`
 Layer management for standard 2-layer setup.
 
 **Constants:**
@@ -230,12 +238,18 @@ Uses dataclass + configurator pattern.
 - `decimate_to_half()`
 - `decimate_16x()` - Quick 1/16 proxy
 - `subdivide_once()` - Double polycount
+- `make_symmetrical()` - Make object symmetrical along axis
 
 **Conversion Functions:**
 - `convert_to_surface(volume)` - Voxels → surface
 - `convert_to_voxels(volume, polycount?)` - Surface → voxels
 - `ensure_surface_mode(volume)` - Ensure surface mode
 - `voxelize_to_polycount(target)`
+
+**Uniform Density Functions:**
+- `calculate_target_polycount_by_scale(ref_vol, target_vol)` - Calculate matching polycount
+- `resample_to_match_density(element, ref_vol)` - Resample to match reference density
+- `smart_match_density(element, ref_vol)` - Use subdivide/decimate to match density
 
 **Cleanup:**
 - `cleanup_after_mesh_operation()` - Remove empty layers, reset active layer
@@ -319,13 +333,41 @@ Autopo workflow with dataclass/configurator pattern.
 ## 🖼️ Panels
 
 ### `LKS_Tools_Panel.py`
-Main comprehensive tools panel containing:
-- **Dynamic Subdiv section:** auto_subdivide, details_level, remove_stretching
-- **Object Operations section:** scale 100x up/down, convert to surface/voxel
-- **Visibility section:** ghost toggle, unghost all, isolate, invert ghost
-- **Decimate section:** reduction percent slider, decimate current/tree
-- **Autopo section:** density, run autopo, import to sculpt/multires
-- **Settings:** save/load persistent settings
+Comprehensive tools panel with all functionality:
+
+**Dynamic Subdiv section:**
+- `auto_subdivide`, `details_level`, `remove_stretching` controls
+- Apply to brushes, increment/decrement level buttons (fixed: always enables auto_subdivide)
+
+**Mesh Operations section (with headers):**
+- **Decimate:** percent slider, Current/Tree/All buttons, 50%/80% quick buttons
+- **Resample:** Half (Cur/Tree/All), Double, Subdivide
+- **Mode Conversion:** To Surface/To Voxels (Cur/Tree/All)
+
+**Scale section:**
+- Scale Down 100x (Cur/Tree/All)
+- Scale Up 100x (Cur/Tree/All)
+
+**Visibility section (with headers):**
+- **Hide:** Hide/Show (Cur/Tree/Other/All), Invert Hide
+- **Ghost:** Ghost/Unghost (Cur/Tree/Other/All), Invert Ghost
+
+**Smart Actions section (with headers):**
+- **Uniform Density:** UniformResample, UniformSmart (subtree density matching)
+- **Remesh + Symmetry:** RemeshResymmCur, RemeshResymmTree
+- **Other:** IdColorsTree, SplitMasked, MergePreserve
+
+**Autopo section (ALL parameters exposed):**
+- `autopo_density`, `autopo_capture_details`, `autopo_auto_density`
+- `autopo_decimation_limit`, `autopo_hardsurface`, `autopo_voxelize`
+- `autopo_tangent_smooth`, `autopo_bypass_modal`
+- Run Autopo, Autopo to Sculpt, Autopo to Multires
+
+**Layers section:**
+- Setup Layers button (creates Sculpt/Color layers)
+
+**Settings:**
+- Save Settings button (persists all settings)
 
 ## 📄 Documentation
 

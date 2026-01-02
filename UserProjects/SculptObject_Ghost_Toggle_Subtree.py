@@ -7,7 +7,7 @@ Action: Toggle ghost on subtree (invert current state)
 import coat
 
 from _utils.scene_api import SceneAPI
-from _utils.visibility_utils import set_ghost
+from _utils.SceneElement_visibility_utils import set_ghost
 from _utils.coat_ui_utils import show_message
 
 

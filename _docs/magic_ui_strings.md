@@ -47,7 +47,7 @@ Parameters for the autopo (automatic retopology) feature.
 
 | String | Purpose | Type | Value |
 |--------|---------|------|-------|
-| `$AutoRetopo` | Execute autopo command | cmd | - |
+| `$Quadrangulate` | Open autopo dialog | cmd | - |
 | `$QuadragulationTask::RequiredPolycount` | Target poly count | int | e.g., 10000 |
 | `$QuadragulationTask::CaptureDetails` | Detail capture percentage | float | 0.0-100.0 |
 | `$QuadragulationTask::HardsurfaceRetopology` | Hard surface mode | bool | true/false |
@@ -56,6 +56,7 @@ Parameters for the autopo (automatic retopology) feature.
 | `$QuadragulationTask::DecimationLimit1` | Decimation limit (K) | int | e.g., 1000 |
 | `$QuadragulationTask::TangentSmoothRes` | Tangent smooth result | bool | true/false |
 | `$QuadragulationTask::BypassDensityAndStrokes` | Skip density modal | bool | true/false |
+| `COMBOBOX_QuadQuality` | Quality preset dropdown | combo | draft/intermediate/best |
 
 **Utility Location:** `_utils/autopo_utils.py`
 

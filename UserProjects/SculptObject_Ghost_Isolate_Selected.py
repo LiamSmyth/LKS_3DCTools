@@ -7,7 +7,7 @@ Action: Ghost all except selected (toggle isolation mode)
 import coat
 
 from _utils.scene_api import SceneAPI
-from _utils.visibility_utils import ghost_except
+from _utils.SceneElement_visibility_utils import ghost_except
 from _utils.coat_ui_utils import show_message
 
 

@@ -7,7 +7,7 @@ Action: Invert ghost state (ghosted→unghosted, unghosted→ghosted)
 import coat
 
 from _utils.scene_api import SceneAPI
-from _utils.visibility_utils import invert_ghost_on_elements
+from _utils.SceneElement_visibility_utils import invert_ghost_on_elements
 from _utils.coat_ui_utils import show_message
 
 

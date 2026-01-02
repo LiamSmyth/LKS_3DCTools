@@ -14,11 +14,17 @@ DEFAULTS = {
     "auto_subdivide": True,
     "remove_stretching": True,
 
-    # Autopo
-    "autopo_density": 10000,
-    "autopo_optimize_mesh": True,
-    "autopo_keep_creases": False,
-    "autopo_add_to_scene": True,
+    # Autopo - all parameters
+    "autopo_polycount": 10000,
+    "autopo_capture_details": 1.0,  # 0.0-1.0 (1.0 = 100%)
+    "autopo_auto_density": 0.5,  # 0.0-2.0 (painted density influence)
+    "autopo_hardsurface": False,
+    "autopo_voxelize": False,
+    "autopo_voxelize_polycount": 1000,  # x1000 polys (1000 = 1M)
+    "autopo_decimate_if_above": False,
+    "autopo_decimation_limit": 10,  # x1000 polys (10 = 10k)
+    "autopo_tangent_smooth": True,
+    "autopo_bypass_density_modal": True,
 
     # Decimate
     "decimate_reduction": 50,

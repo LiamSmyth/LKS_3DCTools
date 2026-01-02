@@ -1,83 +1,102 @@
+"""
+Safely remesh and re-symmetrize the selected sculpt object.
 
+Preserves the original polycount by resampling first, converting to voxels,
+making symmetrical, converting back to surface, then decimating if needed.
+
+Room: Sculpt
+Action: Remesh, symmetrize, and restore polycount on selected object
+"""
 import coat
-import math
+from _utils.object_utils import ObjectUtils
+from _utils.mesh_utils import (
+    execute_resample,
+    ResampleParams,
+    decimate_to_target,
+    make_symmetrical,
+    cleanup_after_mesh_operation,
+)
+from _utils.coat_ui_utils import show_message, show_error
+
+# Default resample scale preserves details during voxel conversion
+DEFAULT_RESAMPLE_SCALE: float = 4.0
 
 
-def remesh_resymm_safe(el: coat.SceneElement):
-    coat.SceneElement.selectOne(el)
+def remesh_resymm_safe(element: coat.SceneElement) -> bool:
+    """
+    Safely remesh and symmetrize a sculpt object.
 
-    if not el.isSculptObject():
+    Process:
+    1. Resample at higher detail if surface mode
+    2. Convert to voxels
+    3. Make symmetrical
+    4. Convert back to surface
+    5. Decimate back to original polycount if needed
+
+    Args:
+        element: The SceneElement to process
+
+    Returns:
+        True if successful, False otherwise
+    """
+    element.selectOne()
+
+    if not element.isSculptObject():
         return False
 
-    el.selectOne()
-
-    vol: coat.Volume = el.Volume()
+    vol: coat.Volume = element.Volume()
     target_polycount: int = vol.getPolycount()
 
-    def remesh_command():
-        # The resampling scale should preserve details
-        coat.ui.setSliderValue("$ResampleParams::ResamplingScale", 4.0)
-        coat.ui.cmd("$DialogButton#1")
+    if target_polycount <= 0:
+        return False
 
-    print(f"Remeshing {el.name()} to {target_polycount} polys")
+    print(f"Remeshing {element.name()} to target {target_polycount:,} polys")
+
+    # Resample to preserve detail if surface
     if not vol.isVoxelized():
-        coat.ui.cmd("$Resample", remesh_command)
+        params = ResampleParams(
+            target_polycount=target_polycount,
+            scale=DEFAULT_RESAMPLE_SCALE
+        )
+        execute_resample(params)
         vol.toVoxels()
 
-    coat.ui.cmd("$MakeSymm")
+    # Make symmetrical in voxel mode
+    make_symmetrical()
 
+    # Convert back to surface
     vol.toSurface()
-    new_polycount = vol.getPolycount()
+    new_polycount: int = vol.getPolycount()
 
-    needs_decimate = new_polycount > target_polycount
+    # Decimate back to target if polycount increased
+    max_attempts: int = 3
+    attempt: int = 0
 
-    while needs_decimate:
-
-        # The reduction percent is how much to _reduce_ by so we need
-        # the difference between 100% and the new polycount percentage
-
-        # The new polycount could be 2.5x the target polycount
-        new_polycount_ratio: int = (new_polycount / target_polycount)
-        # We want to get down to 1.0 ratio, so the reduction ratio is the inverse
-        reduction_ratio: float = 1.0 / new_polycount_ratio
-
-        # Then to convert to a percentage
-        reduction_percent: float = 100 - (reduction_ratio * 100.0)
-
-        print(
-            f"Reducing to {target_polycount}, or {reduction_percent} % of the original polycount")
-
-        def decimate_command():
-            coat.ui.wait('$DecimationParams::ReducedPolycount', 1)
-            coat.ui.setEditBoxValue(
-                "$DecimationParams::ReducedPolycount", target_polycount)
-            coat.ui.setSliderValue(
-                "$DecimationParams::ReductionPercent", reduction_percent)
-            coat.ui.cmd("$DialogButton#1")
-
-        coat.ui.cmd("$Decimate", decimate_command)
+    while new_polycount > target_polycount + 1000 and attempt < max_attempts:
+        print(f"Decimating from {new_polycount:,} to {target_polycount:,}")
+        decimate_to_target(target_polycount)
         new_polycount = vol.getPolycount()
-        lay_0_indx = coat.Scene.getLayer("Layer 0")
-        coat.Scene.setActiveLayer(lay_0_indx)
-        coat.Scene.removeEmptyLayers()
+        attempt += 1
 
-        # Check if the new polycount is still too high
-        needs_decimate = new_polycount > target_polycount + 1000
-        if needs_decimate:
-            print("Decimate failed, retrying")
-        else:
-            print("Decimate succeeded")
+    cleanup_after_mesh_operation()
 
-    # todo: get selected and iterate over them
+    print(f"Completed: {element.name()} at {new_polycount:,} polys")
+    return True
 
 
-active_element: coat.SceneElement = coat.Scene.current()
+def main() -> None:
+    """Remesh and symmetrize the currently selected object."""
+    element: coat.SceneElement | None = ObjectUtils.get_current_sculpt_object()
+    if not element:
+        show_error("No sculpt object selected", 2000)
+        return
 
-# To do a safe resymmetrize, convert to voxels, symm, and back to surface
-# Ensure details are preserved
+    success: bool = remesh_resymm_safe(element)
+
+    if success:
+        show_message(f"Remesh + symmetrize complete", 2000)
+    else:
+        show_error("Failed to process object", 2000)
 
 
-remesh_resymm_safe(active_element)
-lay_0_indx = coat.Scene.getLayer("Layer 0")
-coat.Scene.setActiveLayer(lay_0_indx)
-coat.Scene.removeEmptyLayers()
+main()

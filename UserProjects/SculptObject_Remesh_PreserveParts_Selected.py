@@ -1,74 +1,97 @@
 """
 Remesh a surface object while preserving its parts.
-A single scene element will first be split to 
 
+Decomposes the object into parts, resamples each part to increase detail,
+then merges back together. This preserves the topology of separate parts.
+
+Room: Sculpt
+Action: Decompose, resample each part, merge back
 """
 import coat
-import math
+from _utils.scene_api import SceneAPI
+from _utils.mesh_utils import (
+    execute_resample,
+    ResampleParams,
+    ensure_surface_mode,
+)
+from _utils.coat_ui_utils import (
+    CMD_DIALOG_OK,
+    CMD_DECOMPOSE,
+    CMD_TO_GLOBAL_SPACE,
+    wait_frames,
+    show_message,
+    show_error,
+)
 
-REMESH_RATIO = 4  # A remesh ratio of 4 will preserve most details usually
-
-active_element: coat.SceneElement = coat.Scene.current()
-
-print(f"Start Reduce: {active_element.name()} \n\n")
-
-
-def remesh_element(el: coat.SceneElement):
-
-    el.selectOne()
-    if el.isSculptObject():
-        vol: coat.Volume = el.Volume()
-        if not vol.isSurface():
-            vol.toSurface()
-
-        cur_polycount: int = vol.getPolycount()
-        tgt_poylcount: int = math.floor(cur_polycount * REMESH_RATIO)
-
-        # Must produce the ui command ahead of time so that it can be passeed into the resample window
-        def resample_command():
-            coat.ui.setEditBoxValue(
-                "$ResampleParams::RequiredPolycount", tgt_poylcount)
-            coat.ui.setSliderValue(
-                "$ResampleParams::ResamplingScale", REMESH_RATIO)
-            coat.ui.cmd("$DialogButton#1")
-
-        # With the resmaple window, call ui_command (sets parms)
-        coat.ui.cmd("$Resample", resample_command)
-
-        print("Resampled $s from $s polys to $s polys",
-              [el.name(), cur_polycount, tgt_poylcount])
-
-        return False
+# Resample ratio to preserve details during remesh
+REMESH_RATIO: float = 4.0
 
 
-def process_element(_el: coat.SceneElement):
-    _el.Volume().toVoxels()
-    # _el.Volume().toSurface()
-    return False  # To continue iteration
+def remesh_element(element: coat.SceneElement) -> None:
+    """Remesh a single element by resampling to higher detail."""
+    element.selectOne()
+
+    if not element.isSculptObject():
+        return
+
+    vol: coat.Volume = element.Volume()
+    ensure_surface_mode(vol)
+
+    current_polycount: int = vol.getPolycount()
+    target_polycount: int = int(current_polycount * REMESH_RATIO)
+
+    params = ResampleParams(
+        target_polycount=target_polycount,
+        scale=REMESH_RATIO
+    )
+    execute_resample(params)
+
+    print(
+        f"Resampled '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
 
 
-def main():
-    el: coat.SceneElement = coat.Scene.current()
+def main() -> None:
+    """Remesh object preserving parts via decompose and merge."""
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
 
-    def decompose_ui():
-        coat.ui.cmd("$DialogButton#1")
+    if not current:
+        show_error("No object selected", 2000)
+        return
 
-    # Opens a modal so we have to pass in a function to close it
-    coat.ui.cmd("$Decompose", decompose_ui)
+    if not current.isSculptObject():
+        show_error("Selected element is not a sculpt object", 2000)
+        return
 
-    active_element.iterateSubtree(remesh_element)
+    print(f"Starting remesh with preserve parts: {current.name()}")
 
-    active_element.selectOne()
+    # Decompose object into parts
+    def decompose_confirm() -> None:
+        coat.ui.cmd(CMD_DIALOG_OK)
 
-    vol: coat.Volume = el.Volume()
-    if not vol.isSurface():
-        vol.toSurface()
+    coat.ui.cmd(CMD_DECOMPOSE, decompose_confirm)
+    wait_frames(4)
+
+    # Remesh each part in subtree
+    subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+    for el in subtree:
+        if el.isSculptObject():
+            remesh_element(el)
+
+    # Select root and convert to voxels then back to surface
+    current.selectOne()
+    vol: coat.Volume = current.Volume()
+    ensure_surface_mode(vol)
 
     vol.toVoxels()
     vol.toSurface()
 
-    active_element.mergeSubtree()
-    coat.ui.cmd("$ToGlobalSpace")
+    # Merge subtree back together
+    current.mergeSubtree()
+
+    # Reset to global space
+    coat.ui.cmd(CMD_TO_GLOBAL_SPACE)
+
+    show_message(f"Remeshed with parts preserved: {len(subtree)} parts", 2000)
 
 
 main()

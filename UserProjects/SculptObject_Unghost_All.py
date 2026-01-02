@@ -7,7 +7,7 @@ Action: Remove ghost state from all objects
 import coat
 
 from _utils.scene_api import SceneAPI
-from _utils.visibility_utils import unghost_elements
+from _utils.SceneElement_visibility_utils import unghost_elements
 from _utils.coat_ui_utils import show_message
 
 

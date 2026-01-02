@@ -1,17 +1,20 @@
 """
-Half Polycount
+Reduce polycount by half using resample + voxel conversion.
 
-This script reduces the polycount of the current object by half using voxel conversion.
-If the object is already voxelized, it converts to surface first.
+This reduces the polycount of the current object by half using resample,
+then converts to voxels to lock in the new density.
+
+Room: Sculpt
+Action: Resample to half, then convert to voxels
 """
 import coat
 from _utils.object_utils import ObjectUtils
-from _utils.ui_dialog_utils import UIDialogUtils
+from _utils.mesh_utils import resample_to_half, ensure_surface_mode
+from _utils.coat_ui_utils import show_message
 
 
-def half_polycount():
-    """Reduce polycount by half using voxel conversion"""
-
+def main() -> None:
+    """Reduce polycount by half using resample + voxel conversion."""
     # Get current sculpt object and volume with validation
     result = ObjectUtils.get_current_sculpt_volume()
     if not result:
@@ -20,33 +23,26 @@ def half_polycount():
     current_object, vol = result
 
     # Validate object has polygons
-    if not ObjectUtils.validate_object_has_polygons(vol):
+    if not ObjectUtils.validate_volume_has_polygons(vol):
         return
 
     # If it's voxelized, convert to surface first
-    ObjectUtils.ensure_surface_mode(vol)
+    ensure_surface_mode(vol)
 
     # Get current polycount
-    current_polycount = vol.getPolycount()
-    target_polycount = current_polycount // 2
+    current_polycount: int = vol.getPolycount()
+    target_polycount: int = current_polycount // 2
 
-    print(
-        f"Reducing polycount by half: {current_polycount:,} -> {target_polycount:,}")
+    print(f"Reducing: {current_polycount:,} -> {target_polycount:,}")
 
-    # Use resample to achieve target polycount, then convert to voxels
-    UIDialogUtils.execute_resample_to_half(current_polycount)
+    # Resample to half
+    resample_to_half(current_polycount)
 
-    # Convert to voxels with the reduced polycount
+    # Convert to voxels
     vol.toVoxels()
 
-    new_polycount = vol.getPolycount()
-    print(f"Final voxel polycount: {new_polycount:,}")
-    ObjectUtils.show_polycount_message("Reduced to Half", new_polycount)
+    new_polycount: int = vol.getPolycount()
+    show_message(f"Reduced to {new_polycount:,} polys", 3000)
 
 
-def main():
-    half_polycount()
-
-
-# 3DCoat executes script content directly, so call main() here
 main()
