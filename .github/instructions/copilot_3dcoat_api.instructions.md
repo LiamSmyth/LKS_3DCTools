@@ -112,6 +112,82 @@ Decimate and similar operations often create unwanted layers:
 
 ---
 
+## ⚠️ coat.ui.apply() Triggers Mesh Revoxelization
+
+`coat.ui.apply()` simulates pressing Enter. **AVOID using it after setting dialog values.**
+
+**Problem:** On surface meshes, `apply()` triggers a full mesh revoxelization, corrupting the source mesh.
+
+```python
+# BAD - triggers revoxelize on surface objects
+coat.ui.setEditBoxValue("$SomeDialog::Value", 5000)
+coat.ui.apply()  # DON'T DO THIS
+
+# GOOD - use dialog OK button instead
+coat.ui.cmd("$DialogButton#1")
+```
+
+---
+
+## 📄 coat.io.toJson Requires Object with __dict__
+
+`coat.io.toJson()` serializes Python objects to JSON, but **plain dicts don't serialize correctly**.
+
+**Problem:** Passing a plain Python `dict` to `coat.io.toJson()` produces an empty file.
+
+```python
+# BAD - plain dict doesn't serialize
+data = {"key": "value"}
+coat.io.toJson(data, "file.json")  # Creates empty or invalid file
+
+# GOOD - use native Python json module for dicts
+import json
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+
+# OR use an object with __dict__ if you need coat.io.toJson
+class Settings:
+    def __init__(self):
+        self.key = "value"
+settings = Settings()
+coat.io.toJson(settings, "file.json")  # Works
+```
+
+---
+
+## 📁 Path Utilities: coat.io.documents()
+
+Use `coat.io.documents(path)` to convert relative paths to absolute 3DCoat documents paths.
+
+```python
+# Convert relative to absolute path in documents folder
+rel_path: str = "UserPrefs/Addons/LKS/settings.json"
+abs_path: str = coat.io.documents(rel_path)
+# Returns: C:\Users\...\Documents\3DCoat\UserPrefs\Addons\LKS\settings.json
+```
+
+**Note:** There is NO `coat.documentsPath()` method - this is a common hallucination.
+
+---
+
+## 🔄 Singleton Settings Staleness in Action Scripts
+
+Action scripts (root-level .py files) may be re-executed with stale module state.
+
+**Problem:** When 3DCoat runs an action script, Python module singletons may retain values from previous runs, even if the disk file changed.
+
+**Solution:** Always reload settings from disk at the start of action scripts:
+
+```python
+# In action script - force fresh disk read
+from _utils.lks_settings import reload_brush_settings, get_brush_settings
+
+reload_brush_settings()  # Clear cache, re-read from disk
+settings = get_brush_settings()
+```
+
+---
+
 ## 🔮 Magic UI Strings Reference
 
 > **Full registry:** See `_docs/magic_ui_strings.md`

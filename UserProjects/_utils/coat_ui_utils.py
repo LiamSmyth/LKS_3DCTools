@@ -112,18 +112,26 @@ def is_in_room(room: str) -> bool:
     return room in current_room
 
 
-def switch_to_room(room: str, wait_frames: int = DEFAULT_WAIT_FRAMES, force: bool = True) -> None:
+def switch_to_room(room: str, wait_frames_count: int = DEFAULT_WAIT_FRAMES, force: bool = True, confirm_dialog: bool = True) -> None:
     """
     Switch to specified room and wait for transition.
 
+    If a confirmation dialog appears during room switch, it will be automatically
+    confirmed if confirm_dialog is True.
+
     Args:
         room: Room name ("Sculpt", "Retopo", "Paint", "Tweak", "UV", "Render")
-        wait_frames: Number of frames to wait after switch (default 4)
+        wait_frames_count: Number of frames to wait after switch (default 4)
         force: Force room switch even if 3DCoat thinks it's not needed (default True)
+        confirm_dialog: Auto-confirm any dialogs that appear (default True)
     """
     if not is_in_room(room):
         coat.ui.toRoom(room, force)
-        coat.io.step(wait_frames)
+        # Auto-confirm any dialog that may have appeared
+        if confirm_dialog:
+            coat.io.step(1)  # Brief wait for dialog to appear
+            coat.ui.cmd(CMD_DIALOG_OK)  # Try to click OK (no-op if no dialog)
+        coat.io.step(wait_frames_count)
 
 
 def get_current_room() -> str:

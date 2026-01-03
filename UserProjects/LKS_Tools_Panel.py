@@ -10,7 +10,11 @@ The ui() method returns layout items dynamically.
 Room: All
 """
 import coat
-from _utils.lks_settings import get_settings, save_settings
+from _utils.lks_settings import (
+    get_settings, save_settings,
+    get_brush_settings, save_brush_settings,
+    get_autopo_settings, save_autopo_settings,
+)
 from _utils.coat_ui_utils import show_message
 
 
@@ -25,26 +29,34 @@ class LKSToolsConfig:
     def __init__(self):
         """Initialize with cached settings."""
         settings = get_settings()
+        brush_settings = get_brush_settings()
+        autopo_settings = get_autopo_settings()
 
-        # ==================== DYNAMIC SUBDIV ====================
-        self.auto_subdivide: bool = settings.auto_subdivide
-        self.details_level: float = float(settings.details_level)
-        self.remove_stretching: bool = settings.remove_stretching
+        # ==================== DYNAMIC SUBDIV (from brush settings) ====================
+        self.auto_subdivide: bool = brush_settings.auto_subdivide
+        self.details_level: float = float(brush_settings.details_level)
+        self.remove_stretching: bool = brush_settings.remove_stretching
 
-        # ==================== AUTOPO (all parameters) ====================
-        self.autopo_polycount: int = settings.autopo_polycount
-        self.autopo_capture_details: float = settings.autopo_capture_details
-        self.autopo_auto_density: float = settings.autopo_auto_density
-        self.autopo_hardsurface: bool = settings.autopo_hardsurface
-        self.autopo_voxelize: bool = settings.autopo_voxelize
-        self.autopo_voxelize_polycount: int = settings.autopo_voxelize_polycount
-        self.autopo_decimate_if_above: bool = settings.autopo_decimate_if_above
-        self.autopo_decimation_limit: int = settings.autopo_decimation_limit
-        self.autopo_tangent_smooth: bool = settings.autopo_tangent_smooth
-        self.autopo_bypass_modal: bool = settings.autopo_bypass_density_modal
+        # ==================== AUTOPO (from autopo settings) ====================
+        self.autopo_polycount: int = autopo_settings.autopo_polycount
+        self.autopo_capture_details: float = autopo_settings.autopo_capture_details
+        self.autopo_auto_density: float = autopo_settings.autopo_auto_density
+        self.autopo_hardsurface: bool = autopo_settings.autopo_hardsurface
+        self.autopo_voxelize: bool = autopo_settings.autopo_voxelize
+        self.autopo_voxelize_polycount: int = autopo_settings.autopo_voxelize_polycount
+        self.autopo_decimate_if_above: bool = autopo_settings.autopo_decimate_if_above
+        self.autopo_decimation_limit: int = autopo_settings.autopo_decimation_limit
+        self.autopo_tangent_smooth: bool = autopo_settings.autopo_tangent_smooth
+        self.autopo_bypass_modal: bool = autopo_settings.autopo_bypass_density_modal
 
-        # ==================== DECIMATE ====================
-        self.decimate_percent: int = 50  # Reduction percentage
+        # ==================== DECIMATE (from general settings) ====================
+        self.decimate_percent: int = settings.decimate_reduction
+
+        # ==================== PREVIOUS STATE (for change detection) ====================
+        self._prev_brush: dict = brush_settings.to_dict()
+        self._prev_autopo: dict = autopo_settings.to_dict()
+        self._prev_general: dict = {
+            "decimate_reduction": self.decimate_percent}
 
     def ui(self) -> list:
         """Define UI layout."""
@@ -151,14 +163,11 @@ class LKSToolsConfig:
         # --- Uniform Density subsection ---
         items.append("##Uniform Density")
         items.append("[1 1]")
-        items.append("UniformResample")
-        items.append("UniformSmart")
-
-        # --- Remesh/Symmetry subsection ---
-        items.append("##Remesh + Symmetry")
+        items.append("UniformResampleTree")
+        items.append("UniformResampleAll")
         items.append("[1 1]")
-        items.append("RemeshResymmCur")
-        items.append("RemeshResymmTree")
+        items.append("UniformSmartTree")
+        items.append("UniformSmartAll")
 
         # --- Other Smart Actions ---
         items.append("##Other")
@@ -166,6 +175,14 @@ class LKSToolsConfig:
         items.append("IdColorsTree")
         items.append("SplitMasked")
         items.append("MergePreserve")
+
+        items.append("---")
+
+        # ==================== SYMMETRY SECTION ====================
+        items.append("#Symmetry")
+        items.append("[1 1]")
+        items.append("RemeshResymmCur")
+        items.append("RemeshResymmTree")
 
         items.append("---")
 
@@ -200,13 +217,126 @@ class LKSToolsConfig:
         # ==================== SAVE/CLOSE ====================
         items.append("SaveSettings")
 
+        items.append("---")
+
+        # ==================== DEV TOOLS ====================
+        items.append("#Dev Tools")
+        items.append("ReloadScripts")
+
         return items
 
     def process(self) -> bool:
-        """Called each frame while dialog is open."""
+        """
+        Called each frame while dialog is open.
+
+        Syncs panel state with disk to reflect external changes (e.g., from action scripts).
+        Saves panel changes to disk when user modifies values via the panel UI.
+        """
+        self._sync_from_disk_and_save_ui_changes()
         return False
 
+    def _sync_from_disk_and_save_ui_changes(self) -> None:
+        """
+        Smart sync: Detect if disk changed (external script) vs UI changed (user edit).
+
+        Logic:
+        1. Read current disk state
+        2. If disk differs from _prev_disk, update panel UI from disk (external change)
+        3. If panel UI differs from _prev_ui, save panel to disk (user change)
+        """
+        from _utils.lks_settings import reload_brush_settings, reload_autopo_settings
+
+        # --- BRUSH SETTINGS ---
+        # Get fresh disk state
+        reload_brush_settings()
+        brush_disk = get_brush_settings()
+        disk_brush: dict = {
+            "auto_subdivide": brush_disk.auto_subdivide,
+            "details_level": int(brush_disk.details_level),
+            "remove_stretching": brush_disk.remove_stretching,
+        }
+
+        # Get current panel UI state
+        ui_brush: dict = {
+            "auto_subdivide": self.auto_subdivide,
+            "details_level": int(self.details_level),
+            "remove_stretching": self.remove_stretching,
+        }
+
+        # If disk changed from our last known disk state, sync UI from disk
+        if disk_brush != self._prev_brush:
+            self.auto_subdivide = disk_brush["auto_subdivide"]
+            self.details_level = float(disk_brush["details_level"])
+            self.remove_stretching = disk_brush["remove_stretching"]
+            self._prev_brush = disk_brush
+        # Else if UI changed from disk, save UI to disk
+        elif ui_brush != disk_brush:
+            self._save_brush_settings_to_cache()
+            self._prev_brush = ui_brush
+
+        # --- AUTOPO SETTINGS ---
+        reload_autopo_settings()
+        autopo_disk = get_autopo_settings()
+        disk_autopo: dict = {
+            "autopo_polycount": autopo_disk.autopo_polycount,
+            "autopo_capture_details": autopo_disk.autopo_capture_details,
+            "autopo_auto_density": autopo_disk.autopo_auto_density,
+            "autopo_hardsurface": autopo_disk.autopo_hardsurface,
+            "autopo_voxelize": autopo_disk.autopo_voxelize,
+            "autopo_voxelize_polycount": autopo_disk.autopo_voxelize_polycount,
+            "autopo_decimate_if_above": autopo_disk.autopo_decimate_if_above,
+            "autopo_decimation_limit": autopo_disk.autopo_decimation_limit,
+            "autopo_tangent_smooth": autopo_disk.autopo_tangent_smooth,
+            "autopo_bypass_density_modal": autopo_disk.autopo_bypass_density_modal,
+        }
+
+        ui_autopo: dict = {
+            "autopo_polycount": self.autopo_polycount,
+            "autopo_capture_details": self.autopo_capture_details,
+            "autopo_auto_density": self.autopo_auto_density,
+            "autopo_hardsurface": self.autopo_hardsurface,
+            "autopo_voxelize": self.autopo_voxelize,
+            "autopo_voxelize_polycount": self.autopo_voxelize_polycount,
+            "autopo_decimate_if_above": self.autopo_decimate_if_above,
+            "autopo_decimation_limit": self.autopo_decimation_limit,
+            "autopo_tangent_smooth": self.autopo_tangent_smooth,
+            "autopo_bypass_density_modal": self.autopo_bypass_modal,
+        }
+
+        if disk_autopo != self._prev_autopo:
+            self.autopo_polycount = disk_autopo["autopo_polycount"]
+            self.autopo_capture_details = disk_autopo["autopo_capture_details"]
+            self.autopo_auto_density = disk_autopo["autopo_auto_density"]
+            self.autopo_hardsurface = disk_autopo["autopo_hardsurface"]
+            self.autopo_voxelize = disk_autopo["autopo_voxelize"]
+            self.autopo_voxelize_polycount = disk_autopo["autopo_voxelize_polycount"]
+            self.autopo_decimate_if_above = disk_autopo["autopo_decimate_if_above"]
+            self.autopo_decimation_limit = disk_autopo["autopo_decimation_limit"]
+            self.autopo_tangent_smooth = disk_autopo["autopo_tangent_smooth"]
+            self.autopo_bypass_modal = disk_autopo["autopo_bypass_density_modal"]
+            self._prev_autopo = disk_autopo
+        elif ui_autopo != disk_autopo:
+            self._save_autopo_settings_to_cache()
+            self._prev_autopo = ui_autopo
+
+        # --- GENERAL SETTINGS (no external scripts modify these currently) ---
+        # Just save UI changes to disk
+        current_general: dict = {
+            "decimate_reduction": self.decimate_percent,
+        }
+        if current_general != self._prev_general:
+            self._save_general_settings_to_cache()
+            self._prev_general = current_general
+
     # ==================== DYNAMIC SUBDIV HANDLERS ====================
+
+    def _save_brush_settings_to_cache(self) -> None:
+        """Save current brush settings to the brush settings cache."""
+        brush_settings = get_brush_settings()
+        brush_settings.auto_subdivide = self.auto_subdivide
+        brush_settings.details_level = int(self.details_level)
+        brush_settings.remove_stretching = self.remove_stretching
+        save_brush_settings()
 
     def ApplyToBrushes(self) -> None:
         """Apply current dynamic subdiv settings to all brushes."""
@@ -214,6 +344,7 @@ class LKSToolsConfig:
         apply_auto_subdivide_all(self.auto_subdivide)
         apply_details_level_all(self.details_level)
         apply_remove_stretching_all(self.remove_stretching)
+        self._save_brush_settings_to_cache()
         show_message("Applied to all brushes", 2000)
 
     def IncrementLevel(self) -> None:
@@ -223,6 +354,7 @@ class LKSToolsConfig:
         self.auto_subdivide = True
         apply_auto_subdivide_all(True)
         apply_details_level_all(self.details_level)
+        self._save_brush_settings_to_cache()
         show_message(f"Details: {self.details_level}", 1500)
 
     def DecrementLevel(self) -> None:
@@ -232,6 +364,7 @@ class LKSToolsConfig:
         self.auto_subdivide = True
         apply_auto_subdivide_all(True)
         apply_details_level_all(self.details_level)
+        self._save_brush_settings_to_cache()
         show_message(f"Details: {self.details_level}", 1500)
 
     # ==================== DECIMATE HANDLERS ====================
@@ -678,53 +811,96 @@ class LKSToolsConfig:
 
     # ==================== SMART ACTIONS HANDLERS ====================
 
-    def UniformResample(self) -> None:
-        """Resample subtree children to match parent density."""
-        from _utils.scene_api import SceneAPI
+    def _uniform_resample_elements(self, reference: 'coat.SceneElement', elements: list) -> int:
+        """Helper: Resample elements to match reference density."""
         from _utils.mesh_utils import resample_to_match_density
+        ref_vol = reference.Volume()
+        count: int = 0
+        for el in elements:
+            if el != reference and el.isSculptObject():
+                resample_to_match_density(el, ref_vol)
+                count += 1
+        return count
+
+    def _uniform_smart_elements(self, reference: 'coat.SceneElement', elements: list) -> tuple:
+        """Helper: Smart density match elements to reference."""
+        from _utils.mesh_utils import smart_match_density
+        ref_vol = reference.Volume()
+        subdivided: int = 0
+        decimated: int = 0
+        resampled: int = 0
+        for el in elements:
+            if el != reference and el.isSculptObject():
+                result = smart_match_density(el, ref_vol)
+                if result == "subdivided":
+                    subdivided += 1
+                elif result == "decimated":
+                    decimated += 1
+                elif result == "resampled":
+                    resampled += 1
+        return subdivided, decimated, resampled
+
+    def UniformResampleTree(self) -> None:
+        """Resample subtree children to match selected object's density."""
+        from _utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a sculpt object", 2000)
             return
-        ref_vol = reference.Volume()
         subtree = SceneAPI.collect_subtree(reference)
-        children = [el for el in subtree if el !=
-                    reference and el.isSculptObject()]
+        children = [el for el in subtree if el != reference]
         if not children:
             show_message("No children to process", 2000)
             return
-        count: int = 0
-        for child in children:
-            resample_to_match_density(child, ref_vol)
-            count += 1
+        count = self._uniform_resample_elements(reference, children)
         reference.selectOne()
         show_message(f"Resampled {count} to uniform", 2000)
 
-    def UniformSmart(self) -> None:
-        """Smart density match subtree (subdivide/decimate)."""
+    def UniformResampleAll(self) -> None:
+        """Resample ALL sculpt objects to match selected object's density."""
         from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import smart_match_density
+        reference = SceneAPI.get_current_element()
+        if not reference or not reference.isSculptObject():
+            show_message("Select a reference object", 2000)
+            return
+        all_elements = SceneAPI.collect_all_sculpt_objects()
+        if len(all_elements) <= 1:
+            show_message("No other objects to process", 2000)
+            return
+        count = self._uniform_resample_elements(reference, all_elements)
+        reference.selectOne()
+        show_message(f"Resampled {count} to uniform", 2000)
+
+    def UniformSmartTree(self) -> None:
+        """Smart density match subtree (subdivide/decimate/resample)."""
+        from _utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a sculpt object", 2000)
             return
-        ref_vol = reference.Volume()
         subtree = SceneAPI.collect_subtree(reference)
-        children = [el for el in subtree if el !=
-                    reference and el.isSculptObject()]
+        children = [el for el in subtree if el != reference]
         if not children:
             show_message("No children to process", 2000)
             return
-        subdivided: int = 0
-        decimated: int = 0
-        for child in children:
-            result = smart_match_density(child, ref_vol)
-            if result == "subdivided":
-                subdivided += 1
-            elif result == "decimated":
-                decimated += 1
+        sub, dec, res = self._uniform_smart_elements(reference, children)
         reference.selectOne()
-        show_message(f"Sub:{subdivided} Dec:{decimated}", 2000)
+        show_message(f"Sub:{sub} Dec:{dec} Res:{res}", 2000)
+
+    def UniformSmartAll(self) -> None:
+        """Smart density match ALL objects to selected reference."""
+        from _utils.scene_api import SceneAPI
+        reference = SceneAPI.get_current_element()
+        if not reference or not reference.isSculptObject():
+            show_message("Select a reference object", 2000)
+            return
+        all_elements = SceneAPI.collect_all_sculpt_objects()
+        if len(all_elements) <= 1:
+            show_message("No other objects to process", 2000)
+            return
+        sub, dec, res = self._uniform_smart_elements(reference, all_elements)
+        reference.selectOne()
+        show_message(f"Sub:{sub} Dec:{dec} Res:{res}", 2000)
 
     def RemeshResymmCur(self) -> None:
         """Remesh and symmetrize current selection."""
@@ -837,6 +1013,11 @@ class LKSToolsConfig:
     def _get_autopo_params(self):
         """Build AutopoParams from current settings."""
         from _utils.autopo_utils import AutopoParams
+        # Debug: print all panel values being used
+        print(f"[LKS Panel] _get_autopo_params:")
+        print(f"  autopo_polycount = {self.autopo_polycount}")
+        print(f"  autopo_voxelize = {self.autopo_voxelize}")
+        print(f"  autopo_decimate_if_above = {self.autopo_decimate_if_above}")
         return AutopoParams(
             target_polycount=self.autopo_polycount,
             capture_details=self.autopo_capture_details,
@@ -850,38 +1031,59 @@ class LKSToolsConfig:
             bypass_density_modal=self.autopo_bypass_modal,
         )
 
-    def _save_autopo_settings(self) -> None:
-        """Save autopo settings to cache."""
+    def _save_autopo_settings_to_cache(self) -> None:
+        """Save autopo settings to autopo settings cache."""
+        autopo_settings = get_autopo_settings()
+        autopo_settings.autopo_polycount = self.autopo_polycount
+        autopo_settings.autopo_capture_details = self.autopo_capture_details
+        autopo_settings.autopo_auto_density = self.autopo_auto_density
+        autopo_settings.autopo_hardsurface = self.autopo_hardsurface
+        autopo_settings.autopo_voxelize = self.autopo_voxelize
+        autopo_settings.autopo_voxelize_polycount = self.autopo_voxelize_polycount
+        autopo_settings.autopo_decimate_if_above = self.autopo_decimate_if_above
+        autopo_settings.autopo_decimation_limit = self.autopo_decimation_limit
+        autopo_settings.autopo_tangent_smooth = self.autopo_tangent_smooth
+        autopo_settings.autopo_bypass_density_modal = self.autopo_bypass_modal
+        save_autopo_settings()
+
+    def _save_general_settings_to_cache(self) -> None:
+        """Save general settings to general settings cache."""
         settings = get_settings()
-        settings.autopo_polycount = self.autopo_polycount
-        settings.autopo_capture_details = self.autopo_capture_details
-        settings.autopo_auto_density = self.autopo_auto_density
-        settings.autopo_hardsurface = self.autopo_hardsurface
-        settings.autopo_voxelize = self.autopo_voxelize
-        settings.autopo_voxelize_polycount = self.autopo_voxelize_polycount
-        settings.autopo_decimate_if_above = self.autopo_decimate_if_above
-        settings.autopo_decimation_limit = self.autopo_decimation_limit
-        settings.autopo_tangent_smooth = self.autopo_tangent_smooth
-        settings.autopo_bypass_density_modal = self.autopo_bypass_modal
+        settings.decimate_reduction = self.decimate_percent
         save_settings()
+
+    def _save_autopo_settings(self) -> None:
+        """Save autopo settings to cache. (Legacy - calls new method)"""
+        self._save_autopo_settings_to_cache()
 
     def RunAutopo(self) -> None:
         """Run autopo with current settings."""
         from _utils.autopo_utils import execute_autopo
-        self._save_autopo_settings()
-        execute_autopo(self._get_autopo_params())
+        self._save_autopo_settings_to_cache()
+        params = self._get_autopo_params()
+        print(
+            f"[LKS Panel] RunAutopo with params: target_polycount={params.target_polycount}")
+        print(
+            f"[LKS Panel] Panel value: self.autopo_polycount={self.autopo_polycount}")
+        execute_autopo(params)
 
     def AutopoToSculpt(self) -> None:
         """Run autopo and import to sculpt."""
         from _utils.autopo_utils import autopo_to_sculpt
-        self._save_autopo_settings()
-        autopo_to_sculpt(self._get_autopo_params())
+        self._save_autopo_settings_to_cache()
+        params = self._get_autopo_params()
+        print(
+            f"[LKS Panel] AutopoToSculpt with params: target_polycount={params.target_polycount}")
+        autopo_to_sculpt(params)
 
     def AutopoToMultires(self) -> None:
         """Run autopo and import as multiresolution."""
         from _utils.autopo_utils import autopo_to_multiresolution
-        self._save_autopo_settings()
-        autopo_to_multiresolution(self._get_autopo_params())
+        self._save_autopo_settings_to_cache()
+        params = self._get_autopo_params()
+        print(
+            f"[LKS Panel] AutopoToMultires with params: target_polycount={params.target_polycount}")
+        autopo_to_multiresolution(params)
 
     # ==================== LAYERS HANDLER ====================
 
@@ -894,14 +1096,52 @@ class LKSToolsConfig:
     # ==================== SAVE HANDLER ====================
 
     def SaveSettings(self) -> None:
-        """Save all settings to disk."""
-        settings = get_settings()
-        settings.auto_subdivide = self.auto_subdivide
-        settings.details_level = int(self.details_level)
-        settings.remove_stretching = self.remove_stretching
-        self._save_autopo_settings()
-        save_settings()
-        show_message("Settings saved", 2000)
+        """Save all settings to disk (brush, autopo, and general)."""
+        # Save brush settings
+        self._save_brush_settings_to_cache()
+        # Save autopo settings
+        self._save_autopo_settings_to_cache()
+        # Save general settings
+        self._save_general_settings_to_cache()
+        show_message("All settings saved", 2000)
+
+    # ==================== DEV TOOLS HANDLER ====================
+
+    def ReloadScripts(self) -> None:
+        """Reload all _utils modules to pick up code changes."""
+        import importlib
+        import sys
+
+        # List of modules to reload (in dependency order)
+        modules_to_reload: list[str] = [
+            '_utils.lks_settings',
+            '_utils.coat_ui_utils',
+            '_utils.scene_api',
+            '_utils.scope_utils',
+            '_utils.object_utils',
+            '_utils.mesh_utils',
+            '_utils.Scene_layer_utils',
+            '_utils.Scene_tiling_utils',
+            '_utils.SceneElement_visibility_utils',
+            '_utils.SceneElement_boolean_utils',
+            '_utils.brush_settings_utils',
+            '_utils.autopo_utils',
+            '_utils.scene_iteration_utils',
+        ]
+
+        reloaded_count: int = 0
+        for module_name in modules_to_reload:
+            if module_name in sys.modules:
+                try:
+                    importlib.reload(sys.modules[module_name])
+                    print(f"[LKS] Reloaded: {module_name}")
+                    reloaded_count += 1
+                except Exception as e:
+                    print(f"[LKS] Failed to reload {module_name}: {e}")
+            else:
+                print(f"[LKS] Not loaded: {module_name}")
+
+        show_message(f"Reloaded {reloaded_count} modules", 2000)
 
 
 def show_lks_tools_panel() -> None:

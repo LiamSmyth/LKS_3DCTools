@@ -435,26 +435,33 @@ def resample_to_match_density(
 
 def smart_match_density(
     element: coat.SceneElement,
-    reference_volume: coat.Volume
+    reference_volume: coat.Volume,
+    tolerance: float = 0.2
 ) -> str:
     """
-    Smart density matching using subdivide or decimate (not resample).
+    Smart density matching using subdivide, decimate, or resample.
 
-    Uses subdivision for increases > 2x (preserves shape better than resample)
-    and decimation for decreases. Skips objects within 2x of target.
+    Strategy:
+    - If target is much higher (>4x): subdivide to overshoot, then decimate to exact
+    - If target is higher (1.5x-4x): resample up
+    - If within tolerance: skip
+    - If target is lower: decimate to target
 
     Args:
         element: The SceneElement to adjust
         reference_volume: The reference volume whose density to match
+        tolerance: How close is "close enough" (0.2 = within 20%)
 
     Returns:
-        Action taken: "subdivided", "decimated", or "skipped"
+        Action taken: "subdivided", "decimated", "resampled", or "skipped"
     """
     import math
 
     element.selectOne()
 
     if not element.isSculptObject():
+        print(
+            f"[SmartDensity] '{element.name()}' is not a sculpt object, skipping")
         return "skipped"
 
     vol: coat.Volume = element.Volume()
@@ -462,37 +469,88 @@ def smart_match_density(
     # Ensure surface mode
     if not vol.isSurface():
         vol.toSurface()
+        wait_frames(MESH_OP_WAIT_FRAMES)
 
     target_polycount: int = calculate_target_polycount_by_scale(
         reference_volume, vol)
     current_polycount: int = vol.getPolycount()
 
+    print(
+        f"[SmartDensity] '{element.name()}': current={current_polycount:,}, target={target_polycount:,}")
+
     if target_polycount <= 0 or current_polycount <= 0:
+        print(f"[SmartDensity] Invalid polycount, skipping")
         return "skipped"
 
     polycount_ratio: float = target_polycount / current_polycount
+    print(f"[SmartDensity] Ratio: {polycount_ratio:.2f} (target/current)")
+
+    # Check if within tolerance (e.g., 0.8 to 1.2 for 20% tolerance)
+    if (1.0 - tolerance) <= polycount_ratio <= (1.0 + tolerance):
+        print(
+            f"[SmartDensity] Skipped '{element.name()}' - ratio {polycount_ratio:.2f} within tolerance")
+        return "skipped"
 
     if polycount_ratio < 1.0:
         # Need to reduce - use decimate
-        decimate_to_target(target_polycount)
+        # Calculate reduction percent: how much to REDUCE by (not keep)
+        # reduction_percent = (1 - target/current) * 100
+        reduction_percent: float = (1.0 - polycount_ratio) * 100.0
         print(
-            f"Decimated '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
+            f"[SmartDensity] Decimating by {reduction_percent:.1f}% (keeping {polycount_ratio*100:.1f}%)")
+
+        # Use decimate by percent instead of target (more reliable)
+        decimate_by_percent(reduction_percent)
+        wait_frames(MESH_OP_WAIT_FRAMES)
+
+        final_polycount: int = vol.getPolycount()
+        print(
+            f"[SmartDensity] Decimated '{element.name()}': {current_polycount:,} -> {final_polycount:,} (target was {target_polycount:,})")
         return "decimated"
 
-    elif polycount_ratio > 2.0:
-        # Need to increase significantly - use subdivide
-        # Each subdivide roughly quadruples polycount
-        resample_ratio: float = math.sqrt(polycount_ratio)
-        subdivide_count: int = min(math.ceil(math.log2(resample_ratio)), 5)
+    elif polycount_ratio > 4.0:
+        # Need to increase significantly - subdivide then decimate to exact target
+        # Each subdivide roughly quadruples polycount (2^2 per subdivision)
+        # So for ratio of 16x we need 2 subdivisions (4^2)
+        subdivide_count: int = int(math.ceil(math.log(polycount_ratio, 4)))
+        # Cap at 4 subdivisions (256x)
+        subdivide_count = min(subdivide_count, 4)
         subdivide_count = max(subdivide_count, 1)
 
-        for _ in range(subdivide_count):
-            subdivide_once()
+        print(
+            f"[SmartDensity] Subdividing {subdivide_count}x to increase from {current_polycount:,}")
 
-        print(f"Subdivided '{element.name()}' {subdivide_count}x")
+        for i in range(subdivide_count):
+            subdivide_once()
+            wait_frames(MESH_OP_WAIT_FRAMES)
+            print(
+                f"[SmartDensity] After subdivide {i+1}: {vol.getPolycount():,} polys")
+
+        # Now we likely overshot - decimate to exact target
+        new_polycount: int = vol.getPolycount()
+        if new_polycount > target_polycount:
+            # Calculate reduction to reach target
+            reduction_ratio: float = target_polycount / new_polycount
+            reduction_percent: float = (1.0 - reduction_ratio) * 100.0
+            print(
+                f"[SmartDensity] Decimating by {reduction_percent:.1f}% to reach {target_polycount:,}")
+            decimate_by_percent(reduction_percent)
+            wait_frames(MESH_OP_WAIT_FRAMES)
+            final_polycount: int = vol.getPolycount()
+            print(
+                f"[SmartDensity] Subdivided+decimated '{element.name()}': {current_polycount:,} -> {final_polycount:,}")
+        else:
+            print(
+                f"[SmartDensity] Subdivided '{element.name()}' {subdivide_count}x: {current_polycount:,} -> {new_polycount:,}")
         return "subdivided"
 
     else:
-        # Close enough - skip
-        print(f"Skipped '{element.name()}' - close to target")
-        return "skipped"
+        # Moderate increase (1x to 4x) - use resample
+        print(
+            f"[SmartDensity] Resampling up from {current_polycount:,} to {target_polycount:,}")
+        resample_to_target(current_polycount, target_polycount)
+        wait_frames(MESH_OP_WAIT_FRAMES)
+        final_polycount: int = vol.getPolycount()
+        print(
+            f"[SmartDensity] Resampled '{element.name()}': {current_polycount:,} -> {final_polycount:,}")
+        return "resampled"

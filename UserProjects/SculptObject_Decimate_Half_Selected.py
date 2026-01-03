@@ -21,7 +21,7 @@ def main() -> None:
     current_object, vol = result
 
     # Validate object has polygons
-    if not ObjectUtils.validate_object_has_polygons(vol):
+    if not ObjectUtils.validate_volume_has_polygons(vol):
         return
 
     # Convert to surface if it's voxelized

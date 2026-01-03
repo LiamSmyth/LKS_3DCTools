@@ -1,15 +1,13 @@
 """
 Autopo To Sculpt
 
-Runs autopo, imports result to sculpt room, and hides original object.
+Runs autopo, imports result to sculpt room as a sibling of original,
+and ghosts the original object.
 
 Room: Sculpt
-Action: Autopo -> import to sculpt -> hide original
+Action: Autopo -> import to sculpt -> reparent -> ghost original
 """
 from _utils.autopo_utils import autopo_to_sculpt
-import importlib
-from _utils import autopo_utils
-importlib.reload(autopo_utils)
 
 
 # Execute

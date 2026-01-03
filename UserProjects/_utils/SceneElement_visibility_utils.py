@@ -142,6 +142,48 @@ def invert_ghost_on_elements(elements: list[coat.SceneElement]) -> int:
 
 
 # =============================================================================
+# STATE CACHING
+# =============================================================================
+
+def cache_ghost_states(
+    elements: list[coat.SceneElement]
+) -> dict[int, bool]:
+    """
+    Cache the ghost state of all elements.
+
+    Args:
+        elements: List of elements to cache
+
+    Returns:
+        Dict mapping element id() to ghost state
+    """
+    return {id(el): el.ghost() for el in elements}
+
+
+def restore_ghost_states(
+    elements: list[coat.SceneElement],
+    cache: dict[int, bool]
+) -> int:
+    """
+    Restore ghost states from a cache.
+
+    Args:
+        elements: List of elements to restore
+        cache: Dict from cache_ghost_states()
+
+    Returns:
+        Number of elements restored
+    """
+    count: int = 0
+    for el in elements:
+        el_id: int = id(el)
+        if el_id in cache:
+            el.setGhost(cache[el_id])
+            count += 1
+    return count
+
+
+# =============================================================================
 # FILTERED OPERATIONS
 # =============================================================================
 

@@ -201,14 +201,34 @@ Object validation and manipulation.
 - `show_polycount_message(operation, polycount)`
 
 **Pure functions:**
+- `validate_and_ensure_surface_mode()` → `bool` - Validate current object and ensure surface mode
 - `scale_element(element, scale_factor)` - Scale without selection
 - `scale_element_with_select(element, scale_factor)` - Select and scale
 - `scale_elements(elements, scale_factor)` → `int`
 
 ### `lks_settings.py`
-Persistent settings cache with singleton pattern.
-- `get_settings()` - Get singleton settings instance
-- `save_settings()` - Persist to JSON file
+Persistent settings cache with separate singletons for brush, autopo, and general settings.
+
+**Files:**
+- `lks_brush_settings.json` - Brush settings (details_level, auto_subdivide, etc.)
+- `lks_autopo_settings.json` - Autopo workflow configuration
+- `lks_settings.json` - General settings (decimate, etc.)
+
+**Brush Settings Functions:**
+- `get_brush_settings()` - Get brush settings singleton
+- `save_brush_settings()` - Persist brush settings to disk
+- `reload_brush_settings()` - Force reload from disk
+
+**Autopo Settings Functions:**
+- `get_autopo_settings()` - Get autopo settings singleton
+- `save_autopo_settings()` - Persist autopo settings to disk
+- `reload_autopo_settings()` - Force reload from disk
+
+**General Settings Functions:**
+- `get_settings()` - Get general settings singleton
+- `save_settings()` - Persist general settings to disk
+- `reload_settings()` - Force reload from disk
+- `reset_settings()` - Reset to defaults
 
 ### `mesh_utils.py` 🆕
 **Primary module for mesh modification operations (resample, decimate, voxelize, subdivide).**
@@ -249,7 +269,7 @@ Uses dataclass + configurator pattern.
 **Uniform Density Functions:**
 - `calculate_target_polycount_by_scale(ref_vol, target_vol)` - Calculate matching polycount
 - `resample_to_match_density(element, ref_vol)` - Resample to match reference density
-- `smart_match_density(element, ref_vol)` - Use subdivide/decimate to match density
+- `smart_match_density(element, ref_vol, tolerance?)` - Smart density matching using subdivide/decimate/resample
 
 **Cleanup:**
 - `cleanup_after_mesh_operation()` - Remove empty layers, reset active layer
@@ -333,11 +353,15 @@ Autopo workflow with dataclass/configurator pattern.
 ## 🖼️ Panels
 
 ### `LKS_Tools_Panel.py`
-Comprehensive tools panel with all functionality:
+Comprehensive tools panel with all functionality.
+
+**Auto-save:** Panel uses `process()` callback to detect field changes and auto-save
+to the appropriate JSON files (brush, autopo, general).
 
 **Dynamic Subdiv section:**
 - `auto_subdivide`, `details_level`, `remove_stretching` controls
 - Apply to brushes, increment/decrement level buttons (fixed: always enables auto_subdivide)
+- Auto-saves to `lks_brush_settings.json`
 
 **Mesh Operations section (with headers):**
 - **Decimate:** percent slider, Current/Tree/All buttons, 50%/80% quick buttons
@@ -358,16 +382,20 @@ Comprehensive tools panel with all functionality:
 - **Other:** IdColorsTree, SplitMasked, MergePreserve
 
 **Autopo section (ALL parameters exposed):**
-- `autopo_density`, `autopo_capture_details`, `autopo_auto_density`
+- `autopo_polycount`, `autopo_capture_details`, `autopo_auto_density`
 - `autopo_decimation_limit`, `autopo_hardsurface`, `autopo_voxelize`
 - `autopo_tangent_smooth`, `autopo_bypass_modal`
 - Run Autopo, Autopo to Sculpt, Autopo to Multires
+- Auto-saves to `lks_autopo_settings.json`
 
 **Layers section:**
 - Setup Layers button (creates Sculpt/Color layers)
 
 **Settings:**
-- Save Settings button (persists all settings)
+- Save Settings button (manually saves all settings)
+
+**Dev Tools:**
+- Reload Scripts button (reloads all _utils modules)
 
 ## 📄 Documentation
 

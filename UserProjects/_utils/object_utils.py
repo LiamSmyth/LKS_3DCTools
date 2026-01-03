@@ -144,6 +144,40 @@ class ObjectUtils:
         message: str = f"{name}: {before:,} -> {after:,} polygons ({reduction_percent:.1f}% reduction)"
         print(message)
 
+
+# =============================================================================
+# VALIDATION + MODE UTILITIES (Pure functions)
+# =============================================================================
+
+def validate_and_ensure_surface_mode() -> bool:
+    """
+    Validate current sculpt object exists and ensure it's in surface mode.
+
+    This is a convenience function for action scripts that need to verify:
+    1. A sculpt object is selected
+    2. It has a valid volume
+    3. It's in surface mode (converting from voxels if needed)
+
+    Returns:
+        True if a valid sculpt object is ready in surface mode, False otherwise
+    """
+    current: coat.SceneElement | None = coat.Scene.current()
+    if not current:
+        return False
+    if not current.isSculptObject():
+        return False
+
+    vol: coat.Volume | None = current.Volume()
+    if not vol:
+        return False
+
+    if not vol.isSurface():
+        # Convert to surface mode
+        vol.toSurface()
+        coat.io.step(2)
+
+    return True
+
     @staticmethod
     def show_polycount_message(
         operation: str,

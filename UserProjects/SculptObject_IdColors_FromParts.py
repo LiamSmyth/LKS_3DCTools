@@ -16,15 +16,20 @@ from _utils.coat_ui_utils import (
     show_message,
     show_error,
 )
+from _utils.SceneElement_visibility_utils import (
+    cache_ghost_states,
+    restore_ghost_states,
+    ghost_elements,
+)
 
 # Minimum color value to avoid pure black
 MIN_COLOR: int = 0
 
 
 def fill_element_with_random_color(element: coat.SceneElement) -> None:
-    """Fill a single element with a random RGB color."""
-    element.selectOne()
-    element.setVisibility(True)
+    """Fill a single element with a random RGB color using ghost isolation."""
+    # Unghost this element, fill, re-ghost
+    element.setGhost(False)
 
     # Generate random color
     r: float = random.uniform(MIN_COLOR, 255)
@@ -34,7 +39,8 @@ def fill_element_with_random_color(element: coat.SceneElement) -> None:
     coat.Volume.color(r, g, b)
     coat.ui.cmd(CMD_FILL_LAYER)
 
-    element.setVisibility(False)
+    # Re-ghost so next element can be filled in isolation
+    element.setGhost(True)
 
 
 def main() -> None:
@@ -51,38 +57,31 @@ def main() -> None:
     # Set pen depth to 0 for color-only filling
     coat.ui.setSliderValue(SETTING_PEN_DEPTH, 0)
 
-    # Switch to IDMap layer
-    layer_id: int = coat.Scene.getLayer("IDMap")
+    # Switch to IDMap layer (creates if not exists)
+    layer_id: int = coat.Scene.getLayer("IDMap", True)
     coat.Scene.setActiveLayer(layer_id)
     coat.Scene.setLayerDepthOpacity(layer_id, 0)
 
-    # Get scene root
-    scene_root: coat.SceneElement | None = SceneAPI.get_sculpt_root()
-    if not scene_root:
-        show_error("No sculpt root found", 2000)
-        return
-
-    # Disable all visibility first
+    # Collect ALL scene elements and subtree
     all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects()
-    for el in all_elements:
-        el.setVisibility(False)
-
-    # Fill root element
-    fill_element_with_random_color(active_element)
-
-    # Fill all children in subtree
     subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(active_element)
-    for el in subtree:
-        if el != active_element:
-            fill_element_with_random_color(el)
 
-    # Re-enable all visibility
-    for el in all_elements:
-        el.setVisibility(True)
+    # Cache ghost states for restoration
+    ghost_cache: dict[int, bool] = cache_ghost_states(all_elements)
+
+    # Ghost everything in the scene
+    ghost_elements(all_elements)
+
+    # Fill each element in subtree (unghost one at a time)
+    for el in subtree:
+        fill_element_with_random_color(el)
+
+    # Restore original ghost states
+    restore_ghost_states(all_elements, ghost_cache)
 
     # Restore original selection and layer
     active_element.selectOne()
-    coat.Scene.setActiveLayer(coat.Scene.getLayer("Layer 0"))
+    coat.Scene.setActiveLayer(coat.Scene.getLayer("Layer 0", True))
     coat.ui.setSliderValue(SETTING_PEN_DEPTH, original_pen_depth)
 
     show_message(f"Filled {len(subtree)} objects with ID colors", 2000)

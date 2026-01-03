@@ -7,10 +7,6 @@ Room: Sculpt
 Action: Autopo -> import as multiresolution
 """
 from _utils.autopo_utils import autopo_to_multiresolution
-import importlib
-from _utils import autopo_utils
-importlib.reload(autopo_utils)
 
-
-# Execute
+# Execute autopo and import as multiresolution
 autopo_to_multiresolution()

@@ -28,6 +28,8 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 
 8. **Maintain todo list continuously.** Throughout the conversation, always keep a todo list updated. Work incrementally—mark tasks in-progress before starting, completed immediately after finishing. One task at a time.
 
+9. **Check existing utilities first.** Before writing new code, consult `copilot_codebase_router.instructions.md` and search `_utils/` for existing functions. Reuse and extend existing utilities rather than duplicating functionality.
+
 ---
 
 ## 1. Purpose and Scope

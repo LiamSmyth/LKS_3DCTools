@@ -39,9 +39,9 @@ import coat
 # CONSTANTS
 # =============================================================================
 
-# Standard layer names
-LAYER_SCULPT: str = "Sculpt"  # Layer 0 - depth only
-LAYER_COLOR: str = "Color"    # Layer 1 - color only
+# Standard layer names (use 3DCoat's default names to avoid duplicates)
+LAYER_SCULPT: str = "Layer 0"  # Layer 0 - depth only
+LAYER_COLOR: str = "Layer 1"   # Layer 1 - color only
 
 # Opacity values
 OPACITY_FULL: float = 1.0
@@ -68,7 +68,7 @@ def ensure_standard_layers() -> None:
     coat.Scene.mergeVisibleLayers()
 
     # Step 3: After merge, we should have one layer at index 0
-    # Rename it to "Sculpt" and configure as depth-only
+    # Keep the default name "Layer 0" to avoid 3DCoat creating duplicates
     base_layer_name: str = coat.Scene.getLayerName(0)
     if base_layer_name != LAYER_SCULPT:
         coat.Scene.setLayerName(0, LAYER_SCULPT)

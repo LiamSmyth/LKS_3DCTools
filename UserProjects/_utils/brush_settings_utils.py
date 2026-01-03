@@ -34,6 +34,11 @@ SETTING_AUTO_SUBDIVIDE_TEMPLATE: str = "$BrushConstructor::AutoSubdivide[{brush}
 SETTING_DETAILS_LEVEL_TEMPLATE: str = "$BrushConstructor::DetailsLevel[{brush}]"
 SETTING_REMOVE_STRETCHING_TEMPLATE: str = "$BrushConstructor::RemoveStretching[{brush}]"
 
+# Current brush settings (without [brushtype] suffix - applies to active brush)
+SETTING_AUTO_SUBDIVIDE_CURRENT: str = "$BrushConstructor::AutoSubdivide"
+SETTING_DETAILS_LEVEL_CURRENT: str = "$BrushConstructor::DetailsLevel"
+SETTING_REMOVE_STRETCHING_CURRENT: str = "$BrushConstructor::RemoveStretching"
+
 # Global settings (must be enabled for per-brush settings to work)
 SETTING_GLOBAL_REMOVE_STRETCHING: str = "$RemoveStretching"
 
@@ -151,6 +156,39 @@ def apply_remove_stretching(brush_type: str, enabled: bool) -> None:
     """Set remove stretching for a specific brush type."""
     setting: str = SETTING_REMOVE_STRETCHING_TEMPLATE.format(brush=brush_type)
     coat.ui.setBoolValue(setting, enabled)
+
+
+# =============================================================================
+# CURRENT BRUSH FUNCTIONS (applies to active brush only - fast)
+# =============================================================================
+
+def apply_auto_subdivide_current(enabled: bool) -> None:
+    """Set auto subdivide for the currently active brush only."""
+    coat.ui.setBoolValue(SETTING_AUTO_SUBDIVIDE_CURRENT, enabled)
+
+
+def apply_details_level_current(level: float) -> None:
+    """Set details level for the currently active brush only."""
+    clamped_level: float = max(
+        MIN_DETAILS_LEVEL, min(MAX_DETAILS_LEVEL, level))
+    coat.ui.setSliderValue(SETTING_DETAILS_LEVEL_CURRENT, clamped_level)
+
+
+def apply_remove_stretching_current(enabled: bool) -> None:
+    """Set remove stretching for the currently active brush only."""
+    coat.ui.setBoolValue(SETTING_REMOVE_STRETCHING_CURRENT, enabled)
+
+
+def apply_brush_settings_current(params: BrushDynamicSubdivParams) -> None:
+    """
+    Apply dynamic subdiv settings to the CURRENT brush only (fast).
+
+    Args:
+        params: BrushDynamicSubdivParams with all settings
+    """
+    apply_auto_subdivide_current(params.auto_subdivide)
+    apply_details_level_current(params.details_level)
+    apply_remove_stretching_current(params.remove_stretching)
 
 
 # =============================================================================

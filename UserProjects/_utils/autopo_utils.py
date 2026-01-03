@@ -106,19 +106,78 @@ def configure_autopo(params: AutopoParams) -> None:
     Args:
         params: AutopoParams with all settings
     """
-    coat.ui.setEditBoxValue(SETTING_REQUIRED_POLYCOUNT,
-                            params.target_polycount)
-    coat.ui.setSliderValue(SETTING_CAPTURE_DETAILS, params.capture_details)
-    coat.ui.setSliderValue(SETTING_AUTO_DENSITY, params.auto_density)
-    coat.ui.setBoolValue(SETTING_HARDSURFACE, params.hardsurface)
-    coat.ui.setBoolValue(SETTING_VOXELIZE, params.voxelize)
-    coat.ui.setEditBoxValue(SETTING_VOXELIZE_POLYCOUNT,
-                            params.voxelize_polycount)
-    coat.ui.setBoolValue(SETTING_DECIMATE_IF_ABOVE, params.decimate_if_above)
-    coat.ui.setEditBoxValue(SETTING_DECIMATION_LIMIT, params.decimation_limit)
-    coat.ui.setBoolValue(SETTING_TANGENT_SMOOTH, params.tangent_smooth)
-    coat.ui.setBoolValue(SETTING_BYPASS_DENSITY_MODAL,
-                         params.bypass_density_modal)
+    # Debug: print values being set
+    print(f"[Autopo Config] Setting polycount: {params.target_polycount}")
+    print(f"[Autopo Config] Setting capture_details: {params.capture_details}")
+    print(f"[Autopo Config] Setting auto_density: {params.auto_density}")
+    print(f"[Autopo Config] Setting hardsurface: {params.hardsurface}")
+    print(f"[Autopo Config] Setting voxelize: {params.voxelize}")
+    print(
+        f"[Autopo Config] Setting voxelize_polycount: {params.voxelize_polycount}")
+    print(
+        f"[Autopo Config] Setting decimate_if_above: {params.decimate_if_above}")
+    print(
+        f"[Autopo Config] Setting decimation_limit: {params.decimation_limit}")
+    print(f"[Autopo Config] Setting tangent_smooth: {params.tangent_smooth}")
+    print(
+        f"[Autopo Config] Setting bypass_density_modal: {params.bypass_density_modal}")
+
+    # Try multiple approaches to set polycount
+    # First try setEditBoxValue with int
+    r1a: bool = coat.ui.setEditBoxValue(
+        SETTING_REQUIRED_POLYCOUNT, int(params.target_polycount))
+    print(
+        f"[Autopo Config] setEditBoxValue(int) RequiredPolycount returned: {r1a}")
+
+    # Also try setSliderValue (in case it's a slider internally)
+    r1b: bool = coat.ui.setSliderValue(
+        SETTING_REQUIRED_POLYCOUNT, float(params.target_polycount))
+    print(f"[Autopo Config] setSliderValue RequiredPolycount returned: {r1b}")
+
+    # Also try setEditBoxValue with float
+    r1c: bool = coat.ui.setEditBoxValue(
+        SETTING_REQUIRED_POLYCOUNT, float(params.target_polycount))
+    print(
+        f"[Autopo Config] setEditBoxValue(float) RequiredPolycount returned: {r1c}")
+
+    # Set slider values
+    r2: bool = coat.ui.setSliderValue(
+        SETTING_CAPTURE_DETAILS, float(params.capture_details))
+    print(f"[Autopo Config] setSliderValue CaptureDetails returned: {r2}")
+
+    r3: bool = coat.ui.setSliderValue(
+        SETTING_AUTO_DENSITY, float(params.auto_density))
+    print(f"[Autopo Config] setSliderValue AutoDensity returned: {r3}")
+
+    # Set boolean values
+    r4: bool = coat.ui.setBoolValue(SETTING_HARDSURFACE, params.hardsurface)
+    print(f"[Autopo Config] setBoolValue Hardsurface returned: {r4}")
+
+    r5: bool = coat.ui.setBoolValue(SETTING_VOXELIZE, params.voxelize)
+    print(f"[Autopo Config] setBoolValue Voxelize returned: {r5}")
+
+    r6: bool = coat.ui.setEditBoxValue(
+        SETTING_VOXELIZE_POLYCOUNT, int(params.voxelize_polycount))
+    print(f"[Autopo Config] setEditBoxValue VoxelizePolycount returned: {r6}")
+
+    r7: bool = coat.ui.setBoolValue(
+        SETTING_DECIMATE_IF_ABOVE, params.decimate_if_above)
+    print(f"[Autopo Config] setBoolValue DecimateIfAbove returned: {r7}")
+
+    r8: bool = coat.ui.setEditBoxValue(
+        SETTING_DECIMATION_LIMIT, int(params.decimation_limit))
+    print(f"[Autopo Config] setEditBoxValue DecimationLimit returned: {r8}")
+
+    r9: bool = coat.ui.setBoolValue(
+        SETTING_TANGENT_SMOOTH, params.tangent_smooth)
+    print(f"[Autopo Config] setBoolValue TangentSmooth returned: {r9}")
+
+    r10: bool = coat.ui.setBoolValue(
+        SETTING_BYPASS_DENSITY_MODAL, params.bypass_density_modal)
+    print(f"[Autopo Config] setBoolValue BypassDensityModal returned: {r10}")
+
+    # NOTE: Do NOT call coat.ui.apply() here - it simulates Enter key
+    # which triggers revoxelize on surface meshes in sculpt room
 
 
 def create_autopo_configurator(params: AutopoParams) -> Callable[[], None]:
@@ -156,8 +215,8 @@ def execute_autopo(params: AutopoParams) -> bool:
     Returns:
         True if autopo started successfully, False on error
     """
-    # Ensure we're in Sculpt room (switch if needed)
-    ensure_sculpt_room()
+    # NOTE: Do not switch rooms before autopo - it may modify the source mesh
+    # Autopo will automatically switch to the appropriate room
 
     # Validate we have something selected
     current = coat.Scene.current()
@@ -165,17 +224,29 @@ def execute_autopo(params: AutopoParams) -> bool:
         show_error("No object selected for autopo", 3000)
         return False
 
-    # Configure autopo settings BEFORE opening the dialog
-    # (3DCoat remembers these settings even when dialog is closed)
-    configure_autopo(params)
-    wait_frames(2)
+    # Use a counter to track callback invocations
+    # The callback is called each frame while the dialog is open
+    _call_count: list[int] = [0]
 
-    # Now open dialog and just click OK
-    def click_ok() -> None:
-        wait_frames(2)
-        coat.ui.cmd(CMD_DIALOG_OK_LOCAL)
+    def configure_and_confirm() -> None:
+        _call_count[0] += 1
+        call = _call_count[0]
 
-    result: bool = coat.ui.cmd(CMD_AUTOPO, click_ok)
+        if call == 1:
+            # First frame: Configure values
+            print(
+                f"[Autopo] Frame {call}: Configuring dialog with polycount={params.target_polycount}")
+            configure_autopo(params)
+        elif call == 2:
+            # Second frame: Click OK (values should be applied now)
+            print(f"[Autopo] Frame {call}: Clicking OK")
+            coat.ui.cmd(CMD_DIALOG_OK_LOCAL)
+        else:
+            # Subsequent frames: Keep clicking OK
+            print(f"[Autopo] Frame {call}: Still clicking OK")
+            coat.ui.cmd(CMD_DIALOG_OK_LOCAL)
+
+    result: bool = coat.ui.cmd(CMD_AUTOPO, configure_and_confirm)
 
     if result:
         show_message(
@@ -245,7 +316,10 @@ def clear_retopo_mesh() -> None:
 
 def autopo_to_sculpt(params: AutopoParams | None = None) -> bool:
     """
-    Run autopo, import result to sculpt, and ghost original.
+    Run autopo, import result to sculpt, reparent as sibling, and ghost original.
+
+    The imported mesh is reparented to be under the same parent as the original
+    object (as a sibling), rather than as a child of the original.
 
     Args:
         params: AutopoParams (uses defaults if None)
@@ -264,6 +338,7 @@ def autopo_to_sculpt(params: AutopoParams | None = None) -> bool:
 
     original_element: coat.SceneElement = current
     original_name: str = original_element.name()
+    original_parent: coat.SceneElement = original_element.parent()
 
     # Run autopo
     if not execute_autopo(params):
@@ -280,10 +355,30 @@ def autopo_to_sculpt(params: AutopoParams | None = None) -> bool:
         show_error("Failed to import retopo to sculpt", 3000)
         return False
 
+    # Wait for import to complete
+    wait_frames(IMPORT_WAIT_FRAMES)
+
+    # Find the newly imported object (it should be the current selection now)
+    imported_element: coat.SceneElement = coat.Scene.current()
+
+    # Reparent imported mesh to be sibling of original (under same parent)
+    reparented: bool = False
+    if imported_element and original_parent:
+        try:
+            imported_element.changeParent(original_parent)
+            reparented = True
+        except Exception:
+            # changeParent may fail in some cases
+            pass
+
     # Ghost the original object
     try:
         original_element.setGhost(True)
-        show_message(f"Imported retopo, ghosted '{original_name}'", 3000)
+        if reparented:
+            show_message(
+                f"Imported '{imported_element.name()}' as sibling, ghosted '{original_name}'", 3000)
+        else:
+            show_message(f"Imported retopo, ghosted '{original_name}'", 3000)
     except Exception:
         show_message("Imported retopo (could not ghost original)", 3000)
 
@@ -319,20 +414,28 @@ def autopo_to_multiresolution(params: AutopoParams | None = None) -> bool:
 
 
 # =============================================================================
-# LEGACY FUNCTION (for backward compatibility with lks_settings)
+# CONVENIENCE FUNCTION (for action scripts)
 # =============================================================================
 
 def run_autopo_with_settings() -> bool:
     """
     Run autopo using cached LKS settings.
 
-    Legacy function - prefer using execute_autopo(AutopoParams(...)) directly.
+    Reads all autopo parameters from the autopo settings cache.
     """
-    from _utils.lks_settings import get_settings
-    settings = get_settings()
+    from _utils.lks_settings import get_autopo_settings
+    settings = get_autopo_settings()
 
     params = AutopoParams(
-        target_polycount=settings.autopo_density,
-        bypass_density_modal=DEFAULT_BYPASS_DENSITY_MODAL
+        target_polycount=settings.autopo_polycount,
+        capture_details=settings.autopo_capture_details,
+        auto_density=settings.autopo_auto_density,
+        hardsurface=settings.autopo_hardsurface,
+        voxelize=settings.autopo_voxelize,
+        voxelize_polycount=settings.autopo_voxelize_polycount,
+        decimate_if_above=settings.autopo_decimate_if_above,
+        decimation_limit=settings.autopo_decimation_limit,
+        tangent_smooth=settings.autopo_tangent_smooth,
+        bypass_density_modal=settings.autopo_bypass_density_modal,
     )
     return execute_autopo(params)

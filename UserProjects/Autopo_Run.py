@@ -7,10 +7,6 @@ Room: Sculpt
 Action: Execute autopo with density/options from settings cache
 """
 from _utils.autopo_utils import run_autopo_with_settings
-import importlib
-from _utils import autopo_utils
-importlib.reload(autopo_utils)
 
-
-# Execute
+# Execute autopo with cached settings
 run_autopo_with_settings()

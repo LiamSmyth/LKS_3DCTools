@@ -1,43 +1,45 @@
 """
 Decrement Details Level
 
-Decrements the brush details level by 1 and ensures dynamic subdiv is enabled.
-5 -> 4 -> 3 -> 2 -> 1 -> 0 (floor)
+Decrements the brush details level by 1 and applies to current brush.
+Use 'Apply to Brushes' in LKS panel to apply to all brush types.
 
 Room: Sculpt
-Action: Decrement details level, enable auto subdiv, apply to all brushes
+Action: Decrement details level, apply to current brush
 """
-import coat
-from _utils.brush_settings_utils import BrushSettingsUtils
-from _utils.lks_settings import get_settings, save_settings
-import importlib
-from _utils import lks_settings
-from _utils import brush_settings_utils
-importlib.reload(lks_settings)
-importlib.reload(brush_settings_utils)
+from _utils.brush_settings_utils import apply_auto_subdivide_current, apply_details_level_current
+from _utils.lks_settings import get_brush_settings, save_brush_settings, reload_brush_settings
+from _utils.coat_ui_utils import show_message
+from _utils.object_utils import validate_and_ensure_surface_mode
 
 
 def decrement_details_level():
-    """Decrement the current details level by 1 and enable dynamic subdiv."""
-    settings = get_settings()
-    current = settings.details_level
+    """Decrement the current details level by 1."""
+    # Ensure we're in surface mode (required for dynamic subdiv to work)
+    if not validate_and_ensure_surface_mode():
+        show_message("Select a sculpt object in surface mode", 2000)
+        return
+
+    # Force reload from disk to get latest value (avoid stale singleton)
+    reload_brush_settings()
+
+    # Load current settings from cache
+    settings = get_brush_settings()
+    current: int = int(settings.details_level)
 
     # Floor at 0
-    new_value = max(0, current - 1)
+    new_value: int = max(0, current - 1)
 
-    # Update cache - enable auto_subdivide, use cached remove_stretching
+    # Update cache and save to disk
     settings.details_level = new_value
     settings.auto_subdivide = True
-    save_settings()
+    save_brush_settings()
 
-    # Apply all settings to all brushes
-    BrushSettingsUtils.apply_global_brush_settings(
-        settings.auto_subdivide,
-        settings.details_level,
-        settings.remove_stretching
-    )
-    coat.ui.showInfoMessage(f"Details Level: {new_value} (DynSubdiv ON)", 2000)
+    # Apply to current brush only (fast - instant)
+    apply_auto_subdivide_current(True)
+    apply_details_level_current(float(new_value))
+
+    show_message(f"Details Level: {new_value}", 1000)
 
 
-# Execute
 decrement_details_level()
