@@ -314,3 +314,97 @@ def deduplicate_elements(elements: list[coat.SceneElement]) -> list[coat.SceneEl
             seen.add(el_id)
             unique.append(el)
     return unique
+
+
+# =============================================================================
+# INSTANCE DETECTION (EXPERIMENTAL)
+# =============================================================================
+
+def get_volume_tree_id(element: coat.SceneElement) -> int | None:
+    """
+    Get the underlying VoxTreeBranch pointer ID for an element's volume.
+
+    Instances share the same VoxTreeBranch, so comparing these IDs can
+    detect whether two elements are instances of each other.
+
+    Args:
+        element: SceneElement to check
+
+    Returns:
+        Integer ID of the tree pointer, or None if not a sculpt object
+    """
+    if not element.isSculptObject():
+        return None
+    volume: coat.Volume = element.Volume()
+    if not volume or not volume.valid():
+        return None
+    tree_ptr = volume.tree()
+    # tree() returns a raw pointer - id() gives us a unique integer
+    return id(tree_ptr) if tree_ptr else None
+
+
+def deduplicate_instances(
+    elements: list[coat.SceneElement]
+) -> list[coat.SceneElement]:
+    """
+    Remove elements that are instances of already-processed geometry.
+
+    When iterating a subtree with instances (e.g., left/right leg),
+    operations like decimate would be applied twice to the same geometry.
+    This function returns only the first occurrence of each unique geometry.
+
+    Args:
+        elements: List of elements (may contain instances)
+
+    Returns:
+        List with only one element per unique underlying geometry
+    """
+    seen_trees: set[int] = set()
+    unique: list[coat.SceneElement] = []
+
+    for el in elements:
+        tree_id: int | None = get_volume_tree_id(el)
+
+        if tree_id is None:
+            # Not a sculpt object - keep it (could be a folder/group)
+            unique.append(el)
+            continue
+
+        if tree_id not in seen_trees:
+            seen_trees.add(tree_id)
+            unique.append(el)
+        # else: skip - this is an instance of geometry we've already seen
+
+    return unique
+
+
+def partition_instances(
+    elements: list[coat.SceneElement]
+) -> tuple[list[coat.SceneElement], list[coat.SceneElement]]:
+    """
+    Partition elements into unique geometry and instance duplicates.
+
+    Args:
+        elements: List of elements
+
+    Returns:
+        Tuple of (unique_elements, instance_duplicates)
+    """
+    seen_trees: set[int] = set()
+    unique: list[coat.SceneElement] = []
+    instances: list[coat.SceneElement] = []
+
+    for el in elements:
+        tree_id: int | None = get_volume_tree_id(el)
+
+        if tree_id is None:
+            unique.append(el)
+            continue
+
+        if tree_id not in seen_trees:
+            seen_trees.add(tree_id)
+            unique.append(el)
+        else:
+            instances.append(el)
+
+    return unique, instances

@@ -57,6 +57,11 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 ```
 UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
+├── _ops/                      # Hidden from 3DCoat - configurable operators
+│   ├── __init__.py
+│   ├── SculptObject_Decimate.py
+│   ├── SculptObject_SetGhost.py
+│   └── ...
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
 │   ├── __init__.py
 │   ├── coat_api.py            # Low-level 3DCoat API wrappers
@@ -77,7 +82,39 @@ UserProjects/
 
 ## 5. Script Types
 
-### 5.1 Action Scripts (Root Level)
+### 5.1 Operators (`_ops/`)
+
+**Location:** `UserProjects/_ops/*.py`
+**Purpose:** Configurable workflows that both action scripts and panel buttons invoke
+**Naming:** `<ObjectType>_<Action>.py` (scope/config are parameters, not in filename)
+
+**Pattern:**
+```python
+# _ops/SculptObject_Decimate.py
+"""Decimate sculpt objects with configurable scope and parameters."""
+from _utils.scope_utils import Scope, resolve_scope
+from _utils.mesh_utils import execute_decimate, DecimateParams
+
+def main(
+    scope: Scope = Scope.CURRENT,
+    reduction_percent: float = 50.0,
+    target_polycount: int | None = None,
+    preserve_selection: bool = True,
+) -> int:
+    """Decimate objects. Returns count of objects processed."""
+    elements = resolve_scope(scope)
+    # ... implementation using _utils functions
+    return count
+```
+
+**Key principles:**
+- Operators have a `main()` with explicit typed parameters
+- Use `Scope` enum for element targeting
+- Return count or result for feedback
+- Use `_utils/` for core logic (don't duplicate)
+- Handle selection preservation internally
+
+### 5.2 Action Scripts (Root Level)
 
 **Location:** `UserProjects/*.py`
 **Purpose:** Minimal invokers exposed to 3DCoat's script browser
@@ -97,7 +134,7 @@ Examples:
 - `Brush_IncrementDetailsLevel.py` - Increment brush detail level
 - `Autopo_ToSculpt.py` - Run autopo and import to sculpt
 
-**Pattern:**
+**Pattern (action scripts call operators):**
 ```python
 """
 Brief description.
@@ -105,10 +142,16 @@ Brief description.
 Room: Sculpt
 Action: One-line description
 """
-from _utils.some_utils import some_function
+from _ops.SculptObject_Decimate import main as op_main
+from _utils.scope_utils import Scope
 
-# Minimal logic - just configure and invoke
-some_function(param1=value1)
+
+def main() -> None:
+    """Decimate selected object to half polycount."""
+    op_main(scope=Scope.CURRENT, reduction_percent=50.0)
+
+
+main()
 ```
 
 ### 5.2 Utility Modules (`_utils/`)

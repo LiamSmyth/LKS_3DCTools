@@ -24,6 +24,12 @@ A ledger of existing code, utilities, and resources. This file provides quick li
 UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
 ├── LKS_Tools_Panel.py         # Main tools panel (comprehensive, all features)
+├── _ops/                      # Hidden from 3DCoat - configurable operators
+│   ├── __init__.py            # Package docstring
+│   ├── SculptObject_Decimate.py    # Decimate with scope/config
+│   ├── SculptObject_SetGhost.py    # Ghost/unghost/invert/isolate
+│   ├── SculptObject_IdColors.py    # Fill with ID colors
+│   └── ...
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
 │   ├── __init__.py            # Package exports
 │   ├── scene_api.py           # Thin wrappers for coat iterators
@@ -48,6 +54,69 @@ UserProjects/
 - Root `.py` files appear in 3DCoat's script browser
 - `_` prefixed folders are hidden but importable
 - Non-prefixed subfolders appear as categories
+
+## 🎯 Operators (`_ops/`)
+
+Operators are configurable scripts that encapsulate reusable workflows.
+Both action scripts and panel buttons call operators, ensuring consistent behavior.
+
+**Pattern:** Each operator has a `main()` function with explicit parameters:
+```python
+# _ops/SculptObject_SetGhost.py
+def main(scope: Scope, ghost: bool = True, mode: GhostMode = GhostMode.SET) -> int:
+    ...
+```
+
+**Usage from action script:**
+```python
+from _ops.SculptObject_SetGhost import main as op_main
+from _utils.scope_utils import Scope
+op_main(scope=Scope.ALL, ghost=False)
+```
+
+**Usage from panel button:**
+```python
+def UnghostAll(self) -> None:
+    from _ops.SculptObject_SetGhost import main as op_main
+    from _utils.scope_utils import Scope
+    op_main(scope=Scope.ALL, ghost=False)
+```
+
+### Available Operators
+
+#### `SculptObject_Decimate.py`
+Decimate sculpt objects by percentage or to target polycount.
+
+**Parameters:**
+- `scope: Scope` - Which objects (CURRENT, TREE, ALL)
+- `reduction_percent: float | None` - Percentage to reduce (e.g., 50.0)
+- `target_polycount: int | None` - Absolute target (overrides percent)
+- `use_16x: bool` - Quick 16x proxy mode
+- `preserve_selection: bool` - Restore selection after
+
+**Used by:** DecCurrent, DecTree, DecAll, Dec50, Dec80 (panel), SculptObject_Decimate_*.py (actions)
+
+#### `SculptObject_SetGhost.py`
+Ghost/unghost operations with modes for set, invert, and isolate.
+
+**Parameters:**
+- `scope: Scope` - Which objects (CURRENT, TREE, OTHER, ALL)
+- `ghost: bool` - True = ghost, False = unghost (for SET mode)
+- `mode: GhostMode` - SET, INVERT, or ISOLATE
+- `preserve_selection: bool` - Restore selection after
+
+**Used by:** GhostCur/Tree/All, UnghostCur/Tree/All, InvertGhost (panel), SculptObject_Ghost_*.py (actions)
+
+#### `SculptObject_IdColors.py`
+Fill objects with random ID colors for texture baking.
+
+**Parameters:**
+- `scope: Scope` - Which objects (TREE, ALL)
+- `layer_name: str` - Layer to use/create (default: "IDMap")
+- `min_color: int` - Minimum RGB value to avoid pure black
+- `restore_layer: bool` - Restore Layer 0 after
+
+**Used by:** IdColorsTree (panel), SculptObject_IdColors_FromParts.py (action)
 
 ## 🧩 Action Scripts (Root Level)
 
@@ -128,6 +197,11 @@ Wraps callback-based iterators into list-returning functions.
 - `filter_elements(elements, predicate)` → `list`
 - `filter_sculpt_objects(elements)` → `list`
 - `deduplicate_elements(elements)` → `list`
+
+**Instance Detection (Experimental):**
+- `get_volume_tree_id(element)` → `int | None` - Get underlying VoxTreeBranch pointer ID
+- `deduplicate_instances(elements)` → `list` - Remove elements that are instances of already-seen geometry
+- `partition_instances(elements)` → `tuple[list, list]` - Split into (unique, instance_duplicates)
 
 ### `scope_utils.py`
 Scope enum and resolution for batch operations.

@@ -369,64 +369,38 @@ class LKSToolsConfig:
 
     # ==================== DECIMATE HANDLERS ====================
 
-    def _decimate_elements(self, elements: list) -> int:
-        """Helper to decimate a list of elements."""
-        from _utils.mesh_utils import DecimateParams, execute_decimate, ensure_surface_mode
-        count: int = 0
-        for el in elements:
-            if el.isSculptObject():
-                vol = el.Volume()
-                ensure_surface_mode(vol)
-                el.selectOne()
-                execute_decimate(DecimateParams(
-                    reduction_percent=float(self.decimate_percent)))
-                count += 1
-        return count
-
     def DecCurrent(self) -> None:
         """Decimate current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import cleanup_after_mesh_operation
-        elements = SceneAPI.get_selected_elements()
-        if not elements:
-            show_message("No selection", 2000)
-            return
-        count = self._decimate_elements(elements)
-        cleanup_after_mesh_operation()
-        show_message(f"Decimated {count} obj", 2000)
+        from _ops.SculptObject_Decimate import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.CURRENT, reduction_percent=float(
+            self.decimate_percent))
 
     def DecTree(self) -> None:
         """Decimate current subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import cleanup_after_mesh_operation
-        current = SceneAPI.get_current_element()
-        if not current:
-            show_message("No selection", 2000)
-            return
-        elements = SceneAPI.collect_subtree(current)
-        count = self._decimate_elements(elements)
-        current.selectOne()
-        cleanup_after_mesh_operation()
-        show_message(f"Decimated {count} obj", 2000)
+        from _ops.SculptObject_Decimate import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.TREE, reduction_percent=float(self.decimate_percent))
 
     def DecAll(self) -> None:
         """Decimate all sculpt objects."""
-        from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import cleanup_after_mesh_operation
-        elements = SceneAPI.collect_all_sculpt_objects()
-        count = self._decimate_elements(elements)
-        cleanup_after_mesh_operation()
-        show_message(f"Decimated {count} obj", 2000)
+        from _ops.SculptObject_Decimate import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.ALL, reduction_percent=float(self.decimate_percent))
 
     def Dec50(self) -> None:
         """Quick decimate 50%."""
+        from _ops.SculptObject_Decimate import main as op_main
+        from _utils.scope_utils import Scope
         self.decimate_percent = 50
-        self.DecCurrent()
+        op_main(scope=Scope.CURRENT, reduction_percent=50.0)
 
     def Dec80(self) -> None:
         """Quick decimate 80%."""
+        from _ops.SculptObject_Decimate import main as op_main
+        from _utils.scope_utils import Scope
         self.decimate_percent = 80
-        self.DecCurrent()
+        op_main(scope=Scope.CURRENT, reduction_percent=80.0)
 
     # ==================== RESAMPLE HANDLERS ====================
 
@@ -730,84 +704,57 @@ class LKSToolsConfig:
 
     def GhostCur(self) -> None:
         """Ghost current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        elements = SceneAPI.get_selected_elements()
-        count = set_ghost(elements, True)
-        show_message(f"Ghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.CURRENT, ghost=True)
 
     def GhostTree(self) -> None:
         """Ghost current subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        current = SceneAPI.get_current_element()
-        if not current:
-            return
-        elements = SceneAPI.collect_subtree(current)
-        count = set_ghost(elements, True)
-        show_message(f"Ghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.TREE, ghost=True)
 
     def GhostOther(self) -> None:
         """Ghost all except selection subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import ghost_except
-        selected = SceneAPI.get_selected_elements()
-        all_elements = SceneAPI.collect_all_sculpt_objects()
-        count = ghost_except(all_elements, selected)
-        show_message(f"Ghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main, GhostMode
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.CURRENT, mode=GhostMode.ISOLATE)
 
     def GhostAll(self) -> None:
         """Ghost all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        elements = SceneAPI.collect_all_sculpt_objects()
-        count = set_ghost(elements, True)
-        show_message(f"Ghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.ALL, ghost=True)
 
     def UnghostCur(self) -> None:
         """Unghost current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        elements = SceneAPI.get_selected_elements()
-        count = set_ghost(elements, False)
-        show_message(f"Unghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.CURRENT, ghost=False)
 
     def UnghostTree(self) -> None:
         """Unghost current subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        current = SceneAPI.get_current_element()
-        if not current:
-            return
-        elements = SceneAPI.collect_subtree(current)
-        count = set_ghost(elements, False)
-        show_message(f"Unghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.TREE, ghost=False)
 
     def UnghostOther(self) -> None:
         """Unghost all except selection subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_ghost
-        selected = SceneAPI.get_selected_elements()
-        all_elements = SceneAPI.collect_all_sculpt_objects()
-        others = self._get_other_elements(selected, all_elements)
-        count = set_ghost(others, False)
-        show_message(f"Unghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.OTHER, ghost=False)
 
     def UnghostAll(self) -> None:
         """Unghost all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import unghost_elements
-        elements = SceneAPI.collect_all_sculpt_objects()
-        count = unghost_elements(elements)
-        show_message(f"Unghosted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.ALL, ghost=False)
 
     def InvertGhost(self) -> None:
         """Invert ghost on all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import invert_ghost_on_elements
-        elements = SceneAPI.collect_all_sculpt_objects()
-        count = invert_ghost_on_elements(elements)
-        show_message(f"Inverted {count}", 2000)
+        from _ops.SculptObject_SetGhost import main as op_main, GhostMode
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.ALL, mode=GhostMode.INVERT)
 
     # ==================== SMART ACTIONS HANDLERS ====================
 
@@ -946,29 +893,9 @@ class LKSToolsConfig:
 
     def IdColorsTree(self) -> None:
         """Fill subtree with random ID colors."""
-        import random
-        from _utils.scene_api import SceneAPI
-        from _utils.coat_ui_utils import CMD_FILL_LAYER
-        reference = SceneAPI.get_current_element()
-        if not reference:
-            show_message("No selection", 2000)
-            return
-        subtree = SceneAPI.collect_subtree(reference)
-        for el in subtree:
-            if el.isSculptObject():
-                el.selectOne()
-                el.setVisibility(True)
-                r = random.uniform(0, 255)
-                g = random.uniform(0, 255)
-                b = random.uniform(0, 255)
-                coat.Volume.color(r, g, b)
-                coat.ui.cmd(CMD_FILL_LAYER)
-                el.setVisibility(False)
-        # Show all again
-        for el in subtree:
-            el.setVisibility(True)
-        reference.selectOne()
-        show_message(f"Filled {len(subtree)} with ID colors", 2000)
+        from _ops.SculptObject_IdColors import main as op_main
+        from _utils.scope_utils import Scope
+        op_main(scope=Scope.TREE)
 
     def SplitMasked(self) -> None:
         """Split frozen/masked area to new object."""
