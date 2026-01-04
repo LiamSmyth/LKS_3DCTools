@@ -73,8 +73,8 @@ try:
                      "SculptObject_Decimate_Half_Selected.py", "LKS: Decimate Selected 50%")
     _register_action("LKS_Decimate_Half_Subtree",
                      "SculptObject_Decimate_Half_Subtree.py", "LKS: Decimate Subtree 50%")
-    _register_action("LKS_Decimate_16x_Toggle",
-                     "SculptObject_Decimate_16x_Toggle.py", "LKS: Decimate 16x Toggle")
+    _register_action("LKS_ProxyToggle_Decimate16X",
+                     "SculptObject_ProxyToggle_Decimate16X_Selected.py", "LKS: Proxy Toggle Decimate 16X")
     _register_action("LKS_Ghost_Toggle_Subtree",
                      "SculptObject_Ghost_Toggle_Subtree.py", "LKS: Ghost Toggle Subtree")
     _register_action("LKS_Ghost_Invert_All",

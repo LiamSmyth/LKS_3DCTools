@@ -2,7 +2,9 @@
 SculptObject_Decimate Operator
 
 Decimate sculpt objects to reduce polygon count.
-Supports: percentage reduction, target polycount, and 16x quick proxy.
+Supports: percentage reduction and target polycount.
+
+For proxy mode (16X decimation cache), use SculptObject_Proxy instead.
 
 Uses scope resolution to determine which elements to operate on.
 """
@@ -10,10 +12,7 @@ import coat
 from dataclasses import dataclass
 from utils.scene_api import SceneAPI
 from utils.scope_utils import Scope, resolve_scope
-from utils.Volume_decimate_utils import (
-    execute_decimate,
-    decimate_16x,
-)
+from utils.Volume_decimate_utils import execute_decimate
 from utils.Volume_mode_utils import ensure_surface_mode
 from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
 from utils.coat_ui_utils import show_message, show_error
@@ -35,7 +34,6 @@ class DecimateConfig:
     """Configuration for decimate operation."""
     reduction_percent: float | None = DEFAULT_REDUCTION_PERCENT
     target_polycount: int | None = None
-    use_16x: bool = False  # Quick 16x proxy mode
 
 
 # =============================================================================
@@ -61,14 +59,11 @@ def _decimate_element(
     # Select element for operation
     element.selectOne()
 
-    if config.use_16x:
-        decimate_16x()
-    else:
-        # Call utils with raw args (no dataclass)
-        execute_decimate(
-            target_polycount=config.target_polycount,
-            reduction_percent=config.reduction_percent,
-        )
+    # Call utils with raw args (no dataclass)
+    execute_decimate(
+        target_polycount=config.target_polycount,
+        reduction_percent=config.reduction_percent,
+    )
 
     return True
 
@@ -81,7 +76,6 @@ def main(
     scope: Scope = Scope.CURRENT,
     reduction_percent: float | None = DEFAULT_REDUCTION_PERCENT,
     target_polycount: int | None = None,
-    use_16x: bool = False,
     preserve_selection: bool = True,
 ) -> int:
     """
@@ -91,7 +85,6 @@ def main(
         scope: Which objects to decimate
         reduction_percent: Percentage of polygons to remove (e.g., 50.0 = half)
         target_polycount: Absolute target polycount (overrides percent if set)
-        use_16x: Use quick 16x decimation proxy mode
         preserve_selection: Whether to restore selection after operation
 
     Returns:
@@ -111,7 +104,6 @@ def main(
     config = DecimateConfig(
         reduction_percent=reduction_percent,
         target_polycount=target_polycount,
-        use_16x=use_16x,
     )
 
     # Resolve which elements to operate on
@@ -135,10 +127,8 @@ def main(
         current.selectOne()
 
     # Build status message
-    if use_16x:
-        status: str = f"16x decimated {count}"
-    elif target_polycount is not None:
-        status = f"Decimated {count} to {target_polycount:,}"
+    if target_polycount is not None:
+        status: str = f"Decimated {count} to {target_polycount:,}"
     else:
         status = f"Decimated {count} by {reduction_percent:.0f}%"
 

@@ -14,7 +14,6 @@ from utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
 # =============================================================================
 
 CMD_DECIMATE: str = "$Decimate"
-CMD_DECIMATE_16X: str = "$Decimate16X"
 SETTING_DECIMATE_POLYCOUNT: str = "$DecimationParams::ReducedPolycount"
 SETTING_DECIMATE_PERCENT: str = "$DecimationParams::ReductionPercent"
 
@@ -94,9 +93,3 @@ def decimate_to_target(polycount: int) -> None:
 def decimate_to_half() -> None:
     """Decimate current Volume to approximately half (50% reduction)."""
     decimate_by_percent(50.0)
-
-
-def decimate_16x() -> None:
-    """Decimate current Volume to 1/16th (quick proxy)."""
-    coat.ui.cmd(CMD_DECIMATE_16X)
-    wait_frames(MESH_OP_WAIT_FRAMES)

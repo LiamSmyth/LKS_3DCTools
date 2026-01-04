@@ -104,7 +104,19 @@ from utils.Volume_decimate_utils import (
     decimate_by_percent,
     decimate_to_target,
     decimate_to_half,
-    decimate_16x,
+)
+
+# Volume utilities - Proxy (raw args pattern)
+from utils.Volume_proxy_utils import (
+    toggle_proxy,
+    toggle_decimate_16x,
+    toggle_decimate_8x,
+    toggle_decimate_4x,
+    toggle_decimate_2x,
+    toggle_reduce_8x,
+    toggle_reduce_4x,
+    toggle_reduce_2x,
+    ProxyType,
 )
 
 # Volume utilities - Resample (raw args pattern)
@@ -145,3 +157,14 @@ from utils.scene_iteration_utils import SceneIterationUtils
 
 # Brush settings utilities
 from utils.brush_settings_utils import BrushSettingsUtils
+
+# Registration utilities
+from utils.registration_utils import (
+    register_addon,
+    unregister_addon,
+    full_reload,
+    reload_modules,
+    register_actions,
+    LKS_MODULES,
+    ACTION_DEFINITIONS,
+)

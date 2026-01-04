@@ -65,7 +65,8 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   └── scene_iteration_utils.py # Legacy - prefer scene_api.py
 ├── ui/                       # Qt UI components
 │   ├── __init__.py           # Exports DARK_STYLESHEET
-│   └── styles.py             # Qt stylesheets and color constants
+│   ├── styles.py             # Qt stylesheets and color constants
+│   └── widgets.py            # Reusable Qt widgets (CollapsibleSection, ButtonGrid, ActivityLog)
 ├── data/                     # Runtime state and settings
 │   ├── lks_settings.json     # General settings
 │   ├── lks_brush_settings.json # Brush settings
@@ -205,7 +206,12 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 - `LKS_ExternalPanel_Launch.py` - Launch external panel and register extension
 - `LKS_ExternalPanel_Stop.py` - Stop external panel and unregister extension
 
-## 🛠️ Utility Modules (`_utils/`)
+### Registration & Lifecycle
+- `LKS_Register.py` - Register the addon (extension + actions + show panel)
+- `LKS_Unregister.py` - Unregister the addon (close panel + remove actions)
+- `LKS_FullReload.py` - Full reload for development (reload modules + re-register)
+
+## 🛠️ Utility Modules (`utils/`)
 
 > **Architecture Note:** Utils take RAW PRIMITIVE ARGUMENTS only (no dataclasses).
 > Dataclasses for configuration belong in operators (`_ops/`).
@@ -461,6 +467,78 @@ Autopo workflow with dataclass/configurator pattern.
 ### `scene_iteration_utils.py` (Legacy)
 **Prefer `scene_api.py` for new code.**
 - `SceneIterationUtils` - Static methods for iteration
+
+### `registration_utils.py`
+Addon lifecycle management - registration, unregistration, and module reloading.
+
+**Constants:**
+- `ACTION_DEFINITIONS: list[tuple]` - List of (script_path, menu_location, id) tuples
+- `LKS_MODULES: list[str]` - List of module paths for reloading
+
+**Functions:**
+- `register_actions()` - Register all action scripts with 3DCoat menus
+- `unregister_actions()` - Remove all registered actions
+- `register_addon(show_panel?)` - Full registration (extension + actions + optionally show panel)
+- `unregister_addon()` - Full cleanup (close panel + remove actions)
+- `reload_modules(modules?)` → `tuple[int, int]` - Reload modules, returns (success, failed) counts
+- `full_reload()` - Complete development reload (unregister + reload modules + re-register)
+
+**Used by:** `actions/LKS_Register.py`, `actions/LKS_Unregister.py`, `actions/LKS_FullReload.py`
+
+## 🎨 UI Components (`ui/`)
+
+Reusable PySide6 widget primitives for the LKS panel.
+
+### `styles.py`
+Qt stylesheets and color constants for dark theme.
+
+**Constants:**
+- `DARK_STYLESHEET: str` - Complete dark theme stylesheet for Qt widgets
+- `DARK_BG: str`, `DARK_SURFACE: str`, `DARK_BORDER: str` - Color constants
+
+### `widgets.py`
+Reusable Qt widgets for the LKS panel.
+
+**Widgets:**
+- `CollapsibleSection(title, color?, collapsed?)` - Expandable/collapsible section with arrow toggle
+  - `toggle_section()` - Expand/collapse the section
+  - `set_collapsed(collapsed)` - Set collapsed state
+  - `content_layout: QVBoxLayout` - Layout for adding content widgets
+  - Signals: `toggled(bool)` - Emitted when section is toggled
+
+- `ButtonGrid(columns)` - Grid layout for buttons with uniform sizing
+  - `add_button(text, callback, tooltip?)` - Add a button to the grid
+  - Auto-wraps buttons to new rows based on column count
+
+- `ActivityLog(max_lines?)` - Scrollable activity log with colored messages
+  - `log_info(text)` - Log info message (gray)
+  - `log_warn(text)` - Log warning (yellow)
+  - `log_error(text)` - Log error (red)
+  - `log_success(text)` - Log success (green)
+  - `log_debug(text)` - Log debug (dim gray)
+  - `clear()` - Clear all messages
+  - HTML-based with auto-scrolling
+
+- `SectionHeader(text, color?)` - Styled section header label
+- `LabeledSlider(label, min, max, value)` - Slider with label and value display
+- `add_tooltip(widget, text)` - Add tooltip to any widget
+
+**Usage:**
+```python
+from ui.styles import DARK_STYLESHEET
+from ui.widgets import CollapsibleSection, ButtonGrid, ActivityLog
+
+self.setStyleSheet(DARK_STYLESHEET)
+
+section = CollapsibleSection("Decimate", color="#ffb74d")
+grid = ButtonGrid(columns=3)
+grid.add_button("Cur", self._on_cur, "Decimate current")
+grid.add_button("Tree", self._on_tree, "Decimate subtree")
+section.content_layout.addWidget(grid)
+
+self._log = ActivityLog()
+self._log.log_success("Operation completed")
+```
 
 ## 🖼️ Panels
 
