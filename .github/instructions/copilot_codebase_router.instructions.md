@@ -24,7 +24,7 @@ A ledger of existing code, utilities, and resources. This file provides quick li
 ```
 LKS/                           # cModule root (in StdScripts/cModules/)
 ├── __init__.py               # Package marker
-├── __onstartup.py            # Runs on 3DCoat startup (Qt init)
+├── __onstartup.py            # Runs on 3DCoat startup (Qt init + action registration)
 ├── requirements.txt          # PySide6, etc. (auto-installed)
 ├── LKS.py                    # Main extension (cExtension + Qt panel)
 ├── coat.pyi                  # Type hints for IDE
@@ -33,7 +33,7 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   ├── Brush_*.py            # Brush setting actions
 │   ├── SculptObject_*.py     # Sculpt object actions
 │   └── ...
-├── _ops/                     # Operators (workflow orchestration)
+├── ops/                      # Operators (workflow orchestration)
 │   ├── __init__.py
 │   ├── SculptObject_Decimate.py    # Decimate with scope/config
 │   ├── SculptObject_SetGhost.py    # Ghost/unghost/invert/isolate
@@ -43,7 +43,7 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   ├── SculptObject_ModeConvert.py # Mode conversion
 │   ├── SculptObject_Subdivide.py   # Subdivide operations
 │   └── ...
-├── _utils/                   # Low-level utilities
+├── utils/                    # Low-level utilities
 │   ├── __init__.py           # Package exports
 │   ├── scene_api.py          # Thin wrappers for coat iterators
 │   ├── scope_utils.py        # Scope enum and resolution
@@ -63,11 +63,18 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   ├── brush_settings_utils.py # Brush configuration
 │   ├── autopo_utils.py       # Autopo workflow automation
 │   └── scene_iteration_utils.py # Legacy - prefer scene_api.py
-├── _docs/                    # Documentation
+├── ui/                       # Qt UI components
+│   ├── __init__.py           # Exports DARK_STYLESHEET
+│   └── styles.py             # Qt stylesheets and color constants
+├── data/                     # Runtime state and settings
+│   ├── lks_settings.json     # General settings
+│   ├── lks_brush_settings.json # Brush settings
+│   ├── lks_autopo_settings.json # Autopo settings
+│   └── lks_panel_state.json  # Panel state
+├── .docs/                    # Documentation (hidden from 3DCoat)
 │   ├── cmodule_migration_plan.md  # Migration from Addon to cModule
 │   └── magic_ui_strings.md   # Registry of 3DCoat magic strings
-├── _example_code/            # Reference implementations
-├── _external/                # Legacy external panel (deprecated)
+├── .example_code/            # Reference implementations (hidden)
 └── .github/instructions/     # Copilot instruction files
 ```
 
@@ -86,22 +93,22 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 - Lists pip packages auto-installed by 3DCoat
 - Currently: `PySide6`
 
-## 🎯 Operators (`_ops/`)
+## 🎯 Operators (`ops/`)
 
 Operators are configurable scripts that encapsulate reusable workflows.
 Both action scripts and panel buttons call operators, ensuring consistent behavior.
 
 **Pattern:** Each operator has a `main()` function with explicit parameters:
 ```python
-# _ops/SculptObject_SetGhost.py
+# ops/SculptObject_SetGhost.py
 def main(scope: Scope, ghost: bool = True, mode: GhostMode = GhostMode.SET) -> int:
     ...
 ```
 
-**Usage from action script (cModule import path):**
+**Usage from action script:**
 ```python
-from cModules.LKS._ops.SculptObject_SetGhost import main as op_main
-from cModules.LKS._utils.scope_utils import Scope
+from ops.SculptObject_SetGhost import main as op_main
+from utils.scope_utils import Scope
 op_main(scope=Scope.ALL, ghost=False)
 ```
 
@@ -584,7 +591,7 @@ Command dispatch and handlers running inside 3DCoat.
 
 **Adding Custom Handlers:**
 ```python
-from _utils.ipc_server import register_handler
+from utils.ipc_server import register_handler
 
 @register_handler("my_custom_action")
 def handle_my_action(params: dict) -> dict:

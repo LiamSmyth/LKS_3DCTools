@@ -8,15 +8,15 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
-from _utils.scene_api import SceneAPI
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.Volume_mode_utils import (
+from utils.scene_api import SceneAPI
+from utils.scope_utils import Scope, resolve_scope
+from utils.Volume_mode_utils import (
     convert_to_surface,
     convert_to_voxels,
     resample_and_voxelize,
 )
-from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
-from _utils.coat_ui_utils import show_message, show_error
+from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
+from utils.coat_ui_utils import show_message, show_error
 
 
 class ConvertMode(Enum):

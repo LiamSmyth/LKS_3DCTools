@@ -4,7 +4,7 @@ Scene Tiling Utilities - Setup tiling grids and instances.
 Creates tiled grids of sculpt objects with translational symmetry for seamless tiling.
 
 Pattern:
-    from _utils.Scene_tiling_utils import TilingParams, setup_tiling_grid
+    from utils.Scene_tiling_utils import TilingParams, setup_tiling_grid
     
     params = TilingParams(base_size=64, use_box=True)
     setup_tiling_grid(params)
@@ -14,7 +14,7 @@ from coat import vec3, Mesh
 from dataclasses import dataclass
 from enum import Enum
 
-from _utils.coat_ui_utils import show_message
+from utils.coat_ui_utils import show_message
 
 
 # =============================================================================

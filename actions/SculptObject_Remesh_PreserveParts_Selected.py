@@ -8,10 +8,10 @@ Room: Sculpt
 Action: Decompose, resample each part, merge back
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.Volume_resample_utils import execute_resample
-from _utils.Volume_mode_utils import ensure_surface_mode
-from _utils.coat_ui_utils import (
+from utils.scene_api import SceneAPI
+from utils.Volume_resample_utils import execute_resample
+from utils.Volume_mode_utils import ensure_surface_mode
+from utils.coat_ui_utils import (
     CMD_DIALOG_OK,
     CMD_DECOMPOSE,
     CMD_TO_GLOBAL_SPACE,

@@ -4,14 +4,14 @@ SceneElement Boolean Utilities - Live boolean operations on SceneElements.
 Creates child boolean volumes for sculpt objects. Requires parent to be in voxel mode.
 
 Pattern:
-    from _utils.SceneElement_boolean_utils import create_boolean_child, BooleanMode
+    from utils.SceneElement_boolean_utils import create_boolean_child, BooleanMode
     
     create_boolean_child(parent_element, BooleanMode.SUBTRACT)
 """
 import coat
 from enum import IntEnum
 
-from _utils.coat_ui_utils import wait_frames, show_message, CMD_DIALOG_OK
+from utils.coat_ui_utils import wait_frames, show_message, CMD_DIALOG_OK
 
 
 # =============================================================================

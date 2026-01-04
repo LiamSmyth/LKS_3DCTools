@@ -68,7 +68,7 @@ def main() -> None:
 
     # Register the extension
     try:
-        from _utils.lks_extension import register_extension, is_extension_registered
+        from utils.lks_extension import register_extension, is_extension_registered
 
         if not is_extension_registered():
             register_extension()

@@ -13,13 +13,13 @@ from typing import Optional, Type
 
 import coat
 
-from _utils.ipc_protocol import (
+from utils.ipc_protocol import (
     cleanup_ipc,
     clear_shutdown,
     is_shutdown_requested,
     write_heartbeat,
 )
-from _utils.ipc_server import (
+from utils.ipc_server import (
     broadcast_scene_state,
     process_pending_commands,
 )

@@ -7,7 +7,7 @@ and ghosts the original object.
 Room: Sculpt
 Action: Autopo -> import to sculpt -> reparent -> ghost original
 """
-from _utils.autopo_utils import autopo_to_sculpt
+from utils.autopo_utils import autopo_to_sculpt
 
 
 # Execute

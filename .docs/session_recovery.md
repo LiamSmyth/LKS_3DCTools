@@ -200,8 +200,8 @@ class BrushSettingsUtils:
 **`Brush_IncrementDetailsLevel.py`**
 ```python
 """Increment Details Level - adds 1 to current level."""
-from _utils.lks_settings import get_settings, save_settings
-from _utils.brush_settings_utils import BrushSettingsUtils
+from utils.lks_settings import get_settings, save_settings
+from utils.brush_settings_utils import BrushSettingsUtils
 
 settings = get_settings()
 settings.details_level = settings.details_level + 1
@@ -219,8 +219,8 @@ coat.ui.showInfoMessage(f"Details Level: {settings.details_level}", 2000)
 **`Brush_DecrementDetailsLevel.py`**
 ```python
 """Decrement Details Level - subtracts 1 (floor at 0)."""
-from _utils.lks_settings import get_settings, save_settings
-from _utils.brush_settings_utils import BrushSettingsUtils
+from utils.lks_settings import get_settings, save_settings
+from utils.brush_settings_utils import BrushSettingsUtils
 
 settings = get_settings()
 settings.details_level = max(0, settings.details_level - 1)
@@ -244,8 +244,8 @@ coat.ui.showInfoMessage(f"Details Level: {settings.details_level}", 2000)
 ```python
 """Autopo workflow automation."""
 import coat
-from _utils.lks_settings import get_settings
-from _utils.coat_ui_utils import switch_to_room, command_with_confirm
+from utils.lks_settings import get_settings
+from utils.coat_ui_utils import switch_to_room, command_with_confirm
 
 CMD_AUTOPO = "$AutoRetopo"
 CMD_IMPORT_MULTIRES = "$RetopoBuildMR"
@@ -312,8 +312,8 @@ def autopo_to_multiresolution() -> None:
 
 ```python
 import coat
-from _utils.lks_settings import get_settings, save_settings
-from _utils.brush_settings_utils import BrushSettingsUtils
+from utils.lks_settings import get_settings, save_settings
+from utils.brush_settings_utils import BrushSettingsUtils
 
 class LKSToolsPanel(coat.scripted_panel):
     caption = "LKS Tools"

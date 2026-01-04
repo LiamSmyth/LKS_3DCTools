@@ -7,10 +7,10 @@ Operators in `_ops/` own Config dataclasses and call these functions.
 import coat
 import math
 
-from _utils.coat_ui_utils import wait_frames
-from _utils.Volume_decimate_utils import decimate_by_percent
-from _utils.Volume_resample_utils import execute_resample, resample_to_target
-from _utils.Volume_subdivide_utils import subdivide_once
+from utils.coat_ui_utils import wait_frames
+from utils.Volume_decimate_utils import decimate_by_percent
+from utils.Volume_resample_utils import execute_resample, resample_to_target
+from utils.Volume_subdivide_utils import subdivide_once
 
 # =============================================================================
 # DEFAULTS

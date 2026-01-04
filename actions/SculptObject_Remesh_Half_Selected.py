@@ -8,10 +8,10 @@ Room: Sculpt
 Action: Resample to half, then convert to voxels
 """
 import coat
-from _utils.object_utils import ObjectUtils
-from _utils.Volume_resample_utils import resample_to_half
-from _utils.Volume_mode_utils import ensure_surface_mode
-from _utils.coat_ui_utils import show_message
+from utils.object_utils import ObjectUtils
+from utils.Volume_resample_utils import resample_to_half
+from utils.Volume_mode_utils import ensure_surface_mode
+from utils.coat_ui_utils import show_message
 
 
 def main() -> None:

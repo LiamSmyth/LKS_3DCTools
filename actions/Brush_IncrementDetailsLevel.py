@@ -7,10 +7,10 @@ Use 'Apply to Brushes' in LKS panel to apply to all brush types.
 Room: Sculpt
 Action: Increment details level, apply to current brush
 """
-from _utils.brush_settings_utils import apply_auto_subdivide_current, apply_details_level_current
-from _utils.lks_settings import get_brush_settings, save_brush_settings, reload_brush_settings
-from _utils.coat_ui_utils import show_message
-from _utils.object_utils import validate_and_ensure_surface_mode
+from utils.brush_settings_utils import apply_auto_subdivide_current, apply_details_level_current
+from utils.lks_settings import get_brush_settings, save_brush_settings, reload_brush_settings
+from utils.coat_ui_utils import show_message
+from utils.object_utils import validate_and_ensure_surface_mode
 
 
 def increment_details_level():

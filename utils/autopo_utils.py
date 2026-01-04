@@ -12,7 +12,7 @@ import coat
 from dataclasses import dataclass
 from typing import Callable
 
-from _utils.coat_ui_utils import (
+from utils.coat_ui_utils import (
     switch_to_room,
     ensure_sculpt_room,
     show_message,
@@ -423,7 +423,7 @@ def run_autopo_with_settings() -> bool:
 
     Reads all autopo parameters from the autopo settings cache.
     """
-    from _utils.lks_settings import get_autopo_settings
+    from utils.lks_settings import get_autopo_settings
     settings = get_autopo_settings()
 
     params = AutopoParams(

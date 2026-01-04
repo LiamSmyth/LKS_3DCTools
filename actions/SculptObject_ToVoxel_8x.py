@@ -4,8 +4,8 @@ Convert surface to voxels with 8x polycount (or back to surface).
 Room: Sculpt
 Action: Resample to 8x polycount and convert to voxels
 """
-from _ops.SculptObject_ModeConvert import main as op_main, ConvertMode
-from _utils.scope_utils import Scope
+from ops.SculptObject_ModeConvert import main as op_main, ConvertMode
+from utils.scope_utils import Scope
 
 
 def main() -> None:

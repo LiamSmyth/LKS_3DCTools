@@ -4,7 +4,7 @@ Setup a 3x3 tiling grid with a box primitive.
 Room: Sculpt
 Action: Creates center box with 8 surrounding instances and translation symmetry.
 """
-from _utils.Scene_tiling_utils import (
+from utils.Scene_tiling_utils import (
     TilingParams,
     PrimitiveType,
     setup_tiling_grid,

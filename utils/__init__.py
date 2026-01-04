@@ -20,10 +20,10 @@ Module Organization:
 """
 
 # Settings
-from _utils.lks_settings import get_settings, save_settings
+from utils.lks_settings import get_settings, save_settings
 
 # Scene API - Primary interface for context/iteration
-from _utils.scene_api import (
+from utils.scene_api import (
     SceneAPI,
     SelectionAPI,
     apply_to_elements,
@@ -33,7 +33,7 @@ from _utils.scene_api import (
 )
 
 # Scope utilities - Scope resolution
-from _utils.scope_utils import (
+from utils.scope_utils import (
     Scope,
     resolve_scope,
     apply_to_scope,
@@ -45,7 +45,7 @@ from _utils.scope_utils import (
 )
 
 # Visibility utilities - Pure functions for visibility/ghost
-from _utils.SceneElement_visibility_utils import (
+from utils.SceneElement_visibility_utils import (
     set_visibility,
     hide_elements,
     show_elements,
@@ -59,7 +59,7 @@ from _utils.SceneElement_visibility_utils import (
 )
 
 # Layer utilities
-from _utils.Scene_layer_utils import (
+from utils.Scene_layer_utils import (
     LAYER_SCULPT,
     LAYER_COLOR,
     ensure_standard_layers,
@@ -70,7 +70,7 @@ from _utils.Scene_layer_utils import (
 )
 
 # UI utilities
-from _utils.coat_ui_utils import (
+from utils.coat_ui_utils import (
     # Constants
     CMD_DIALOG_OK,
     CMD_DIALOG_CANCEL,
@@ -91,7 +91,7 @@ from _utils.coat_ui_utils import (
 )
 
 # Object utilities
-from _utils.object_utils import (
+from utils.object_utils import (
     ObjectUtils,
     scale_element,
     scale_element_with_select,
@@ -99,7 +99,7 @@ from _utils.object_utils import (
 )
 
 # Volume utilities - Decimate (raw args pattern)
-from _utils.Volume_decimate_utils import (
+from utils.Volume_decimate_utils import (
     execute_decimate,
     decimate_by_percent,
     decimate_to_target,
@@ -108,20 +108,20 @@ from _utils.Volume_decimate_utils import (
 )
 
 # Volume utilities - Resample (raw args pattern)
-from _utils.Volume_resample_utils import (
+from utils.Volume_resample_utils import (
     execute_resample,
     resample_to_half,
     resample_to_target,
 )
 
 # Volume utilities - Subdivide (raw args pattern)
-from _utils.Volume_subdivide_utils import (
+from utils.Volume_subdivide_utils import (
     subdivide_once,
     make_symmetrical,
 )
 
 # Volume utilities - Mode Convert (raw args pattern)
-from _utils.Volume_mode_utils import (
+from utils.Volume_mode_utils import (
     convert_to_surface,
     convert_to_voxels,
     ensure_surface_mode,
@@ -129,19 +129,19 @@ from _utils.Volume_mode_utils import (
 )
 
 # Volume utilities - Density Matching (raw args pattern)
-from _utils.Volume_density_utils import (
+from utils.Volume_density_utils import (
     calculate_target_polycount_by_scale,
     resample_to_match_density,
     smart_match_density,
 )
 
 # Scene utilities - Cleanup
-from _utils.Scene_cleanup_utils import (
+from utils.Scene_cleanup_utils import (
     cleanup_after_mesh_operation,
 )
 
 # Scene iteration utilities (legacy, prefer SceneAPI)
-from _utils.scene_iteration_utils import SceneIterationUtils
+from utils.scene_iteration_utils import SceneIterationUtils
 
 # Brush settings utilities
-from _utils.brush_settings_utils import BrushSettingsUtils
+from utils.brush_settings_utils import BrushSettingsUtils

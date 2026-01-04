@@ -4,8 +4,8 @@ Toggle visibility for selected object and all children.
 Room: Sculpt
 Action: Toggle visibility on subtree (invert current state)
 """
-from _ops.SculptObject_Visibility import main as op_main, VisibilityMode
-from _utils.scope_utils import Scope
+from ops.SculptObject_Visibility import main as op_main, VisibilityMode
+from utils.scope_utils import Scope
 
 
 def main() -> None:

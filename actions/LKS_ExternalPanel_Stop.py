@@ -24,8 +24,8 @@ def main() -> None:
         sys.path.insert(0, str(userprojects_dir))
 
     try:
-        from _utils.lks_extension import unregister_extension, is_extension_registered
-        from _utils.ipc_protocol import request_shutdown
+        from utils.lks_extension import unregister_extension, is_extension_registered
+        from utils.ipc_protocol import request_shutdown
 
         if is_extension_registered():
             # Request shutdown - this will signal both extension and panel

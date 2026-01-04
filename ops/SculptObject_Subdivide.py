@@ -7,12 +7,12 @@ Each subdivision approximately doubles the polycount.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.Volume_subdivide_utils import subdivide_once
-from _utils.Volume_mode_utils import ensure_surface_mode
-from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI
+from utils.scope_utils import Scope, resolve_scope
+from utils.Volume_subdivide_utils import subdivide_once
+from utils.Volume_mode_utils import ensure_surface_mode
+from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
+from utils.coat_ui_utils import show_message, show_error
 
 
 # =============================================================================

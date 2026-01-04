@@ -8,16 +8,16 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
-from _utils.scene_api import SceneAPI
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.SceneElement_visibility_utils import (
+from utils.scene_api import SceneAPI
+from utils.scope_utils import Scope, resolve_scope
+from utils.SceneElement_visibility_utils import (
     set_visibility,
     hide_elements,
     show_elements,
     invert_visibility_on_elements,
     hide_except,
 )
-from _utils.coat_ui_utils import show_message, show_error
+from utils.coat_ui_utils import show_message, show_error
 
 
 class VisibilityMode(Enum):

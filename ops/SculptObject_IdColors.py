@@ -8,15 +8,15 @@ Uses ghost isolation pattern to ensure fill only affects one object at a time.
 """
 import coat
 import random
-from _utils.scene_api import SceneAPI
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.coat_ui_utils import (
+from utils.scene_api import SceneAPI
+from utils.scope_utils import Scope, resolve_scope
+from utils.coat_ui_utils import (
     CMD_FILL_LAYER,
     SETTING_PEN_DEPTH,
     show_message,
     show_error,
 )
-from _utils.SceneElement_visibility_utils import (
+from utils.SceneElement_visibility_utils import (
     cache_ghost_states,
     restore_ghost_states,
     ghost_elements,

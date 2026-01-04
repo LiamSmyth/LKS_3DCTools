@@ -7,7 +7,7 @@ Operators in `_ops/` own Config dataclasses and call these functions.
 import coat
 from typing import Callable
 
-from _utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
+from utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
 
 # =============================================================================
 # MAGIC UI STRINGS (NOT in coat.pyi - discovered experimentally)
@@ -118,7 +118,7 @@ def resample_and_voxelize(volume: coat.Volume, multiplier: float) -> int:
         New polycount after operation
     """
     # Import here to avoid circular dependency
-    from _utils.Volume_resample_utils import execute_resample
+    from utils.Volume_resample_utils import execute_resample
 
     if volume.isVoxelized():
         # Already voxel - convert to surface

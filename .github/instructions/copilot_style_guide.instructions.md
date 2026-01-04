@@ -55,30 +55,35 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 ## 4. Repository Layout
 
 ```
-UserProjects/
-├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
-├── _ops/                      # Hidden from 3DCoat - configurable operators
+LKS/                           # cModule root
+├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers (in actions/)
+├── ops/                       # Configurable operators
 │   ├── __init__.py
 │   ├── SculptObject_Decimate.py
 │   ├── SculptObject_SetGhost.py
 │   └── ...
-├── _utils/                    # Hidden from 3DCoat - shared utilities
+├── utils/                     # Shared utilities
 │   ├── __init__.py
 │   ├── coat_api.py            # Low-level 3DCoat API wrappers
 │   ├── coat_ui_utils.py       # UI command abstractions
 │   ├── coat_scene_utils.py    # Scene/object manipulation
 │   ├── lks_settings.py        # Persistent settings cache
 │   └── ...
-├── _archive/                  # Old/deprecated scripts
-├── _example_code/             # Reference implementations
-└── <Category>/                # Visible subfolders become categories
+├── ui/                        # Qt UI components
+│   ├── __init__.py
+│   └── styles.py              # Stylesheets and themes
+├── data/                      # Runtime state and settings
+│   └── lks_*.json             # Settings files
+├── .docs/                     # Documentation (hidden)
+├── .example_code/             # Reference implementations (hidden)
+└── actions/                   # Action scripts for menu registration
     └── <Script>.py
 ```
 
 **Folder visibility rules:**
-- Any `.py` file in `UserProjects/` root appears in 3DCoat's script browser
-- Subfolders starting with `_` are hidden from 3DCoat but still importable
-- Subfolders without `_` prefix appear as script categories
+- Folders starting with `.` are hidden from 3DCoat (`.docs`, `.example_code`)
+- `actions/` folder contains scripts exposed to 3DCoat's script browser
+- `ops/`, `utils/`, `ui/`, `data/` are internal modules
 
 ## 5. Layered Architecture
 
@@ -94,7 +99,7 @@ The codebase has three layers with distinct responsibilities:
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  OPERATORS (`_ops/`)      (Workflow Orchestration)          │
+│  OPERATORS (`ops/`)       (Workflow Orchestration)          │
 │  - Own their Config dataclass (when >3 params)              │
 │  - Handle scope resolution (SceneElement → list)            │
 │  - Compose utils, manage selection, return counts           │
@@ -103,7 +108,7 @@ The codebase has three layers with distinct responsibilities:
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  UTILS (`_utils/`)        (Low-Level Primitives)            │
+│  UTILS (`utils/`)         (Low-Level Primitives)            │
 │  - Raw primitive arguments ONLY (no dataclasses)            │
 │  - Operate on coat.Volume or coat.SceneElement directly     │
 │  - Abstract magic strings, wrap 3DCoat API                  │
@@ -148,8 +153,8 @@ class DecimateParams:  # NO - utils take raw args
 # _ops/SculptObject_SetGhost.py
 """Ghost/unghost operations with configurable scope and mode."""
 from enum import Enum
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.SceneElement_visibility_utils import set_ghost, invert_ghost_on_elements
+from utils.scope_utils import Scope, resolve_scope
+from utils.SceneElement_visibility_utils import set_ghost, invert_ghost_on_elements
 
 class GhostMode(Enum):
     SET = "set"
@@ -172,8 +177,8 @@ def main(
 # _ops/SculptObject_Decimate.py
 """Decimate sculpt objects with configurable scope and parameters."""
 from dataclasses import dataclass
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.Volume_decimate_utils import execute_decimate
+from utils.scope_utils import Scope, resolve_scope
+from utils.Volume_decimate_utils import execute_decimate
 
 @dataclass
 class DecimateConfig:
@@ -228,8 +233,8 @@ Brief description.
 Room: Sculpt
 Action: One-line description
 """
-from _ops.SculptObject_Decimate import main as op_main
-from _utils.scope_utils import Scope
+from ops.SculptObject_Decimate import main as op_main
+from utils.scope_utils import Scope
 
 
 def main() -> None:
@@ -452,8 +457,8 @@ def apply_operation_to_selection():
 
 ```python
 # Action script (entry point) - OK to fetch context here
-from _utils.scene_api import SceneAPI
-from _utils.object_ops import scale_elements
+from utils.scene_api import SceneAPI
+from utils.object_ops import scale_elements
 
 elements: list[coat.SceneElement] = SceneAPI.get_selected_elements()
 scale_elements(elements, scale_factor=0.5)
@@ -493,7 +498,7 @@ During development, reload modules to pick up changes:
 import importlib
 from _utils import some_module
 importlib.reload(some_module)
-from _utils.some_module import some_function
+from utils.some_module import some_function
 ```
 
 ### 6.6 UI Dialog Configurator Pattern
@@ -536,6 +541,46 @@ def main(scope: Scope, config: DecimateConfig) -> int:
 - Config dataclasses belong in operators, unpack to raw args when calling utils
 - Defaults live as constants at the top of the module where Config is defined
 - Configurator returns a closure that captures the args
+
+### 6.7 Separate Large Strings and Data
+
+**Move large strings and data out of main code files for maintainability.**
+
+| Content Type | Extract To | Example |
+|--------------|------------|---------|
+| Qt stylesheets | `ui/styles.py` | `DARK_STYLESHEET` |
+| HTML templates | `ui/templates/<name>.html` | Panel templates |
+| Large prompts/text | `data/<name>.txt` | LLM prompts |
+| JSON schemas | `schemas/<name>.json` | Validation schemas |
+| Default configs | `data/defaults/<name>.json` | Factory settings |
+
+**Pattern for stylesheets:**
+```python
+# ui/styles.py
+DARK_STYLESHEET: str = """
+QWidget { ... }
+"""
+
+# LKS.py
+from ui.styles import DARK_STYLESHEET
+self.setStyleSheet(DARK_STYLESHEET)
+```
+
+**Pattern for loading text/templates:**
+```python
+from pathlib import Path
+
+def load_text_resource(name: str) -> str:
+    """Load text file from data/ folder."""
+    path: Path = Path(__file__).parent / "data" / name
+    return path.read_text(encoding="utf-8")
+```
+
+**Guidelines:**
+- Strings >20 lines should be extracted to separate files
+- Use `ui/` folder for Qt-related resources (styles, widgets)
+- Use `data/` folder for runtime data (settings, templates)
+- Keep test fixtures in `<module>/data/` for isolation
 
 ## 7. Settings Persistence
 
@@ -596,7 +641,7 @@ def require_sculpt_room() -> None:
 
 ```python
 # GOOD - thin invoker
-from _utils.brush_utils import increment_details_level
+from utils.brush_utils import increment_details_level
 increment_details_level()
 
 # BAD - too much logic in action script
@@ -609,7 +654,7 @@ current = settings.details_level
 
 ```python
 # GOOD - abstracted
-from _utils.coat_ui_utils import confirm_dialog
+from utils.coat_ui_utils import confirm_dialog
 confirm_dialog()
 
 # BAD - magic string in action script

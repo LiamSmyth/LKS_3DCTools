@@ -16,7 +16,7 @@ import coat
 from typing import Callable
 from enum import Enum
 
-from _utils.scene_api import SceneAPI, SelectionAPI, deduplicate_elements
+from utils.scene_api import SceneAPI, SelectionAPI, deduplicate_elements
 
 
 class Scope(Enum):

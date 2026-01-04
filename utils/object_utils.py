@@ -13,8 +13,8 @@ Note: Files starting with "_" are hidden from the Addons menu per 3DCoat convent
 """
 import coat
 
-from _utils.scene_api import SceneAPI, SelectionAPI
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI, SelectionAPI
+from utils.coat_ui_utils import show_message, show_error
 
 
 # =============================================================================

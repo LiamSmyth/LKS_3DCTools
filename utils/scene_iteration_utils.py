@@ -12,7 +12,7 @@ Note: Files starting with "_" are hidden from the Addons menu per 3DCoat convent
 import coat
 from typing import Callable
 
-from _utils.scene_api import SceneAPI, SelectionAPI
+from utils.scene_api import SceneAPI, SelectionAPI
 
 
 class SceneIterationUtils:

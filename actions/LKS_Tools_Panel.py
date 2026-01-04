@@ -10,12 +10,12 @@ The ui() method returns layout items dynamically.
 Room: All
 """
 import coat
-from _utils.lks_settings import (
+from utils.lks_settings import (
     get_settings, save_settings,
     get_brush_settings, save_brush_settings,
     get_autopo_settings, save_autopo_settings,
 )
-from _utils.coat_ui_utils import show_message
+from utils.coat_ui_utils import show_message
 
 
 class LKSToolsConfig:
@@ -244,7 +244,7 @@ class LKSToolsConfig:
         2. If disk differs from _prev_disk, update panel UI from disk (external change)
         3. If panel UI differs from _prev_ui, save panel to disk (user change)
         """
-        from _utils.lks_settings import reload_brush_settings, reload_autopo_settings
+        from utils.lks_settings import reload_brush_settings, reload_autopo_settings
 
         # --- BRUSH SETTINGS ---
         # Get fresh disk state
@@ -340,7 +340,7 @@ class LKSToolsConfig:
 
     def ApplyToBrushes(self) -> None:
         """Apply current dynamic subdiv settings to all brushes."""
-        from _utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all, apply_remove_stretching_all
+        from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all, apply_remove_stretching_all
         apply_auto_subdivide_all(self.auto_subdivide)
         apply_details_level_all(self.details_level)
         apply_remove_stretching_all(self.remove_stretching)
@@ -349,7 +349,7 @@ class LKSToolsConfig:
 
     def IncrementLevel(self) -> None:
         """Increment details level by 1 (always enables auto_subdivide)."""
-        from _utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
+        from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
         self.details_level = min(8.0, self.details_level + 1.0)
         self.auto_subdivide = True
         apply_auto_subdivide_all(True)
@@ -359,7 +359,7 @@ class LKSToolsConfig:
 
     def DecrementLevel(self) -> None:
         """Decrement details level by 1 (always enables auto_subdivide)."""
-        from _utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
+        from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
         self.details_level = max(0.0, self.details_level - 1.0)
         self.auto_subdivide = True
         apply_auto_subdivide_all(True)
@@ -371,34 +371,34 @@ class LKSToolsConfig:
 
     def DecCurrent(self) -> None:
         """Decimate current selection."""
-        from _ops.SculptObject_Decimate import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_Decimate import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.CURRENT, reduction_percent=float(
             self.decimate_percent))
 
     def DecTree(self) -> None:
         """Decimate current subtree."""
-        from _ops.SculptObject_Decimate import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_Decimate import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.TREE, reduction_percent=float(self.decimate_percent))
 
     def DecAll(self) -> None:
         """Decimate all sculpt objects."""
-        from _ops.SculptObject_Decimate import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_Decimate import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.ALL, reduction_percent=float(self.decimate_percent))
 
     def Dec50(self) -> None:
         """Quick decimate 50%."""
-        from _ops.SculptObject_Decimate import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_Decimate import main as op_main
+        from utils.scope_utils import Scope
         self.decimate_percent = 50
         op_main(scope=Scope.CURRENT, reduction_percent=50.0)
 
     def Dec80(self) -> None:
         """Quick decimate 80%."""
-        from _ops.SculptObject_Decimate import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_Decimate import main as op_main
+        from utils.scope_utils import Scope
         self.decimate_percent = 80
         op_main(scope=Scope.CURRENT, reduction_percent=80.0)
 
@@ -406,8 +406,8 @@ class LKSToolsConfig:
 
     def _resample_elements(self, elements: list, scale: float) -> int:
         """Helper to resample a list of elements."""
-        from _utils.Volume_resample_utils import execute_resample
-        from _utils.Volume_mode_utils import ensure_surface_mode
+        from utils.Volume_resample_utils import execute_resample
+        from utils.Volume_mode_utils import ensure_surface_mode
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -422,7 +422,7 @@ class LKSToolsConfig:
 
     def ResHalfCur(self) -> None:
         """Resample current to half."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         if not elements:
             show_message("No selection", 2000)
@@ -432,7 +432,7 @@ class LKSToolsConfig:
 
     def ResHalfTree(self) -> None:
         """Resample subtree to half."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             show_message("No selection", 2000)
@@ -444,14 +444,14 @@ class LKSToolsConfig:
 
     def ResHalfAll(self) -> None:
         """Resample all to half."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.collect_all_sculpt_objects()
         count = self._resample_elements(elements, 0.5)
         show_message(f"Resampled {count} obj", 2000)
 
     def ResDouble(self) -> None:
         """Resample current to double."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         if not elements:
             show_message("No selection", 2000)
@@ -461,8 +461,8 @@ class LKSToolsConfig:
 
     def Subdivide(self) -> None:
         """Subdivide current (double polys)."""
-        from _utils.Volume_subdivide_utils import subdivide_once
-        from _utils.scene_api import SceneAPI
+        from utils.Volume_subdivide_utils import subdivide_once
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             show_message("No selection", 2000)
@@ -475,7 +475,7 @@ class LKSToolsConfig:
 
     def _convert_to_surface(self, elements: list) -> int:
         """Helper to convert elements to surface."""
-        from _utils.Volume_mode_utils import convert_to_surface
+        from utils.Volume_mode_utils import convert_to_surface
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -498,14 +498,14 @@ class LKSToolsConfig:
 
     def ToSurfCur(self) -> None:
         """Convert current to surface."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         count = self._convert_to_surface(elements)
         show_message(f"Converted {count}", 2000)
 
     def ToSurfTree(self) -> None:
         """Convert subtree to surface."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -516,21 +516,21 @@ class LKSToolsConfig:
 
     def ToSurfAll(self) -> None:
         """Convert all to surface."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.collect_all_sculpt_objects()
         count = self._convert_to_surface(elements)
         show_message(f"Converted {count}", 2000)
 
     def ToVoxCur(self) -> None:
         """Convert current to voxels."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         count = self._convert_to_voxels(elements)
         show_message(f"Converted {count}", 2000)
 
     def ToVoxTree(self) -> None:
         """Convert subtree to voxels."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -541,7 +541,7 @@ class LKSToolsConfig:
 
     def ToVoxAll(self) -> None:
         """Convert all to voxels."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.collect_all_sculpt_objects()
         count = self._convert_to_voxels(elements)
         show_message(f"Converted {count}", 2000)
@@ -550,7 +550,7 @@ class LKSToolsConfig:
 
     def _scale_elements(self, elements: list, factor: float) -> int:
         """Helper to scale elements."""
-        from _utils.object_utils import scale_element
+        from utils.object_utils import scale_element
         count: int = 0
         for el in elements:
             scale_element(el, factor)
@@ -559,14 +559,14 @@ class LKSToolsConfig:
 
     def ScaleDownCur(self) -> None:
         """Scale current down 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         count = self._scale_elements(elements, 0.01)
         show_message(f"Scaled {count}", 2000)
 
     def ScaleDownTree(self) -> None:
         """Scale subtree down 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -577,21 +577,21 @@ class LKSToolsConfig:
 
     def ScaleDownAll(self) -> None:
         """Scale all down 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.collect_all_sculpt_objects()
         count = self._scale_elements(elements, 0.01)
         show_message(f"Scaled {count}", 2000)
 
     def ScaleUpCur(self) -> None:
         """Scale current up 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.get_selected_elements()
         count = self._scale_elements(elements, 100.0)
         show_message(f"Scaled {count}", 2000)
 
     def ScaleUpTree(self) -> None:
         """Scale subtree up 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -602,7 +602,7 @@ class LKSToolsConfig:
 
     def ScaleUpAll(self) -> None:
         """Scale all up 100x."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         elements = SceneAPI.collect_all_sculpt_objects()
         count = self._scale_elements(elements, 100.0)
         show_message(f"Scaled {count}", 2000)
@@ -612,7 +612,7 @@ class LKSToolsConfig:
     def _get_other_elements(self, selected: list, all_elements: list) -> list:
         """Get elements NOT in the selected subtrees."""
         # Build set of all elements in selected subtrees
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         excluded: set = set()
         for sel in selected:
             subtree = SceneAPI.collect_subtree(sel)
@@ -621,16 +621,16 @@ class LKSToolsConfig:
 
     def HideCur(self) -> None:
         """Hide current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         elements = SceneAPI.get_selected_elements()
         count = set_visibility(elements, False)
         show_message(f"Hid {count}", 2000)
 
     def HideTree(self) -> None:
         """Hide current subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -640,8 +640,8 @@ class LKSToolsConfig:
 
     def HideOther(self) -> None:
         """Hide all except selection subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         selected = SceneAPI.get_selected_elements()
         all_elements = SceneAPI.collect_all_sculpt_objects()
         others = self._get_other_elements(selected, all_elements)
@@ -650,24 +650,24 @@ class LKSToolsConfig:
 
     def HideAll(self) -> None:
         """Hide all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         elements = SceneAPI.collect_all_sculpt_objects()
         count = set_visibility(elements, False)
         show_message(f"Hid {count}", 2000)
 
     def ShowCur(self) -> None:
         """Show current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         elements = SceneAPI.get_selected_elements()
         count = set_visibility(elements, True)
         show_message(f"Shown {count}", 2000)
 
     def ShowTree(self) -> None:
         """Show current subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         current = SceneAPI.get_current_element()
         if not current:
             return
@@ -677,8 +677,8 @@ class LKSToolsConfig:
 
     def ShowOther(self) -> None:
         """Show all except selection subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         selected = SceneAPI.get_selected_elements()
         all_elements = SceneAPI.collect_all_sculpt_objects()
         others = self._get_other_elements(selected, all_elements)
@@ -687,16 +687,16 @@ class LKSToolsConfig:
 
     def ShowAll(self) -> None:
         """Show all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import set_visibility
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import set_visibility
         elements = SceneAPI.collect_all_sculpt_objects()
         count = set_visibility(elements, True)
         show_message(f"Shown {count}", 2000)
 
     def InvertHide(self) -> None:
         """Invert visibility on all."""
-        from _utils.scene_api import SceneAPI
-        from _utils.SceneElement_visibility_utils import invert_visibility_on_elements
+        from utils.scene_api import SceneAPI
+        from utils.SceneElement_visibility_utils import invert_visibility_on_elements
         elements = SceneAPI.collect_all_sculpt_objects()
         count = invert_visibility_on_elements(elements)
         show_message(f"Inverted {count}", 2000)
@@ -705,63 +705,63 @@ class LKSToolsConfig:
 
     def GhostCur(self) -> None:
         """Ghost current selection."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.CURRENT, ghost=True)
 
     def GhostTree(self) -> None:
         """Ghost current subtree."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.TREE, ghost=True)
 
     def GhostOther(self) -> None:
         """Ghost all except selection subtree."""
-        from _ops.SculptObject_SetGhost import main as op_main, GhostMode
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main, GhostMode
+        from utils.scope_utils import Scope
         op_main(scope=Scope.CURRENT, mode=GhostMode.ISOLATE)
 
     def GhostAll(self) -> None:
         """Ghost all."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.ALL, ghost=True)
 
     def UnghostCur(self) -> None:
         """Unghost current selection."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.CURRENT, ghost=False)
 
     def UnghostTree(self) -> None:
         """Unghost current subtree."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.TREE, ghost=False)
 
     def UnghostOther(self) -> None:
         """Unghost all except selection subtree."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.OTHER, ghost=False)
 
     def UnghostAll(self) -> None:
         """Unghost all."""
-        from _ops.SculptObject_SetGhost import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.ALL, ghost=False)
 
     def InvertGhost(self) -> None:
         """Invert ghost on all."""
-        from _ops.SculptObject_SetGhost import main as op_main, GhostMode
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_SetGhost import main as op_main, GhostMode
+        from utils.scope_utils import Scope
         op_main(scope=Scope.ALL, mode=GhostMode.INVERT)
 
     # ==================== SMART ACTIONS HANDLERS ====================
 
     def _uniform_resample_elements(self, reference: 'coat.SceneElement', elements: list) -> int:
         """Helper: Resample elements to match reference density."""
-        from _utils.Volume_density_utils import resample_to_match_density
+        from utils.Volume_density_utils import resample_to_match_density
         ref_vol = reference.Volume()
         count: int = 0
         for el in elements:
@@ -772,7 +772,7 @@ class LKSToolsConfig:
 
     def _uniform_smart_elements(self, reference: 'coat.SceneElement', elements: list) -> tuple:
         """Helper: Smart density match elements to reference."""
-        from _utils.Volume_density_utils import smart_match_density
+        from utils.Volume_density_utils import smart_match_density
         ref_vol = reference.Volume()
         subdivided: int = 0
         decimated: int = 0
@@ -790,7 +790,7 @@ class LKSToolsConfig:
 
     def UniformResampleTree(self) -> None:
         """Resample subtree children to match selected object's density."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a sculpt object", 2000)
@@ -806,7 +806,7 @@ class LKSToolsConfig:
 
     def UniformResampleAll(self) -> None:
         """Resample ALL sculpt objects to match selected object's density."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a reference object", 2000)
@@ -821,7 +821,7 @@ class LKSToolsConfig:
 
     def UniformSmartTree(self) -> None:
         """Smart density match subtree (subdivide/decimate/resample)."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a sculpt object", 2000)
@@ -837,7 +837,7 @@ class LKSToolsConfig:
 
     def UniformSmartAll(self) -> None:
         """Smart density match ALL objects to selected reference."""
-        from _utils.scene_api import SceneAPI
+        from utils.scene_api import SceneAPI
         reference = SceneAPI.get_current_element()
         if not reference or not reference.isSculptObject():
             show_message("Select a reference object", 2000)
@@ -852,10 +852,10 @@ class LKSToolsConfig:
 
     def RemeshResymmCur(self) -> None:
         """Remesh and symmetrize current selection."""
-        from _utils.scene_api import SceneAPI
-        from _utils.Volume_subdivide_utils import make_symmetrical
-        from _utils.Volume_mode_utils import ensure_surface_mode
-        from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
+        from utils.scene_api import SceneAPI
+        from utils.Volume_subdivide_utils import make_symmetrical
+        from utils.Volume_mode_utils import ensure_surface_mode
+        from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
         elements = SceneAPI.get_selected_elements()
         if not elements:
             show_message("No selection", 2000)
@@ -873,10 +873,10 @@ class LKSToolsConfig:
 
     def RemeshResymmTree(self) -> None:
         """Remesh and symmetrize subtree."""
-        from _utils.scene_api import SceneAPI
-        from _utils.Volume_subdivide_utils import make_symmetrical
-        from _utils.Volume_mode_utils import ensure_surface_mode
-        from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
+        from utils.scene_api import SceneAPI
+        from utils.Volume_subdivide_utils import make_symmetrical
+        from utils.Volume_mode_utils import ensure_surface_mode
+        from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
         current = SceneAPI.get_current_element()
         if not current:
             show_message("No selection", 2000)
@@ -896,15 +896,15 @@ class LKSToolsConfig:
 
     def IdColorsTree(self) -> None:
         """Fill subtree with random ID colors."""
-        from _ops.SculptObject_IdColors import main as op_main
-        from _utils.scope_utils import Scope
+        from ops.SculptObject_IdColors import main as op_main
+        from utils.scope_utils import Scope
         op_main(scope=Scope.TREE)
 
     def SplitMasked(self) -> None:
         """Split frozen/masked area to new object."""
-        from _utils.scene_api import SceneAPI
-        from _utils.Volume_mode_utils import ensure_surface_mode
-        from _utils.coat_ui_utils import (
+        from utils.scene_api import SceneAPI
+        from utils.Volume_mode_utils import ensure_surface_mode
+        from utils.coat_ui_utils import (
             CMD_HIDE_FROZEN_AREA,
             CMD_SEPARATE_HIDDEN,
             CMD_DIALOG_OK,
@@ -927,8 +927,8 @@ class LKSToolsConfig:
 
     def MergePreserve(self) -> None:
         """Merge subtree preserving separate parts."""
-        from _utils.scene_api import SceneAPI
-        from _utils.coat_ui_utils import wait_frames
+        from utils.scene_api import SceneAPI
+        from utils.coat_ui_utils import wait_frames
         current = SceneAPI.get_current_element()
         if not current:
             show_message("No selection", 2000)
@@ -942,7 +942,7 @@ class LKSToolsConfig:
 
     def _get_autopo_params(self):
         """Build AutopoParams from current settings."""
-        from _utils.autopo_utils import AutopoParams
+        from utils.autopo_utils import AutopoParams
         # Debug: print all panel values being used
         print(f"[LKS Panel] _get_autopo_params:")
         print(f"  autopo_polycount = {self.autopo_polycount}")
@@ -988,7 +988,7 @@ class LKSToolsConfig:
 
     def RunAutopo(self) -> None:
         """Run autopo with current settings."""
-        from _utils.autopo_utils import execute_autopo
+        from utils.autopo_utils import execute_autopo
         self._save_autopo_settings_to_cache()
         params = self._get_autopo_params()
         print(
@@ -999,7 +999,7 @@ class LKSToolsConfig:
 
     def AutopoToSculpt(self) -> None:
         """Run autopo and import to sculpt."""
-        from _utils.autopo_utils import autopo_to_sculpt
+        from utils.autopo_utils import autopo_to_sculpt
         self._save_autopo_settings_to_cache()
         params = self._get_autopo_params()
         print(
@@ -1008,7 +1008,7 @@ class LKSToolsConfig:
 
     def AutopoToMultires(self) -> None:
         """Run autopo and import as multiresolution."""
-        from _utils.autopo_utils import autopo_to_multiresolution
+        from utils.autopo_utils import autopo_to_multiresolution
         self._save_autopo_settings_to_cache()
         params = self._get_autopo_params()
         print(
@@ -1019,7 +1019,7 @@ class LKSToolsConfig:
 
     def SetupLayers(self) -> None:
         """Setup standard two-layer configuration."""
-        from _utils.Scene_layer_utils import ensure_standard_layers
+        from utils.Scene_layer_utils import ensure_standard_layers
         ensure_standard_layers()
         show_message("Layers configured", 2000)
 

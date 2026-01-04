@@ -8,8 +8,8 @@ Room: Sculpt
 Action: Convert all to surface, then merge subtree
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI
+from utils.coat_ui_utils import show_message, show_error
 
 
 def prepare_element_for_merge(element: coat.SceneElement) -> None:

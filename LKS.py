@@ -13,115 +13,8 @@ Usage:
 import cPy.cCore
 import coat
 
-# =============================================================================
-# DARK THEME STYLESHEET
-# =============================================================================
-
-DARK_STYLESHEET: str = """
-QWidget {
-    background-color: #2b2b2b;
-    color: #e0e0e0;
-    font-family: "Segoe UI", Arial, sans-serif;
-    font-size: 11px;
-}
-
-QGroupBox {
-    border: 1px solid #555555;
-    border-radius: 4px;
-    margin-top: 8px;
-    padding-top: 8px;
-    font-weight: bold;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 8px;
-    padding: 0 4px;
-    color: #90caf9;
-}
-
-QPushButton {
-    background-color: #404040;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    padding: 6px 12px;
-    min-height: 20px;
-}
-
-QPushButton:hover {
-    background-color: #4a4a4a;
-    border-color: #90caf9;
-}
-
-QPushButton:pressed {
-    background-color: #353535;
-}
-
-QPushButton:disabled {
-    background-color: #333333;
-    color: #666666;
-}
-
-QLabel {
-    background-color: transparent;
-}
-
-QTreeWidget {
-    background-color: #1e1e1e;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    alternate-background-color: #252525;
-}
-
-QTreeWidget::item {
-    padding: 4px 2px;
-    border: none;
-}
-
-QTreeWidget::item:selected {
-    background-color: #264f78;
-}
-
-QTreeWidget::item:hover {
-    background-color: #3a3a3a;
-}
-
-QHeaderView::section {
-    background-color: #383838;
-    color: #e0e0e0;
-    padding: 4px;
-    border: 1px solid #555555;
-}
-
-QFrame[frameShape="4"] {
-    /* HLine */
-    background-color: #555555;
-    max-height: 1px;
-}
-
-QScrollBar:vertical {
-    background-color: #2b2b2b;
-    width: 12px;
-    border: none;
-}
-
-QScrollBar::handle:vertical {
-    background-color: #555555;
-    border-radius: 4px;
-    min-height: 20px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #666666;
-}
-
-QToolTip {
-    background-color: #3c3c3c;
-    color: #e0e0e0;
-    border: 1px solid #555555;
-    padding: 4px;
-}
-"""
+# Import stylesheet from ui module
+from ui.styles import DARK_STYLESHEET
 
 
 # =============================================================================
@@ -247,6 +140,19 @@ try:
             self._refresh_timer = QTimer(self)
             self._refresh_timer.timeout.connect(self.refresh_scene_tree)
             self._refresh_timer.start(2000)
+
+        def closeEvent(self, event) -> None:
+            """Handle panel close - stop timer and deactivate extension."""
+            print("[LKS] Panel closed - deactivating extension")
+            self._refresh_timer.stop()
+
+            # Clean up extension reference
+            ext = LKSExtension.get_instance()
+            if ext:
+                ext._panel = None
+                # Note: Can't fully unregister extension, but clear panel ref
+
+            event.accept()
 
         def _setup_ui(self) -> None:
             """Set up the panel UI."""
@@ -397,7 +303,7 @@ try:
             self._scene_tree.clear()
 
             try:
-                from _utils.scene_api import SceneAPI
+                from utils.scene_api import SceneAPI
 
                 root = SceneAPI.get_sculpt_root()
                 if not root:
@@ -458,12 +364,13 @@ try:
                 else:
                     parent.addChild(item)
 
-                # Add children
-                if hasattr(element, 'child'):
-                    child = element.child()
-                    while child:
-                        self._add_element_to_tree(child, item)
-                        child = child.next() if hasattr(child, 'next') else None
+                # Add children using correct 3DCoat API: childCount() + child(index)
+                if hasattr(element, 'childCount') and hasattr(element, 'child'):
+                    child_count: int = element.childCount()
+                    for i in range(child_count):
+                        child = element.child(i)
+                        if child:
+                            self._add_element_to_tree(child, item)
 
             except Exception as e:
                 print(f"[LKS] Error adding element: {e}")
@@ -488,8 +395,8 @@ try:
         def _on_decimate_50(self) -> None:
             """Decimate selected object to 50%."""
             try:
-                from _ops.SculptObject_Decimate import main as decimate
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_Decimate import main as decimate
+                from utils.scope_utils import Scope
                 decimate(scope=Scope.CURRENT, reduction_percent=50.0)
                 self._set_status("Decimated selected to 50%")
                 self.refresh_scene_tree()
@@ -499,8 +406,8 @@ try:
         def _on_decimate_tree(self) -> None:
             """Decimate subtree to 50%."""
             try:
-                from _ops.SculptObject_Decimate import main as decimate
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_Decimate import main as decimate
+                from utils.scope_utils import Scope
                 decimate(scope=Scope.TREE, reduction_percent=50.0)
                 self._set_status("Decimated tree to 50%")
                 self.refresh_scene_tree()
@@ -510,8 +417,8 @@ try:
         def _on_decimate_16x(self) -> None:
             """Quick 16x decimate proxy."""
             try:
-                from _ops.SculptObject_Decimate import main as decimate, DecimateConfig
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_Decimate import main as decimate, DecimateConfig
+                from utils.scope_utils import Scope
                 config = DecimateConfig(use_16x=True)
                 decimate(scope=Scope.CURRENT, config=config)
                 self._set_status("Decimated 16x")
@@ -522,8 +429,8 @@ try:
         def _on_unghost_all(self) -> None:
             """Unghost all objects."""
             try:
-                from _ops.SculptObject_SetGhost import main as set_ghost
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_SetGhost import main as set_ghost
+                from utils.scope_utils import Scope
                 set_ghost(scope=Scope.ALL, ghost=False)
                 self._set_status("Unghosted all objects")
                 self.refresh_scene_tree()
@@ -533,8 +440,8 @@ try:
         def _on_invert_ghost(self) -> None:
             """Invert ghost state of all objects."""
             try:
-                from _ops.SculptObject_SetGhost import main as set_ghost, GhostMode
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_SetGhost import main as set_ghost, GhostMode
+                from utils.scope_utils import Scope
                 set_ghost(scope=Scope.ALL, mode=GhostMode.INVERT)
                 self._set_status("Inverted ghost states")
                 self.refresh_scene_tree()
@@ -544,8 +451,8 @@ try:
         def _on_isolate(self) -> None:
             """Ghost all except selected."""
             try:
-                from _ops.SculptObject_SetGhost import main as set_ghost, GhostMode
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_SetGhost import main as set_ghost, GhostMode
+                from utils.scope_utils import Scope
                 set_ghost(scope=Scope.CURRENT, mode=GhostMode.ISOLATE)
                 self._set_status("Isolated selected")
                 self.refresh_scene_tree()
@@ -555,8 +462,8 @@ try:
         def _on_to_surface(self) -> None:
             """Convert all to surface mode."""
             try:
-                from _ops.SculptObject_ModeConvert import main as convert
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_ModeConvert import main as convert
+                from utils.scope_utils import Scope
                 convert(scope=Scope.ALL, to_surface=True)
                 self._set_status("Converted all to surface")
                 self.refresh_scene_tree()
@@ -566,8 +473,8 @@ try:
         def _on_to_voxels(self) -> None:
             """Convert all to voxel mode."""
             try:
-                from _ops.SculptObject_ModeConvert import main as convert
-                from _utils.scope_utils import Scope
+                from ops.SculptObject_ModeConvert import main as convert
+                from utils.scope_utils import Scope
                 convert(scope=Scope.ALL, to_surface=False)
                 self._set_status("Converted all to voxels")
                 self.refresh_scene_tree()

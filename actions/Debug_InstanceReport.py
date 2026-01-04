@@ -13,8 +13,8 @@ Room: Sculpt
 Action: Print instance detection report to console
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.coat_ui_utils import show_message
+from utils.scene_api import SceneAPI
+from utils.coat_ui_utils import show_message
 
 
 def generate_instance_report() -> None:

@@ -5,10 +5,10 @@ Scale sculpt objects by a multiplier factor.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.scope_utils import Scope, resolve_scope
-from _utils.object_utils import scale_element
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI
+from utils.scope_utils import Scope, resolve_scope
+from utils.object_utils import scale_element
+from utils.coat_ui_utils import show_message, show_error
 
 
 # =============================================================================

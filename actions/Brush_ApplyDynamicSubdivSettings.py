@@ -8,8 +8,8 @@ Room: Sculpt
 Action: Apply dynamic subdiv settings to all brushes
 """
 import coat
-from _utils.brush_settings_utils import BrushSettingsUtils
-from _utils.lks_settings import get_brush_settings
+from utils.brush_settings_utils import BrushSettingsUtils
+from utils.lks_settings import get_brush_settings
 
 
 def apply_dynamic_subdiv_settings():

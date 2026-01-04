@@ -4,8 +4,8 @@ Toggle ghost state for selected object and all children.
 Room: Sculpt
 Action: Toggle ghost on subtree (invert current state)
 """
-from _ops.SculptObject_SetGhost import main as op_main, GhostMode
-from _utils.scope_utils import Scope
+from ops.SculptObject_SetGhost import main as op_main, GhostMode
+from utils.scope_utils import Scope
 
 
 def main() -> None:

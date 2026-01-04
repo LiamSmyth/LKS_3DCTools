@@ -8,12 +8,12 @@ Room: Sculpt
 Action: Remesh, symmetrize all objects in subtree
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.Volume_resample_utils import execute_resample
-from _utils.Volume_decimate_utils import decimate_to_target
-from _utils.Volume_subdivide_utils import make_symmetrical
-from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI
+from utils.Volume_resample_utils import execute_resample
+from utils.Volume_decimate_utils import decimate_to_target
+from utils.Volume_subdivide_utils import make_symmetrical
+from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
+from utils.coat_ui_utils import show_message, show_error
 
 # Default resample scale preserves details during voxel conversion
 DEFAULT_RESAMPLE_SCALE: float = 4.0

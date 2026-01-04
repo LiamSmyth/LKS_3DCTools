@@ -7,8 +7,8 @@ Requires: Parent must be in voxel mode
 """
 import coat
 
-from _utils.SceneElement_boolean_utils import create_subtract_child
-from _utils.coat_ui_utils import show_message
+from utils.SceneElement_boolean_utils import create_subtract_child
+from utils.coat_ui_utils import show_message
 
 
 def main() -> None:

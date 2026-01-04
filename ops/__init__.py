@@ -16,13 +16,13 @@ Example:
     main(ghost: bool, scope: Scope, invert: bool = False) -> int
 
 Usage from action script:
-  from _ops.SculptObject_SetGhost import main
-  from _utils.scope_utils import Scope
+  from ops.SculptObject_SetGhost import main
+  from utils.scope_utils import Scope
   main(ghost=True, scope=Scope.ALL, invert=True)
 
 Usage from panel button:
   def InvertGhost(self) -> None:
-      from _ops.SculptObject_SetGhost import main
-      from _utils.scope_utils import Scope
+      from ops.SculptObject_SetGhost import main
+      from utils.scope_utils import Scope
       main(ghost=True, scope=Scope.ALL, invert=True)
 """

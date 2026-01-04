@@ -7,7 +7,7 @@ Operators in `_ops/` own Config dataclasses and call these functions.
 import coat
 from typing import Callable
 
-from _utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
+from utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
 
 # =============================================================================
 # MAGIC UI STRINGS (NOT in coat.pyi - discovered experimentally)

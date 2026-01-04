@@ -21,7 +21,7 @@ Use in conjunction with `copilot_style_guide.instructions.md` (general patterns)
 | **Dependencies** | Manual install | Auto-install via `requirements.txt` |
 | **Startup code** | None | `__onstartup.py` runs on 3DCoat launch |
 | **Qt/PySide6 UI** | Not available | ✅ Full Qt support, non-blocking |
-| **Import prefix** | `from _utils.` | `from cModules.LKS._utils.` |
+| **Import prefix** | `from utils.` | `from cModules.LKS._utils.` |
 
 ### cModule Entry Points
 
@@ -440,7 +440,7 @@ During development, use `importlib.reload()` to pick up changes without restarti
 import importlib
 from _utils import some_module
 importlib.reload(some_module)
-from _utils.some_module import some_function
+from utils.some_module import some_function
 
 some_function()
 ```
@@ -455,7 +455,7 @@ some_function()
 Action scripts should be thin wrappers:
 ```python
 # GOOD
-from _utils.brush_utils import increment_details_level
+from utils.brush_utils import increment_details_level
 increment_details_level()
 
 # BAD - too much logic in action script
@@ -469,7 +469,7 @@ new_value = current + 1
 Never use magic strings directly in action scripts:
 ```python
 # GOOD
-from _utils.coat_ui_utils import confirm_dialog
+from utils.coat_ui_utils import confirm_dialog
 confirm_dialog()
 
 # BAD

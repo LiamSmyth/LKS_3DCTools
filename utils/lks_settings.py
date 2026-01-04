@@ -4,7 +4,7 @@ LKS Settings - Persistent settings cache for LKS tools.
 Provides singleton settings objects with attribute access that
 persist to JSON files across 3DCoat sessions.
 
-Separate files:
+Separate files (stored in data/ subfolder):
 - lks_brush_settings.json: Brush settings (details_level, auto_subdivide, etc.)
 - lks_autopo_settings.json: Autopo workflow configuration
 - lks_settings.json: General/other settings
@@ -12,30 +12,34 @@ Separate files:
 import coat
 import json
 import os
+from pathlib import Path
 
 # =============================================================================
 # FILE PATHS
 # =============================================================================
 
-# Relative paths (coat.io.documents() converts to absolute)
-BRUSH_SETTINGS_FILE: str = "UserPrefs/Addons/LKS/lks_brush_settings.json"
-AUTOPO_SETTINGS_FILE: str = "UserPrefs/Addons/LKS/lks_autopo_settings.json"
-GENERAL_SETTINGS_FILE: str = "UserPrefs/Addons/LKS/lks_settings.json"
+# Data folder path (relative to this module)
+_DATA_DIR: Path = Path(__file__).parent.parent / "data"
+
+# File names (stored in data/ folder)
+BRUSH_SETTINGS_FILE: str = "lks_brush_settings.json"
+AUTOPO_SETTINGS_FILE: str = "lks_autopo_settings.json"
+GENERAL_SETTINGS_FILE: str = "lks_settings.json"
 
 
 def _get_brush_settings_path() -> str:
     """Get the absolute path to brush settings file."""
-    return coat.io.documents(BRUSH_SETTINGS_FILE)
+    return str(_DATA_DIR / BRUSH_SETTINGS_FILE)
 
 
 def _get_autopo_settings_path() -> str:
     """Get the absolute path to autopo settings file."""
-    return coat.io.documents(AUTOPO_SETTINGS_FILE)
+    return str(_DATA_DIR / AUTOPO_SETTINGS_FILE)
 
 
 def _get_general_settings_path() -> str:
     """Get the absolute path to general settings file."""
-    return coat.io.documents(GENERAL_SETTINGS_FILE)
+    return str(_DATA_DIR / GENERAL_SETTINGS_FILE)
 
 # =============================================================================
 # DEFAULTS

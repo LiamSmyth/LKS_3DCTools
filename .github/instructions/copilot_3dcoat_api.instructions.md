@@ -180,7 +180,7 @@ Action scripts (root-level .py files) may be re-executed with stale module state
 
 ```python
 # In action script - force fresh disk read
-from _utils.lks_settings import reload_brush_settings, get_brush_settings
+from utils.lks_settings import reload_brush_settings, get_brush_settings
 
 reload_brush_settings()  # Clear cache, re-read from disk
 settings = get_brush_settings()

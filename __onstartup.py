@@ -12,13 +12,13 @@ import os
 from pathlib import Path
 
 # =============================================================================
-# PATH SETUP - Enable relative imports (from _utils., from _ops.)
+# PATH SETUP - Enable relative imports (from utils., from ops.)
 # =============================================================================
 
 # Get the LKS module root directory
 _LKS_ROOT: Path = Path(__file__).parent.resolve()
 
-# Add to sys.path if not already present (enables 'from _utils.' imports)
+# Add to sys.path if not already present (enables 'from utils.' imports)
 if str(_LKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_LKS_ROOT))
     print(f"[LKS] Added to sys.path: {_LKS_ROOT}")

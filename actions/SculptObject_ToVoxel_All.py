@@ -4,8 +4,8 @@ Convert all sculpt objects to voxel mode.
 Room: Sculpt
 Action: Convert all surface objects to voxel mode
 """
-from _ops.SculptObject_ModeConvert import main as op_main, ConvertMode
-from _utils.scope_utils import Scope
+from ops.SculptObject_ModeConvert import main as op_main, ConvertMode
+from utils.scope_utils import Scope
 
 
 def main() -> None:

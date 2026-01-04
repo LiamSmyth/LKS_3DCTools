@@ -107,8 +107,8 @@ if str(_LKS_ROOT) not in sys.path:
 This allows keeping the original relative imports:
 ```python
 # These work after the sys.path fix:
-from _utils.scene_api import SceneAPI
-from _ops.SculptObject_Decimate import main as decimate_op
+from utils.scene_api import SceneAPI
+from ops.SculptObject_Decimate import main as decimate_op
 ```
 
 Alternative (not recommended - requires updating all files):
@@ -170,8 +170,8 @@ UserPrefs/StdScripts/cModules/LKS/
 - [ ] Verify Qt panel appears and doesn't block viewport
 
 ### Phase 3: Update Imports (SOLVED via sys.path)
-- [x] ~~Update all imports from `from _utils.` to `from cModules.LKS._utils.`~~
-- [x] ~~Update all imports from `from _ops.` to `from cModules.LKS._ops.`~~
+- [x] ~~Update all imports from `from utils.` to `from cModules.LKS._utils.`~~
+- [x] ~~Update all imports from `from ops.` to `from cModules.LKS._ops.`~~
 - [x] **SOLUTION**: Added LKS root to `sys.path` in `__onstartup.py` - relative imports now work!
 - [ ] Test all operators still work
 

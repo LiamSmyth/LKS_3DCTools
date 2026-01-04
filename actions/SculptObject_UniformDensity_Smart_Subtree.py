@@ -12,9 +12,9 @@ Room: Sculpt
 Action: Subdivide or decimate children to match parent's polygon density
 """
 import coat
-from _utils.scene_api import SceneAPI
-from _utils.Volume_density_utils import smart_match_density
-from _utils.coat_ui_utils import show_message, show_error
+from utils.scene_api import SceneAPI
+from utils.Volume_density_utils import smart_match_density
+from utils.coat_ui_utils import show_message, show_error
 
 
 def main() -> None:
