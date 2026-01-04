@@ -10,17 +10,17 @@ import sys
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
-    
+
     # CRITICAL: Use desktop OpenGL to avoid conflicts with 3DCoat's rendering
     QApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
-    
+
     # Create QApplication with no-opengl flag if not already created
     if not QApplication.instance():
         app = QApplication(["-no-opengl"])
         print("[LKS] Qt initialized successfully")
     else:
         print("[LKS] Qt already initialized")
-        
+
 except ImportError as e:
     print(f"[LKS] Warning: PySide6 not available: {e}")
     print("[LKS] Qt UI features will be disabled")
