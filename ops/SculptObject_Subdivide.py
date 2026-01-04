@@ -7,7 +7,7 @@ Each subdivision approximately doubles the polycount.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
-from utils.scene_api import SceneAPI
+from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.Volume_subdivide_utils import subdivide_once
 from utils.Volume_mode_utils import ensure_surface_mode
@@ -76,11 +76,12 @@ def main(
     subdivisions = max(1, min(subdivisions, MAX_SUBDIVISIONS))
 
     # Save selection for restoration
-    current: coat.SceneElement | None = None
+    saved_selection: list[coat.SceneElement] = []
     if preserve_selection:
-        current = SceneAPI.get_current_element()
+        saved_selection = SelectionAPI.save_selection()
 
-    # Validate for scope-dependent operations
+    # Validation for scope check should use a separate variable
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
     if scope in (Scope.CURRENT, Scope.TREE) and not current:
         show_error("No object selected", 2000)
         return 0
@@ -102,8 +103,8 @@ def main(
     cleanup_after_mesh_operation()
 
     # Restore selection
-    if preserve_selection and current:
-        current.selectOne()
+    if preserve_selection and saved_selection:
+        SelectionAPI.restore_selection(saved_selection)
 
     # Build status message
     multiplier: int = 2 ** subdivisions

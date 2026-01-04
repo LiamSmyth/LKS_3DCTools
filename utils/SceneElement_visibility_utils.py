@@ -187,6 +187,26 @@ def restore_ghost_states(
 # FILTERED OPERATIONS
 # =============================================================================
 
+def _element_in_list(el: coat.SceneElement, elements: list[coat.SceneElement]) -> bool:
+    """
+    Check if element is in list using 3DCoat's equality operator.
+
+    Note: We use explicit loop with __eq__ because Python set/dict would use
+    id() or __hash__ which may not work correctly for 3DCoat wrapper objects.
+
+    Args:
+        el: Element to check
+        elements: List to check against
+
+    Returns:
+        True if element is in list (via __eq__)
+    """
+    for other in elements:
+        if el == other:
+            return True
+    return False
+
+
 def hide_except(
     all_elements: list[coat.SceneElement],
     keep_visible: list[coat.SceneElement]
@@ -201,9 +221,8 @@ def hide_except(
     Returns:
         Number of elements hidden
     """
-    keep_ids: set[int] = {id(el) for el in keep_visible}
     to_hide: list[coat.SceneElement] = [
-        el for el in all_elements if id(el) not in keep_ids
+        el for el in all_elements if not _element_in_list(el, keep_visible)
     ]
     return hide_elements(to_hide)
 
@@ -222,8 +241,7 @@ def ghost_except(
     Returns:
         Number of elements ghosted
     """
-    keep_ids: set[int] = {id(el) for el in keep_unghosted}
     to_ghost: list[coat.SceneElement] = [
-        el for el in all_elements if id(el) not in keep_ids
+        el for el in all_elements if not _element_in_list(el, keep_unghosted)
     ]
     return ghost_elements(to_ghost)

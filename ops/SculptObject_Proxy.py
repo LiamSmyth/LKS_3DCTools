@@ -4,16 +4,22 @@ SculptObject_Proxy Operator
 Toggle proxy mode (decimation/reduction cache) on sculpt objects.
 Proxy mode provides faster viewport performance while preserving full resolution.
 
-Supports multiple proxy types:
-- Decimate: 16X, 8X, 4X, 2X (destructive decimation-based)
-- Reduce: 8X, 4X, 2X (non-destructive reduction)
+Proxy system has two steps:
+1. Set proxy mode ($Decimate16X, $Reduce8X, etc.) - configures HOW objects will be proxied
+2. Apply caching ($ToggleCachingVolume) - actually proxies/unproxies objects
+
+Supports multiple proxy modes:
+- Decimate: 16X, 8X, 4X, 2X (destructive decimation-based, more accurate)
+- Reduce: 8X, 4X, 2X (non-destructive reduction, faster)
 
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
-from utils.scene_api import SceneAPI
+from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
-from utils.Volume_proxy_utils import toggle_proxy, ProxyType, DEFAULT_PROXY_TYPE
+from utils.Volume_proxy_utils import (
+    set_proxy_mode, toggle_caching, ProxyMode, DEFAULT_PROXY_MODE
+)
 from utils.coat_ui_utils import show_message, show_error
 
 
@@ -21,9 +27,13 @@ from utils.coat_ui_utils import show_message, show_error
 # INTERNAL HELPERS
 # =============================================================================
 
-def _proxy_element(element: coat.SceneElement, proxy_type: ProxyType) -> bool:
+def _proxy_element(element: coat.SceneElement, proxy_mode: ProxyMode) -> bool:
     """
     Toggle proxy mode on a single element.
+
+    Args:
+        element: The SceneElement to proxy
+        proxy_mode: The proxy mode to use
 
     Returns:
         True if element was processed, False if skipped
@@ -33,7 +43,10 @@ def _proxy_element(element: coat.SceneElement, proxy_type: ProxyType) -> bool:
 
     # Select element for operation
     element.selectOne()
-    toggle_proxy(proxy_type)
+
+    # Set proxy mode first, then toggle caching
+    set_proxy_mode(proxy_mode)
+    toggle_caching()
     return True
 
 
@@ -43,7 +56,7 @@ def _proxy_element(element: coat.SceneElement, proxy_type: ProxyType) -> bool:
 
 def main(
     scope: Scope = Scope.CURRENT,
-    proxy_type: ProxyType = DEFAULT_PROXY_TYPE,
+    proxy_mode: ProxyMode = DEFAULT_PROXY_MODE,
     preserve_selection: bool = True,
 ) -> int:
     """
@@ -51,18 +64,19 @@ def main(
 
     Args:
         scope: Which objects to operate on
-        proxy_type: Type of proxy to toggle (DECIMATE_16X, REDUCE_8X, etc.)
+        proxy_mode: Mode of proxy to toggle (DECIMATE_16X, REDUCE_8X, etc.)
         preserve_selection: Whether to restore selection after operation
 
     Returns:
         Number of objects processed
     """
     # Save selection for restoration
-    current: coat.SceneElement | None = None
+    saved_selection: list[coat.SceneElement] = []
     if preserve_selection:
-        current = SceneAPI.get_current_element()
+        saved_selection = SelectionAPI.save_selection()
 
-    # Validate for scope-dependent operations
+    # Validation for scope check should use a separate variable
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
     if scope in (Scope.CURRENT, Scope.TREE) and not current:
         show_error("No object selected", 2000)
         return 0
@@ -77,14 +91,14 @@ def main(
     # Process each element
     count: int = 0
     for el in elements:
-        if _proxy_element(el, proxy_type):
+        if _proxy_element(el, proxy_mode):
             count += 1
 
     # Restore selection
-    if preserve_selection and current:
-        current.selectOne()
+    if preserve_selection and saved_selection:
+        SelectionAPI.restore_selection(saved_selection)
 
     # Status message - extract friendly name from enum
-    type_name: str = proxy_type.name.replace("_", " ").title()
-    show_message(f"Toggled {type_name} proxy on {count} objects", 2000)
+    mode_name: str = proxy_mode.name.replace("_", " ").title()
+    show_message(f"Toggled {mode_name} proxy on {count} objects", 2000)
     return count

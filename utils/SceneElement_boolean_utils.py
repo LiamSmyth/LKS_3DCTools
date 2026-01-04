@@ -68,10 +68,13 @@ def create_boolean_child(
     Duplicates the parent, parents the clone under it, and sets up live boolean.
     Parent must be in voxel mode for booleans to work.
 
+    CRITICAL: For INTERSECT, extrusion MUST be applied BEFORE setting boolean mode
+    to prevent 3DCoat crash. For SUBTRACT/UNION, we clear child content first.
+
     Args:
         parent: The parent SceneElement to create boolean child for
         mode: The boolean mode (SUBTRACT, INTERSECT, UNION)
-        apply_extrusion: Whether to apply voxel extrusion (useful for INTERSECT)
+        apply_extrusion: Whether to apply voxel extrusion (required for INTERSECT)
         extrusion_amount: Amount of extrusion if apply_extrusion is True
         clear_child: Whether to clear the child's geometry (for SUBTRACT/UNION)
 
@@ -82,7 +85,7 @@ def create_boolean_child(
         show_message("No parent element provided", 3000)
         return None
 
-    # Duplicate parent
+    # Duplicate parent (child inherits voxel mode from parent)
     child: coat.SceneElement = parent.duplicate()
     wait_frames(BOOLEAN_WAIT_FRAMES)
 
@@ -100,15 +103,20 @@ def create_boolean_child(
     child.selectOne()
     wait_frames(BOOLEAN_WAIT_FRAMES)
     child.changeParent(parent)
+    wait_frames(BOOLEAN_WAIT_FRAMES)
 
-    # Apply extrusion if requested (typically for INTERSECT)
+    # For INTERSECT: extrusion MUST be applied BEFORE setting boolean mode
+    # For SUBTRACT/UNION: clear content first
     if apply_extrusion:
+        # Apply extrusion first (CRITICAL: before assignLiveBooleans to avoid crash)
         _apply_voxel_extrusion(extrusion_amount)
+        wait_frames(BOOLEAN_WAIT_FRAMES)
     elif clear_child:
         # Clear geometry for subtract/union (user will sculpt new geometry)
         child.clear()
+        wait_frames(BOOLEAN_WAIT_FRAMES)
 
-    # Set boolean mode on the volume
+    # Now set boolean mode (after extrusion/clear to avoid crash)
     vol: coat.Volume = child.Volume()
     vol.assignLiveBooleans(int(mode))
 

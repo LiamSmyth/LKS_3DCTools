@@ -49,12 +49,15 @@ def main(
     Returns:
         Number of objects affected
     """
-    # Save selection for restoration
-    current: coat.SceneElement | None = None
+    from utils.scene_api import SelectionAPI
+
+    # Save selection for restoration (multi-selection aware)
+    saved_selection: list[coat.SceneElement] = []
     if preserve_selection:
-        current = SceneAPI.get_current_element()
+        saved_selection = SelectionAPI.save_selection()
 
     # Validate for scope-dependent operations
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
     if scope in (Scope.CURRENT, Scope.TREE) and not current:
         show_error("No object selected", 2000)
         return 0
@@ -62,12 +65,16 @@ def main(
     count: int = 0
 
     if mode == GhostMode.ISOLATE:
-        # Isolate: ghost all EXCEPT the scope elements
+        # Isolate: ghost all, then unghost only the scope elements
         all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects(
         )
         keep_unghosted: list[coat.SceneElement] = resolve_scope(scope)
-        count = ghost_except(all_elements, keep_unghosted)
-        status: str = f"Isolated - ghosted {count}"
+        # First ghost ALL elements
+        ghost_count: int = ghost_elements(all_elements)
+        # Then unghost only the selection
+        unghost_count: int = unghost_elements(keep_unghosted)
+        count = ghost_count
+        status: str = f"Isolated - ghosted {ghost_count}, unghosted {unghost_count}"
 
     elif mode == GhostMode.INVERT:
         # Invert: toggle ghost state on scope elements
@@ -81,9 +88,9 @@ def main(
         action: str = "ghosted" if ghost else "unghosted"
         status = f"{action.capitalize()} {count}"
 
-    # Restore selection
-    if preserve_selection and current:
-        current.selectOne()
+    # Restore selection (multi-selection aware)
+    if preserve_selection and saved_selection:
+        SelectionAPI.restore_selection(saved_selection)
 
     show_message(f"{status} objects", 2000)
     return count

@@ -33,7 +33,8 @@ class Scope(Enum):
 
 def resolve_scope(
     scope: Scope,
-    selected: list[coat.SceneElement] | None = None
+    selected: list[coat.SceneElement] | None = None,
+    include_hidden: bool = False
 ) -> list[coat.SceneElement]:
     """
     Resolve a scope enum to a list of elements.
@@ -41,6 +42,7 @@ def resolve_scope(
     Args:
         scope: The operation scope
         selected: Optional pre-fetched selection (avoids re-fetching)
+        include_hidden: If True, include hidden elements (for visibility ops)
 
     Returns:
         List of elements matching the scope
@@ -55,36 +57,44 @@ def resolve_scope(
         return list(selected)
 
     elif scope == Scope.TREE:
-        return _resolve_tree_scope(selected)
+        return _resolve_tree_scope(selected, include_hidden)
 
     elif scope == Scope.OTHER:
-        return _resolve_other_scope(selected, root)
+        return _resolve_other_scope(selected, root, include_hidden)
 
     elif scope == Scope.ALL:
-        return _resolve_all_scope(root)
+        return _resolve_all_scope(root, include_hidden)
 
     return []
 
 
-def _resolve_tree_scope(selected: list[coat.SceneElement]) -> list[coat.SceneElement]:
+def _resolve_tree_scope(
+    selected: list[coat.SceneElement],
+    include_hidden: bool = False
+) -> list[coat.SceneElement]:
     """
     Resolve TREE scope: selection + all descendants.
 
     Args:
         selected: Currently selected elements
+        include_hidden: If True, include hidden elements
 
     Returns:
         Selected elements plus all their descendants
     """
     tree_elements: list[coat.SceneElement] = []
     for sel in selected:
-        tree_elements.extend(SceneAPI.collect_subtree(sel))
+        if include_hidden:
+            tree_elements.extend(SceneAPI.collect_all_subtree(sel))
+        else:
+            tree_elements.extend(SceneAPI.collect_subtree(sel))
     return deduplicate_elements(tree_elements)
 
 
 def _resolve_other_scope(
     selected: list[coat.SceneElement],
-    root: coat.SceneElement | None
+    root: coat.SceneElement | None,
+    include_hidden: bool = False
 ) -> list[coat.SceneElement]:
     """
     Resolve OTHER scope: everything except selection subtrees.
@@ -92,6 +102,7 @@ def _resolve_other_scope(
     Args:
         selected: Currently selected elements
         root: Scene root element
+        include_hidden: If True, include hidden elements
 
     Returns:
         All elements not in any selection subtree
@@ -102,26 +113,37 @@ def _resolve_other_scope(
     # Build set of IDs in selection trees
     tree_ids: set[int] = set()
     for sel in selected:
-        for el in SceneAPI.collect_subtree(sel):
+        subtree = SceneAPI.collect_all_subtree(
+            sel) if include_hidden else SceneAPI.collect_subtree(sel)
+        for el in subtree:
             tree_ids.add(id(el))
 
     # Collect all elements NOT in selection trees
-    all_elements: list[coat.SceneElement] = SceneAPI.collect_subtree(root)
+    all_elements: list[coat.SceneElement] = (
+        SceneAPI.collect_all_subtree(
+            root) if include_hidden else SceneAPI.collect_subtree(root)
+    )
     return [el for el in all_elements if id(el) not in tree_ids]
 
 
-def _resolve_all_scope(root: coat.SceneElement | None) -> list[coat.SceneElement]:
+def _resolve_all_scope(
+    root: coat.SceneElement | None,
+    include_hidden: bool = False
+) -> list[coat.SceneElement]:
     """
     Resolve ALL scope: entire sculpt tree.
 
     Args:
         root: Scene root element
+        include_hidden: If True, include hidden elements
 
     Returns:
         All elements in the scene
     """
     if not root:
         return []
+    if include_hidden:
+        return SceneAPI.collect_all_subtree(root)
     return SceneAPI.collect_subtree(root)
 
 

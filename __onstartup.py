@@ -65,7 +65,9 @@ try:
         script_path: str = f"{_ACTIONS_PATH}/{script_name}"
         coat.ui.addTranslation(action_id, translation)
         if not coat.ui.checkIfMenuItemInserted(action_id):
-            coat.ui.insertInMenu("SCRIPTS", action_id, script_path)
+            # Valid menu names: File, File.Import, File.Export, Edit, View,
+            # Windows.Popups, Windows.Sliders, Windows, Scripts, Help, Symmetry, Freeze, Voxels
+            coat.ui.insertInMenu("Scripts", action_id, script_path)
 
     # Register key action scripts for hotkey assignment
     # Users can assign hotkeys via Edit → Preferences → Hotkeys → search "LKS"
@@ -109,7 +111,7 @@ try:
     _register_action("LKS_Brush_DecrementDetails",
                      "Brush_DecrementDetailsLevel.py", "LKS: Brush Decrement Details")
 
-    print(f"[LKS] Registered {20} action scripts to SCRIPTS menu")
+    print(f"[LKS] Registered action scripts to Scripts menu")
     print("[LKS] Assign hotkeys via Edit → Preferences → Hotkeys → search 'LKS'")
 
 except Exception as e:

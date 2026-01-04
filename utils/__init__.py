@@ -108,15 +108,18 @@ from utils.Volume_decimate_utils import (
 
 # Volume utilities - Proxy (raw args pattern)
 from utils.Volume_proxy_utils import (
-    toggle_proxy,
+    set_proxy_mode,
+    toggle_caching,
+    cache_visible,
+    uncache_visible,
+    clear_all_caches,
+    proxy_current,
+    proxy_visible,
     toggle_decimate_16x,
     toggle_decimate_8x,
     toggle_decimate_4x,
-    toggle_decimate_2x,
     toggle_reduce_8x,
-    toggle_reduce_4x,
-    toggle_reduce_2x,
-    ProxyType,
+    ProxyMode,
 )
 
 # Volume utilities - Resample (raw args pattern)

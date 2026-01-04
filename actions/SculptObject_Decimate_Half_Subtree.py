@@ -14,6 +14,3 @@ def main() -> None:
 
 
 main()
-
-
-main()

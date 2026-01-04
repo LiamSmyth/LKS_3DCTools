@@ -120,7 +120,8 @@ try:
     from PySide6.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
         QGroupBox, QFrame, QTreeWidget, QTreeWidgetItem, QSplitter,
-        QSizePolicy, QScrollArea, QSlider
+        QSizePolicy, QScrollArea, QSlider, QSpinBox, QDoubleSpinBox,
+        QCheckBox, QRadioButton, QButtonGroup
     )
     from PySide6.QtCore import Qt, QTimer
     from PySide6.QtGui import QColor, QBrush
@@ -206,6 +207,12 @@ try:
             dec_section = CollapsibleSection(title="Decimate", color="#ffb74d")
             self._setup_decimate_section(dec_section.content_layout)
             scroll_layout.addWidget(dec_section)
+
+            # ========== PROXY (CACHE) SECTION ==========
+            proxy_section = CollapsibleSection(
+                title="Proxy (Cache)", color="#ffb74d")
+            self._setup_proxy_section(proxy_section.content_layout)
+            scroll_layout.addWidget(proxy_section)
 
             # ========== RESAMPLE SECTION ==========
             resample_section = CollapsibleSection(
@@ -316,14 +323,15 @@ try:
             self._scene_tree.setColumnWidth(1, 25)
             self._scene_tree.setColumnWidth(2, 25)
             self._scene_tree.setColumnWidth(3, 55)
-            self._scene_tree.setMaximumHeight(180)
+            self._scene_tree.setMinimumHeight(120)
+            self._scene_tree.setMaximumHeight(220)
             layout.addWidget(self._scene_tree)
 
             # Buttons
-            grid = ButtonGrid(columns=3)
+            grid = ButtonGrid(columns=2)
             grid.add_button("↻ Refresh", self.refresh_scene_tree,
                             "Refresh scene tree")
-            grid.add_button("Select", self._on_select_item,
+            grid.add_button("Select in 3DC", self._on_select_item,
                             "Select item in 3DCoat")
             layout.addWidget(grid)
 
@@ -364,7 +372,7 @@ try:
                     vol = element.Volume()
                     if vol:
                         try:
-                            polys = f"{vol.polyCount():,}"
+                            polys = f"{vol.getPolycount():,}"
                         except:
                             polys = "?"
 
@@ -413,29 +421,50 @@ try:
 
         def _setup_decimate_section(self, layout: QVBoxLayout) -> None:
             """Set up the decimate section."""
-            # Reduction % sub-header with preset buttons
-            layout.addWidget(self._create_sub_header("Quick Presets"))
-            presets = ButtonGrid(columns=4)
-            presets.add_button(
-                "25%", lambda: self._decimate(25), "Decimate to 25%")
-            presets.add_button(
-                "50%", lambda: self._decimate(50), "Decimate to 50%")
-            presets.add_button(
-                "75%", lambda: self._decimate(75), "Decimate to 75%")
-            presets.add_button(
-                "Proxy", self._on_proxy_toggle, "Toggle proxy mode")
-            layout.addWidget(presets)
+            # Slider for reduction percentage (5% increments)
+            layout.addWidget(self._create_sub_header("Reduction %"))
+            slider_row = QHBoxLayout()
+            self._decimate_slider = QSlider(Qt.Horizontal)
+            self._decimate_slider.setMinimum(5)
+            self._decimate_slider.setMaximum(95)
+            self._decimate_slider.setValue(50)
+            self._decimate_slider.setSingleStep(5)
+            self._decimate_slider.setPageStep(10)
+            self._decimate_slider.valueChanged.connect(
+                self._on_decimate_slider_changed)
+            slider_row.addWidget(self._decimate_slider)
+            self._decimate_label = QLabel("50%")
+            self._decimate_label.setFixedWidth(35)
+            slider_row.addWidget(self._decimate_label)
+            slider_widget = QWidget()
+            slider_widget.setLayout(slider_row)
+            layout.addWidget(slider_widget)
 
-            # Scope sub-header
-            layout.addWidget(self._create_sub_header("Scope (50%)"))
+            # Scope buttons
+            layout.addWidget(self._create_sub_header("Apply To"))
             scope = ButtonGrid(columns=3)
-            scope.add_button("Cur", lambda: self._decimate_scope(
+            scope.add_button("Sel", lambda: self._decimate_scope(
                 "CURRENT"), "Decimate selected")
             scope.add_button("Tree", lambda: self._decimate_scope(
                 "TREE"), "Decimate subtree")
             scope.add_button(
                 "All", lambda: self._decimate_scope("ALL"), "Decimate all")
             layout.addWidget(scope)
+
+            # Smart Density Matching (moved from Smart Actions)
+            layout.addWidget(self._create_sub_header("Smart Density (Tree)"))
+            density = ButtonGrid(columns=1)
+            density.add_button(
+                "Smart Match", self._uniform_smart_tree, "Smart density match using tolerance")
+            layout.addWidget(density)
+
+        def _on_decimate_slider_changed(self, value: int) -> None:
+            """Update label when slider changes."""
+            # Snap to 5% increments
+            snapped = (value // 5) * 5
+            if snapped != value:
+                self._decimate_slider.setValue(snapped)
+            self._decimate_label.setText(f"{snapped}%")
 
         def _decimate(self, percent: int) -> None:
             """Decimate current selection to percent."""
@@ -449,28 +478,142 @@ try:
                 self._log_error(f"Decimate failed: {e}")
 
         def _decimate_scope(self, scope_name: str) -> None:
-            """Decimate with scope."""
+            """Decimate with scope using slider value."""
             try:
                 from ops.SculptObject_Decimate import main as decimate
                 from utils.scope_utils import Scope
                 scope = getattr(Scope, scope_name)
-                decimate(scope=scope, reduction_percent=50.0)
-                self._log_success(f"Decimated {scope_name.lower()} to 50%")
+                percent = self._decimate_slider.value()
+                decimate(scope=scope, reduction_percent=float(percent))
+                self._log_success(
+                    f"Decimated {scope_name.lower()} to {percent}%")
                 self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Decimate failed: {e}")
 
-        def _on_proxy_toggle(self) -> None:
-            """Toggle proxy mode."""
+        # =====================================================================
+        # PROXY (CACHE) SECTION
+        # =====================================================================
+
+        def _setup_proxy_section(self, layout: QVBoxLayout) -> None:
+            """Set up the proxy (cache) section using 3DCoat's native caching."""
+            # Proxy mode radio buttons
+            layout.addWidget(self._create_sub_header("Proxy Mode"))
+
+            self._proxy_mode_group = QButtonGroup(self)
+
+            # Option 1: Decimate 16x (default)
+            radio_16x = QRadioButton("Decimate 16x (fast)")
+            radio_16x.setChecked(True)  # Default
+            self._proxy_mode_group.addButton(radio_16x, 0)
+            layout.addWidget(radio_16x)
+
+            # Option 2: Decimate 8x
+            radio_8x = QRadioButton("Decimate 8x")
+            self._proxy_mode_group.addButton(radio_8x, 1)
+            layout.addWidget(radio_8x)
+
+            # Option 3: Decimate 4x
+            radio_4x = QRadioButton("Decimate 4x (quality)")
+            self._proxy_mode_group.addButton(radio_4x, 2)
+            layout.addWidget(radio_4x)
+
+            # Option 4: Native cache (uses 3DCoat's built-in caching)
+            radio_native = QRadioButton("Native Cache")
+            self._proxy_mode_group.addButton(radio_native, 3)
+            layout.addWidget(radio_native)
+
+            layout.addWidget(self._create_sub_header("Toggle Proxy"))
+            toggle = ButtonGrid(columns=3)
+            toggle.add_button("Sel", lambda: self._toggle_proxy("CURRENT"),
+                              "Toggle proxy on selection")
+            toggle.add_button("Tree", lambda: self._toggle_proxy("TREE"),
+                              "Toggle proxy on subtree")
+            toggle.add_button("All", lambda: self._toggle_proxy("ALL"),
+                              "Toggle proxy on all")
+            layout.addWidget(toggle)
+
+            layout.addWidget(self._create_sub_header("Native Cache Ops"))
+            batch = ButtonGrid(columns=2)
+            batch.add_button("Cache Visible", self._on_cache_visible,
+                             "Cache all visible objects (native)")
+            batch.add_button("Uncache Visible", self._on_uncache_visible,
+                             "Uncache all visible objects")
+            layout.addWidget(batch)
+
+            clear = ButtonGrid(columns=1)
+            clear.add_button("Clear All Caches", self._on_clear_caches,
+                             "Clear all cached objects")
+            layout.addWidget(clear)
+
+        def _toggle_proxy(self, scope_name: str) -> None:
+            """Toggle proxy on scope using selected mode."""
             try:
-                from ops.SculptObject_Proxy import main as proxy
+                from ops.SculptObject_Proxy import main as proxy_op
+                from utils.Volume_proxy_utils import ProxyMode
                 from utils.scope_utils import Scope
-                from utils.Volume_proxy_utils import ProxyType
-                proxy(scope=Scope.CURRENT, proxy_type=ProxyType.DECIMATE_16X)
-                self._log_success("Toggled proxy")
+
+                mode_id = self._proxy_mode_group.checkedId()
+                scope = getattr(Scope, scope_name)
+
+                if mode_id == 3:
+                    # Native cache mode - just toggle on current
+                    coat.ui.cmd("$ToggleCachingVolume")
+                    self._log_success("Toggled native cache")
+                else:
+                    # Map radio button ID to ProxyMode enum
+                    proxy_mode_map = {
+                        0: ProxyMode.DECIMATE_16X,
+                        1: ProxyMode.DECIMATE_8X,
+                        2: ProxyMode.DECIMATE_4X,
+                    }
+                    proxy_mode = proxy_mode_map.get(
+                        mode_id, ProxyMode.DECIMATE_16X)
+
+                    count = proxy_op(scope=scope, proxy_mode=proxy_mode)
+                    mode_name = proxy_mode.name.replace("_", " ").title()
+                    self._log_success(
+                        f"Toggled {mode_name} proxy on {count} objects")
+
                 self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Proxy toggle failed: {e}")
+
+        def _on_proxy_toggle(self) -> None:
+            """Toggle proxy/cache mode on current object."""
+            try:
+                coat.ui.cmd("$ToggleCachingVolume")
+                self._log_success("Toggled cache mode")
+                self.refresh_scene_tree()
+            except Exception as e:
+                self._log_error(f"Proxy toggle failed: {e}")
+
+        def _on_cache_visible(self) -> None:
+            """Cache all visible objects."""
+            try:
+                coat.ui.cmd("$CacheVisible")
+                self._log_success("Cached visible objects")
+                self.refresh_scene_tree()
+            except Exception as e:
+                self._log_error(f"Cache visible failed: {e}")
+
+        def _on_uncache_visible(self) -> None:
+            """Uncache all visible objects."""
+            try:
+                coat.ui.cmd("$UnCacheVisible")
+                self._log_success("Uncached visible objects")
+                self.refresh_scene_tree()
+            except Exception as e:
+                self._log_error(f"Uncache visible failed: {e}")
+
+        def _on_clear_caches(self) -> None:
+            """Clear all cached objects."""
+            try:
+                coat.ui.cmd("$ClearAllCache")
+                self._log_success("Cleared all caches")
+                self.refresh_scene_tree()
+            except Exception as e:
+                self._log_error(f"Clear caches failed: {e}")
 
         # =====================================================================
         # RESAMPLE SECTION
@@ -480,7 +623,7 @@ try:
             """Set up the resample section."""
             layout.addWidget(self._create_sub_header("Half (0.5x)"))
             half = ButtonGrid(columns=3)
-            half.add_button("Cur", lambda: self._resample_scope(
+            half.add_button("Sel", lambda: self._resample_scope(
                 "CURRENT", 0.5), "Resample to half")
             half.add_button("Tree", lambda: self._resample_scope(
                 "TREE", 0.5), "Resample subtree")
@@ -488,14 +631,21 @@ try:
                 "ALL", 0.5), "Resample all")
             layout.addWidget(half)
 
-            layout.addWidget(self._create_sub_header(
-                "Double (2x) / Subdivide"))
-            double = ButtonGrid(columns=2)
-            double.add_button("Double", lambda: self._resample_scope(
+            layout.addWidget(self._create_sub_header("Double (2x)"))
+            double = ButtonGrid(columns=3)
+            double.add_button("Sel", lambda: self._resample_scope(
                 "CURRENT", 2.0), "Resample to 2x")
-            double.add_button(
-                "Subdivide", self._on_subdivide, "Subdivide mesh")
+            double.add_button("Tree", lambda: self._resample_scope(
+                "TREE", 2.0), "Resample subtree to 2x")
+            double.add_button("All", lambda: self._resample_scope(
+                "ALL", 2.0), "Resample all to 2x")
             layout.addWidget(double)
+
+            layout.addWidget(self._create_sub_header("Smart Resample (Tree)"))
+            smart = ButtonGrid(columns=1)
+            smart.add_button(
+                "Match Density", self._smart_resample_tree, "Match density to root")
+            layout.addWidget(smart)
 
         def _resample_scope(self, scope_name: str, scale: float) -> None:
             """Resample with scope and scale."""
@@ -510,15 +660,26 @@ try:
             except Exception as e:
                 self._log_error(f"Resample failed: {e}")
 
-        def _on_subdivide(self) -> None:
-            """Subdivide current object."""
+        def _smart_resample_tree(self) -> None:
+            """Resample subtree to match root density."""
             try:
-                from utils.Volume_subdivide_utils import subdivide_once
-                subdivide_once()
-                self._log_success("Subdivided")
+                from utils.scene_api import SceneAPI
+                from utils.Volume_density_utils import resample_to_match_density
+                current = SceneAPI.get_current_element()
+                if not current:
+                    self._log_error("No selection")
+                    return
+                subtree = SceneAPI.collect_subtree(current)
+                ref_vol = current.Volume()
+                count = 0
+                for el in subtree:
+                    if el != current and el.isSculptObject():
+                        resample_to_match_density(el, ref_vol)
+                        count += 1
+                self._log_success(f"Resampled {count} to match density")
                 self.refresh_scene_tree()
             except Exception as e:
-                self._log_error(f"Subdivide failed: {e}")
+                self._log_error(f"Smart resample failed: {e}")
 
         # =====================================================================
         # MODE SECTION
@@ -528,32 +689,33 @@ try:
             """Set up the mode conversion section."""
             layout.addWidget(self._create_sub_header("To Surface"))
             surface = ButtonGrid(columns=3)
-            surface.add_button("Cur", lambda: self._convert_mode(
-                "CURRENT", True), "Convert to surface")
+            surface.add_button("Sel", lambda: self._convert_mode(
+                "CURRENT", "TO_SURFACE"), "Convert to surface")
             surface.add_button("Tree", lambda: self._convert_mode(
-                "TREE", True), "Convert subtree")
+                "TREE", "TO_SURFACE"), "Convert subtree")
             surface.add_button("All", lambda: self._convert_mode(
-                "ALL", True), "Convert all")
+                "ALL", "TO_SURFACE"), "Convert all")
             layout.addWidget(surface)
 
             layout.addWidget(self._create_sub_header("To Voxels"))
             voxels = ButtonGrid(columns=3)
-            voxels.add_button("Cur", lambda: self._convert_mode(
-                "CURRENT", False), "Convert to voxels")
+            voxels.add_button("Sel", lambda: self._convert_mode(
+                "CURRENT", "TO_VOXELS"), "Convert to voxels")
             voxels.add_button("Tree", lambda: self._convert_mode(
-                "TREE", False), "Convert subtree")
+                "TREE", "TO_VOXELS"), "Convert subtree")
             voxels.add_button("All", lambda: self._convert_mode(
-                "ALL", False), "Convert all")
+                "ALL", "TO_VOXELS"), "Convert all")
             layout.addWidget(voxels)
 
-        def _convert_mode(self, scope_name: str, to_surface: bool) -> None:
+        def _convert_mode(self, scope_name: str, mode_name: str) -> None:
             """Convert mode with scope."""
             try:
-                from ops.SculptObject_ModeConvert import main as convert
+                from ops.SculptObject_ModeConvert import main as convert, ConvertMode
                 from utils.scope_utils import Scope
                 scope = getattr(Scope, scope_name)
-                convert(scope=scope, to_surface=to_surface)
-                mode_str = "surface" if to_surface else "voxels"
+                mode = getattr(ConvertMode, mode_name)
+                convert(scope=scope, mode=mode)
+                mode_str = "surface" if mode_name == "TO_SURFACE" else "voxels"
                 self._log_success(
                     f"Converted {scope_name.lower()} to {mode_str}")
                 self.refresh_scene_tree()
@@ -566,34 +728,82 @@ try:
 
         def _setup_scale_section(self, layout: QVBoxLayout) -> None:
             """Set up the scale section."""
-            layout.addWidget(self._create_sub_header("Scale Down (÷100)"))
-            down = ButtonGrid(columns=3)
-            down.add_button("Cur", lambda: self._scale(
-                "CURRENT", 0.01), "Scale down 100x")
-            down.add_button("Tree", lambda: self._scale(
-                "TREE", 0.01), "Scale subtree")
-            down.add_button("All", lambda: self._scale(
-                "ALL", 0.01), "Scale all")
-            layout.addWidget(down)
+            # Quick scale buttons - apply immediately to selection
+            layout.addWidget(self._create_sub_header("Quick Scale (Selected)"))
+            quick_row = ButtonGrid(columns=4)
+            quick_row.add_button(
+                "0.5x", lambda: self._quick_scale(0.5), "Scale selection to half")
+            quick_row.add_button(
+                "2x", lambda: self._quick_scale(2.0), "Scale selection to double")
+            quick_row.add_button(
+                "÷100", lambda: self._quick_scale(0.01), "Scale selection ÷100")
+            quick_row.add_button(
+                "×100", lambda: self._quick_scale(100.0), "Scale selection ×100")
+            layout.addWidget(quick_row)
 
-            layout.addWidget(self._create_sub_header("Scale Up (×100)"))
-            up = ButtonGrid(columns=3)
-            up.add_button("Cur", lambda: self._scale(
-                "CURRENT", 100.0), "Scale up 100x")
-            up.add_button("Tree", lambda: self._scale(
-                "TREE", 100.0), "Scale subtree")
-            up.add_button("All", lambda: self._scale(
-                "ALL", 100.0), "Scale all")
-            layout.addWidget(up)
+            # Custom scale with slider
+            layout.addWidget(self._create_sub_header("Custom Scale"))
 
-        def _scale(self, scope_name: str, factor: float) -> None:
-            """Scale with scope."""
+            # Scale factor slider row
+            slider_container = QWidget()
+            slider_layout = QHBoxLayout(slider_container)
+            slider_layout.setContentsMargins(0, 0, 0, 0)
+            slider_layout.setSpacing(4)
+
+            self._scale_slider = QSlider(Qt.Horizontal)
+            self._scale_slider.setMinimum(1)  # 0.01x
+            self._scale_slider.setMaximum(200)  # 2.0x
+            self._scale_slider.setValue(100)  # 1.0x default
+            self._scale_slider.valueChanged.connect(
+                self._on_scale_slider_changed)
+
+            self._scale_label = QLabel("1.00x")
+            self._scale_label.setMinimumWidth(45)
+            self._scale_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            slider_layout.addWidget(self._scale_slider)
+            slider_layout.addWidget(self._scale_label)
+            layout.addWidget(slider_container)
+
+            # Apply scope buttons
+            scope = ButtonGrid(columns=3)
+            scope.add_button("Sel", lambda: self._scale(
+                "CURRENT"), "Apply scale to selected")
+            scope.add_button("Tree", lambda: self._scale(
+                "TREE"), "Apply scale to subtree")
+            scope.add_button("All", lambda: self._scale(
+                "ALL"), "Apply scale to all")
+            layout.addWidget(scope)
+
+            # Store current scale factor
+            self._scale_factor: float = 1.0
+
+        def _on_scale_slider_changed(self, value: int) -> None:
+            """Update scale factor from slider."""
+            self._scale_factor = value / 100.0
+            self._scale_label.setText(f"{self._scale_factor:.2f}x")
+
+        def _quick_scale(self, factor: float) -> None:
+            """Immediately scale selection by factor."""
+            try:
+                from ops.SculptObject_Scale import main as scale
+                from utils.scope_utils import Scope
+                scale(scope=Scope.CURRENT, scale_factor=factor)
+                self._log_success(f"Scaled selection by {factor}x")
+                self.refresh_scene_tree()
+            except Exception as e:
+                self._log_error(f"Quick scale failed: {e}")
+
+        def _scale(self, scope_name: str) -> None:
+            """Scale with scope using current slider factor."""
             try:
                 from ops.SculptObject_Scale import main as scale
                 from utils.scope_utils import Scope
                 scope = getattr(Scope, scope_name)
+                factor = getattr(self, '_scale_factor', 1.0)
                 scale(scope=scope, scale_factor=factor)
-                self._log_success(f"Scaled {scope_name.lower()}")
+                self._log_success(
+                    f"Scaled {scope_name.lower()} by {factor:.2f}x")
                 self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Scale failed: {e}")
@@ -605,25 +815,21 @@ try:
         def _setup_visibility_section(self, layout: QVBoxLayout) -> None:
             """Set up the visibility section."""
             layout.addWidget(self._create_sub_header("Hide"))
-            hide = ButtonGrid(columns=4)
-            hide.add_button("Cur", lambda: self._visibility(
+            hide = ButtonGrid(columns=3)
+            hide.add_button("Sel", lambda: self._visibility(
                 "CURRENT", False), "Hide selected")
             hide.add_button("Tree", lambda: self._visibility(
                 "TREE", False), "Hide subtree")
-            hide.add_button("Other", lambda: self._visibility(
-                "OTHER", False), "Hide others")
             hide.add_button("All", lambda: self._visibility(
                 "ALL", False), "Hide all")
             layout.addWidget(hide)
 
             layout.addWidget(self._create_sub_header("Show"))
-            show = ButtonGrid(columns=4)
-            show.add_button("Cur", lambda: self._visibility(
+            show = ButtonGrid(columns=3)
+            show.add_button("Sel", lambda: self._visibility(
                 "CURRENT", True), "Show selected")
             show.add_button("Tree", lambda: self._visibility(
                 "TREE", True), "Show subtree")
-            show.add_button("Other", lambda: self._visibility(
-                "OTHER", True), "Show others")
             show.add_button("All", lambda: self._visibility(
                 "ALL", True), "Show all")
             layout.addWidget(show)
@@ -641,7 +847,8 @@ try:
                 from utils.scope_utils import Scope, resolve_scope
 
                 scope = getattr(Scope, scope_name)
-                elements = resolve_scope(scope)
+                # Use include_hidden=True to find hidden elements that need to be shown
+                elements = resolve_scope(scope, include_hidden=True)
                 count = set_visibility(elements, visible)
                 action = "Shown" if visible else "Hidden"
                 self._log_success(f"{action} {count} objects")
@@ -668,33 +875,30 @@ try:
         def _setup_ghost_section(self, layout: QVBoxLayout) -> None:
             """Set up the ghost section."""
             layout.addWidget(self._create_sub_header("Ghost"))
-            ghost = ButtonGrid(columns=4)
-            ghost.add_button("Cur", lambda: self._ghost(
+            ghost = ButtonGrid(columns=3)
+            ghost.add_button("Sel", lambda: self._ghost(
                 "CURRENT", True), "Ghost selected")
             ghost.add_button("Tree", lambda: self._ghost(
                 "TREE", True), "Ghost subtree")
-            ghost.add_button("Other", lambda: self._ghost(
-                "OTHER", True), "Ghost others")
             ghost.add_button("All", lambda: self._ghost(
                 "ALL", True), "Ghost all")
             layout.addWidget(ghost)
 
             layout.addWidget(self._create_sub_header("Unghost"))
-            unghost = ButtonGrid(columns=4)
-            unghost.add_button("Cur", lambda: self._ghost(
+            unghost = ButtonGrid(columns=3)
+            unghost.add_button("Sel", lambda: self._ghost(
                 "CURRENT", False), "Unghost selected")
             unghost.add_button("Tree", lambda: self._ghost(
                 "TREE", False), "Unghost subtree")
-            unghost.add_button("Other", lambda: self._ghost(
-                "OTHER", False), "Unghost others")
             unghost.add_button("All", lambda: self._ghost(
                 "ALL", False), "Unghost all")
             layout.addWidget(unghost)
 
+            layout.addWidget(self._create_sub_header("Special"))
             special = ButtonGrid(columns=2)
             special.add_button(
-                "Invert Ghost", self._invert_ghost, "Invert ghost states")
-            special.add_button("Isolate", self._isolate,
+                "Invert", self._invert_ghost, "Invert ghost states")
+            special.add_button("Isolate Sel", self._isolate,
                                "Ghost all except selected")
             layout.addWidget(special)
 
@@ -739,42 +943,35 @@ try:
 
         def _setup_smart_section(self, layout: QVBoxLayout) -> None:
             """Set up the smart actions section."""
-            layout.addWidget(self._create_sub_header("Uniform Density"))
-            uniform = ButtonGrid(columns=2)
-            uniform.add_button(
-                "Resample Tree", self._uniform_resample_tree, "Match density via resample")
-            uniform.add_button(
-                "Smart Tree", self._uniform_smart_tree, "Smart density match")
-            layout.addWidget(uniform)
+            # Mesh Operations
+            layout.addWidget(self._create_sub_header("Mesh Operations"))
+            mesh_ops = ButtonGrid(columns=2)
+            mesh_ops.add_button("ID Colors", self._id_colors,
+                                "Fill with ID colors")
+            mesh_ops.add_button("Split Masked", self._split_masked,
+                                "Split frozen/masked")
+            mesh_ops.add_button("Remesh+Symm", self._remesh_resymm,
+                                "Remesh and symmetrize")
+            mesh_ops.add_button("Merge Parts", self._merge_preserve,
+                                "Merge preserving parts")
+            layout.addWidget(mesh_ops)
 
-            layout.addWidget(self._create_sub_header("Other"))
-            other = ButtonGrid(columns=2)
-            other.add_button("ID Colors", self._id_colors,
-                             "Fill with ID colors")
-            other.add_button("Split Masked", self._split_masked,
-                             "Split frozen/masked")
-            other.add_button("Remesh+Symm", self._remesh_resymm,
-                             "Remesh and symmetrize")
-            other.add_button("Merge Parts", self._merge_preserve,
-                             "Merge preserving parts")
-            layout.addWidget(other)
+            # VoxBool Operations
+            layout.addWidget(self._create_sub_header("VoxBool (Create Child)"))
+            voxbool = ButtonGrid(columns=3)
+            voxbool.add_button("Subtract", self._voxbool_subtract,
+                               "Create subtract boolean child")
+            voxbool.add_button("Intersect", self._voxbool_intersect,
+                               "Create intersect boolean child")
+            voxbool.add_button("Union", self._voxbool_union,
+                               "Create union boolean child")
+            layout.addWidget(voxbool)
 
         def _uniform_resample_tree(self) -> None:
             """Uniform resample subtree."""
             try:
-                from utils.scene_api import SceneAPI
-                from utils.Volume_density_utils import resample_to_match_density
-                current = SceneAPI.get_current_element()
-                if not current:
-                    self._log_error("No selection")
-                    return
-                subtree = SceneAPI.collect_subtree(current)
-                ref_vol = current.Volume()
-                count = 0
-                for el in subtree:
-                    if el != current and el.isSculptObject():
-                        resample_to_match_density(el, ref_vol)
-                        count += 1
+                from ops.SculptObject_UniformDensity import main as uniform_density, DensityMode
+                count = uniform_density(mode=DensityMode.RESAMPLE)
                 self._log_success(f"Resampled {count} to match density")
                 self.refresh_scene_tree()
             except Exception as e:
@@ -783,19 +980,8 @@ try:
         def _uniform_smart_tree(self) -> None:
             """Smart uniform density on subtree."""
             try:
-                from utils.scene_api import SceneAPI
-                from utils.Volume_density_utils import smart_match_density
-                current = SceneAPI.get_current_element()
-                if not current:
-                    self._log_error("No selection")
-                    return
-                subtree = SceneAPI.collect_subtree(current)
-                ref_vol = current.Volume()
-                count = 0
-                for el in subtree:
-                    if el != current and el.isSculptObject():
-                        smart_match_density(el, ref_vol)
-                        count += 1
+                from ops.SculptObject_UniformDensity import main as uniform_density, DensityMode
+                count = uniform_density(mode=DensityMode.SMART)
                 self._log_success(f"Smart matched {count}")
                 self.refresh_scene_tree()
             except Exception as e:
@@ -815,8 +1001,14 @@ try:
         def _split_masked(self) -> None:
             """Split masked/frozen area."""
             try:
-                coat.ui.cmd("$SplitByMask")
-                self._log_success("Split masked")
+                from ops.SculptObject_SplitMasked import main as split_main
+                from utils.scope_utils import Scope
+
+                count: int = split_main(scope=Scope.CURRENT, close_holes=True)
+                if count > 0:
+                    self._log_success(f"Split masked - {count} new objects")
+                else:
+                    self._log_error("No objects created from split")
                 self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Split failed: {e}")
@@ -824,35 +1016,239 @@ try:
         def _remesh_resymm(self) -> None:
             """Remesh and symmetrize."""
             try:
-                from utils.Volume_resample_utils import execute_resample
-                from utils.Volume_subdivide_utils import make_symmetrical
-                from utils.scene_api import SceneAPI
-                current = SceneAPI.get_current_element()
-                if current and current.isSculptObject():
-                    vol = current.Volume()
-                    target = int(vol.polyCount() * 0.5)
-                    execute_resample(target_polycount=target, scale=0.5)
-                    make_symmetrical()
-                    self._log_success("Remeshed + symmetrized")
-                    self.refresh_scene_tree()
+                from ops.SculptObject_RemeshResymm import main as remesh_main
+                from utils.scope_utils import Scope
+
+                count: int = remesh_main(scope=Scope.CURRENT)
+                if count > 0:
+                    self._log_success(
+                        f"Remeshed + symmetrized {count} object(s)")
+                else:
+                    self._log_error("No objects processed")
+                self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Remesh+symm failed: {e}")
 
         def _merge_preserve(self) -> None:
-            """Merge preserving parts."""
+            """Merge subtree preserving parts."""
             try:
-                coat.ui.cmd("$MergeVisibleAsLayer")
-                self._log_success("Merged preserving parts")
+                from ops.SculptObject_MergePreserveParts import main as merge_main
+                from utils.scope_utils import Scope
+
+                count: int = merge_main(scope=Scope.TREE)
+                if count > 0:
+                    self._log_success(
+                        f"Merged {count} objects preserving parts")
+                else:
+                    self._log_error("No objects merged")
                 self.refresh_scene_tree()
             except Exception as e:
                 self._log_error(f"Merge failed: {e}")
+
+        def _voxbool_subtract(self) -> None:
+            """Create subtract boolean child."""
+            try:
+                from ops.SculptObject_VoxBool import subtract
+
+                child = subtract()
+                if child:
+                    self._log_success(f"Created subtract: {child.name()}")
+                    self.refresh_scene_tree()
+                else:
+                    self._log_error("Failed to create subtract child")
+            except Exception as e:
+                self._log_error(f"VoxBool subtract failed: {e}")
+
+        def _voxbool_intersect(self) -> None:
+            """Create intersect boolean child."""
+            try:
+                from ops.SculptObject_VoxBool import intersect
+
+                child = intersect()
+                if child:
+                    self._log_success(f"Created intersect: {child.name()}")
+                    self.refresh_scene_tree()
+                else:
+                    self._log_error("Failed to create intersect child")
+            except Exception as e:
+                self._log_error(f"VoxBool intersect failed: {e}")
+
+        def _voxbool_union(self) -> None:
+            """Create union boolean child."""
+            try:
+                from ops.SculptObject_VoxBool import union
+
+                child = union()
+                if child:
+                    self._log_success(f"Created union: {child.name()}")
+                    self.refresh_scene_tree()
+                else:
+                    self._log_error("Failed to create union child")
+            except Exception as e:
+                self._log_error(f"VoxBool union failed: {e}")
 
         # =====================================================================
         # AUTOPO SECTION
         # =====================================================================
 
         def _setup_autopo_section(self, layout: QVBoxLayout) -> None:
-            """Set up the autopo section."""
+            """Set up the autopo section with config fields."""
+            from utils.lks_settings import get_autopo_settings
+            settings = get_autopo_settings()
+
+            # --- Target Polycount ---
+            layout.addWidget(self._create_sub_header("Target Polycount"))
+            poly_row = QHBoxLayout()
+            self._autopo_polycount = QSpinBox()
+            self._autopo_polycount.setRange(1000, 1000000)
+            self._autopo_polycount.setSingleStep(1000)
+            self._autopo_polycount.setValue(settings.autopo_polycount)
+            self._autopo_polycount.setToolTip("Target polycount for autopo")
+            self._autopo_polycount.valueChanged.connect(
+                self._save_autopo_settings)
+            poly_row.addWidget(self._autopo_polycount)
+            poly_container = QWidget()
+            poly_container.setLayout(poly_row)
+            layout.addWidget(poly_container)
+
+            # --- Capture Details slider (0-100%) ---
+            details_row = QHBoxLayout()
+            details_label = QLabel("Capture Details:")
+            details_label.setMinimumWidth(100)
+            self._autopo_capture_details = QSlider(Qt.Horizontal)
+            self._autopo_capture_details.setRange(0, 100)
+            self._autopo_capture_details.setSingleStep(5)
+            self._autopo_capture_details.setValue(
+                int(settings.autopo_capture_details * 100))
+            self._autopo_capture_details.setToolTip(
+                "Detail capture amount (0-100%)")
+            self._autopo_capture_label = QLabel(
+                f"{int(settings.autopo_capture_details * 100)}%")
+            self._autopo_capture_label.setMinimumWidth(35)
+            self._autopo_capture_details.valueChanged.connect(
+                self._on_capture_details_changed)
+            details_row.addWidget(details_label)
+            details_row.addWidget(self._autopo_capture_details)
+            details_row.addWidget(self._autopo_capture_label)
+            details_container = QWidget()
+            details_container.setLayout(details_row)
+            layout.addWidget(details_container)
+
+            # --- Auto Density slider (0-200%) ---
+            density_row = QHBoxLayout()
+            density_label = QLabel("Auto Density:")
+            density_label.setMinimumWidth(100)
+            self._autopo_auto_density = QSlider(Qt.Horizontal)
+            self._autopo_auto_density.setRange(0, 200)
+            self._autopo_auto_density.setSingleStep(10)
+            self._autopo_auto_density.setValue(
+                int(settings.autopo_auto_density * 100))
+            self._autopo_auto_density.setToolTip(
+                "Painted density influence (0-200%)")
+            self._autopo_density_label = QLabel(
+                f"{int(settings.autopo_auto_density * 100)}%")
+            self._autopo_density_label.setMinimumWidth(35)
+            self._autopo_auto_density.valueChanged.connect(
+                self._on_auto_density_changed)
+            density_row.addWidget(density_label)
+            density_row.addWidget(self._autopo_auto_density)
+            density_row.addWidget(self._autopo_density_label)
+            density_container = QWidget()
+            density_container.setLayout(density_row)
+            layout.addWidget(density_container)
+
+            # --- Checkboxes row 1: hardsurface, voxelize ---
+            layout.addWidget(self._create_sub_header("Options"))
+            check_row1 = QHBoxLayout()
+            self._autopo_hardsurface = QCheckBox("Hardsurface")
+            self._autopo_hardsurface.setChecked(settings.autopo_hardsurface)
+            self._autopo_hardsurface.setToolTip(
+                "Optimize for hard surface models")
+            self._autopo_hardsurface.stateChanged.connect(
+                self._save_autopo_settings)
+            self._autopo_tangent_smooth = QCheckBox("Tangent Smooth")
+            self._autopo_tangent_smooth.setChecked(
+                settings.autopo_tangent_smooth)
+            self._autopo_tangent_smooth.setToolTip("Apply tangent smoothing")
+            self._autopo_tangent_smooth.stateChanged.connect(
+                self._save_autopo_settings)
+            check_row1.addWidget(self._autopo_hardsurface)
+            check_row1.addWidget(self._autopo_tangent_smooth)
+            check_container1 = QWidget()
+            check_container1.setLayout(check_row1)
+            layout.addWidget(check_container1)
+
+            # --- Checkboxes row 2: voxelize, bypass modal ---
+            check_row2 = QHBoxLayout()
+            self._autopo_voxelize = QCheckBox("Voxelize")
+            self._autopo_voxelize.setChecked(settings.autopo_voxelize)
+            self._autopo_voxelize.setToolTip("Voxelize after autopo")
+            self._autopo_voxelize.stateChanged.connect(
+                self._save_autopo_settings)
+            self._autopo_bypass_modal = QCheckBox("Bypass Modal")
+            self._autopo_bypass_modal.setChecked(
+                settings.autopo_bypass_density_modal)
+            self._autopo_bypass_modal.setToolTip("Skip density modal dialog")
+            self._autopo_bypass_modal.stateChanged.connect(
+                self._save_autopo_settings)
+            check_row2.addWidget(self._autopo_voxelize)
+            check_row2.addWidget(self._autopo_bypass_modal)
+            check_container2 = QWidget()
+            check_container2.setLayout(check_row2)
+            layout.addWidget(check_container2)
+
+            # --- Voxelize polycount (x1000) ---
+            vox_row = QHBoxLayout()
+            vox_label = QLabel("Vox Polys (K):")
+            vox_label.setMinimumWidth(90)
+            self._autopo_vox_polycount = QSpinBox()
+            self._autopo_vox_polycount.setRange(100, 10000)
+            self._autopo_vox_polycount.setSingleStep(100)
+            self._autopo_vox_polycount.setValue(
+                settings.autopo_voxelize_polycount)
+            self._autopo_vox_polycount.setToolTip(
+                "Voxelize target polycount (x1000)")
+            self._autopo_vox_polycount.valueChanged.connect(
+                self._save_autopo_settings)
+            vox_row.addWidget(vox_label)
+            vox_row.addWidget(self._autopo_vox_polycount)
+            vox_container = QWidget()
+            vox_container.setLayout(vox_row)
+            layout.addWidget(vox_container)
+
+            # --- Decimate options ---
+            dec_check_row = QHBoxLayout()
+            self._autopo_decimate_if_above = QCheckBox("Decimate If Above")
+            self._autopo_decimate_if_above.setChecked(
+                settings.autopo_decimate_if_above)
+            self._autopo_decimate_if_above.setToolTip(
+                "Decimate if above limit")
+            self._autopo_decimate_if_above.stateChanged.connect(
+                self._save_autopo_settings)
+            dec_check_row.addWidget(self._autopo_decimate_if_above)
+            dec_check_container = QWidget()
+            dec_check_container.setLayout(dec_check_row)
+            layout.addWidget(dec_check_container)
+
+            dec_limit_row = QHBoxLayout()
+            dec_limit_label = QLabel("Dec Limit (K):")
+            dec_limit_label.setMinimumWidth(90)
+            self._autopo_decimation_limit = QSpinBox()
+            self._autopo_decimation_limit.setRange(1, 1000)
+            self._autopo_decimation_limit.setSingleStep(5)
+            self._autopo_decimation_limit.setValue(
+                settings.autopo_decimation_limit)
+            self._autopo_decimation_limit.setToolTip(
+                "Decimation limit (x1000 polys)")
+            self._autopo_decimation_limit.valueChanged.connect(
+                self._save_autopo_settings)
+            dec_limit_row.addWidget(dec_limit_label)
+            dec_limit_row.addWidget(self._autopo_decimation_limit)
+            dec_limit_container = QWidget()
+            dec_limit_container.setLayout(dec_limit_row)
+            layout.addWidget(dec_limit_container)
+
+            # --- Run buttons ---
             layout.addWidget(self._create_sub_header("Run Autopo"))
             run = ButtonGrid(columns=3)
             run.add_button("Run", self._autopo_run, "Run autopo with settings")
@@ -861,6 +1257,35 @@ try:
             run.add_button("→ Multires", self._autopo_to_multires,
                            "Autopo then import as multires")
             layout.addWidget(run)
+
+        def _on_capture_details_changed(self, value: int) -> None:
+            """Handle capture details slider change."""
+            self._autopo_capture_label.setText(f"{value}%")
+            self._save_autopo_settings()
+
+        def _on_auto_density_changed(self, value: int) -> None:
+            """Handle auto density slider change."""
+            self._autopo_density_label.setText(f"{value}%")
+            self._save_autopo_settings()
+
+        def _save_autopo_settings(self) -> None:
+            """Save current autopo settings to disk."""
+            try:
+                from utils.lks_settings import get_autopo_settings, save_autopo_settings
+                settings = get_autopo_settings()
+                settings.autopo_polycount = self._autopo_polycount.value()
+                settings.autopo_capture_details = self._autopo_capture_details.value() / 100.0
+                settings.autopo_auto_density = self._autopo_auto_density.value() / 100.0
+                settings.autopo_hardsurface = self._autopo_hardsurface.isChecked()
+                settings.autopo_tangent_smooth = self._autopo_tangent_smooth.isChecked()
+                settings.autopo_voxelize = self._autopo_voxelize.isChecked()
+                settings.autopo_bypass_density_modal = self._autopo_bypass_modal.isChecked()
+                settings.autopo_voxelize_polycount = self._autopo_vox_polycount.value()
+                settings.autopo_decimate_if_above = self._autopo_decimate_if_above.isChecked()
+                settings.autopo_decimation_limit = self._autopo_decimation_limit.value()
+                save_autopo_settings()
+            except Exception as e:
+                self._log_error(f"Failed to save autopo settings: {e}")
 
         def _autopo_run(self) -> None:
             """Run autopo."""

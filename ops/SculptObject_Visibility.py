@@ -8,7 +8,7 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
-from utils.scene_api import SceneAPI
+from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.SceneElement_visibility_utils import (
     set_visibility,
@@ -50,11 +50,12 @@ def main(
         Number of objects affected
     """
     # Save selection for restoration
-    current: coat.SceneElement | None = None
+    saved_selection: list[coat.SceneElement] = []
     if preserve_selection:
-        current = SceneAPI.get_current_element()
+        saved_selection = SelectionAPI.save_selection()
 
-    # Validate for scope-dependent operations
+    # Validation for scope check should use a separate variable
+    current: coat.SceneElement | None = SceneAPI.get_current_element()
     if scope in (Scope.CURRENT, Scope.TREE) and not current:
         show_error("No object selected", 2000)
         return 0
@@ -89,8 +90,8 @@ def main(
             status = f"Hid {count}"
 
     # Restore selection
-    if preserve_selection and current:
-        current.selectOne()
+    if preserve_selection and saved_selection:
+        SelectionAPI.restore_selection(saved_selection)
 
     show_message(f"{status} objects", 2000)
     return count

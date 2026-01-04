@@ -29,6 +29,13 @@ import coat
 _LKS_ROOT: Path = Path(__file__).parent.parent.resolve()
 _ACTIONS_PATH: str = str(_LKS_ROOT / "actions").replace("\\", "/")
 
+# Menu name for LKS actions (uses Scripts menu - items prefixed with "LKS: " for grouping)
+# Note: Custom top-level menus require cTemplates menu-making scripts.
+# Using Scripts ensures actions appear under Scripts menu and in Hotkeys search.
+# Valid menu names from menu_sections.txt: File, File.Import, File.Export, Edit, View,
+# Windows.Popups, Windows.Sliders, Windows, Scripts, Help, Symmetry, Freeze, Voxels
+LKS_MENU_NAME: str = "Scripts"
+
 # Registered action IDs (for unregistration tracking)
 _REGISTERED_ACTIONS: list[str] = []
 
@@ -101,7 +108,7 @@ ACTION_DEFINITIONS: list[tuple[str, str, str]] = [
 
 def _register_action(action_id: str, script_name: str, translation: str) -> bool:
     """
-    Register a single action script as a menu item.
+    Register a single action script as a menu item in the LKS menu.
 
     Args:
         action_id: Unique identifier for the action
@@ -118,7 +125,7 @@ def _register_action(action_id: str, script_name: str, translation: str) -> bool
 
     # Only insert if not already in menu
     if not coat.ui.checkIfMenuItemInserted(action_id):
-        coat.ui.insertInMenu("SCRIPTS", action_id, script_path)
+        coat.ui.insertInMenu(LKS_MENU_NAME, action_id, script_path)
         _REGISTERED_ACTIONS.append(action_id)
         return True
     return False
