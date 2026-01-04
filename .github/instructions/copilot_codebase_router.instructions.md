@@ -29,6 +29,11 @@ UserProjects/
 │   ├── SculptObject_Decimate.py    # Decimate with scope/config
 │   ├── SculptObject_SetGhost.py    # Ghost/unghost/invert/isolate
 │   ├── SculptObject_IdColors.py    # Fill with ID colors
+│   ├── SculptObject_Scale.py       # Scale elements
+│   ├── SculptObject_Visibility.py  # Visibility operations
+│   ├── SculptObject_Resample.py    # Resample operations
+│   ├── SculptObject_ModeConvert.py # Mode conversion
+│   ├── SculptObject_Subdivide.py   # Subdivide operations
 │   └── ...
 ├── _utils/                    # Hidden from 3DCoat - shared utilities
 │   ├── __init__.py            # Package exports
@@ -38,7 +43,12 @@ UserProjects/
 │   ├── Scene_layer_utils.py   # Layer management
 │   ├── coat_ui_utils.py       # UI command abstractions
 │   ├── object_utils.py        # Object manipulation
-│   ├── mesh_utils.py          # Mesh operations (decimate, resample, etc.)
+│   ├── Volume_decimate_utils.py  # Decimate operations (raw args)
+│   ├── Volume_resample_utils.py  # Resample operations (raw args)
+│   ├── Volume_subdivide_utils.py # Subdivide/symmetry (raw args)
+│   ├── Volume_mode_utils.py      # Mode conversion (raw args)
+│   ├── Volume_density_utils.py   # Density matching (raw args)
+│   ├── Scene_cleanup_utils.py    # Cleanup after mesh ops
 │   ├── SceneElement_boolean_utils.py # Live boolean operations
 │   ├── Scene_tiling_utils.py  # Tiling grid setup
 │   ├── lks_settings.py        # Persistent settings singleton
@@ -173,6 +183,10 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 
 ## 🛠️ Utility Modules (`_utils/`)
 
+> **Architecture Note:** Utils take RAW PRIMITIVE ARGUMENTS only (no dataclasses).
+> Dataclasses for configuration belong in operators (`_ops/`).
+> See `copilot_style_guide.instructions.md` Section 5 for details.
+
 ### `scene_api.py` 🆕
 **Primary interface for 3DCoat scene context and iteration.**
 Wraps callback-based iterators into list-returning functions.
@@ -304,51 +318,51 @@ Persistent settings cache with separate singletons for brush, autopo, and genera
 - `reload_settings()` - Force reload from disk
 - `reset_settings()` - Reset to defaults
 
-### `mesh_utils.py` 🆕
-**Primary module for mesh modification operations (resample, decimate, voxelize, subdivide).**
-Uses dataclass + configurator pattern.
+### `Volume_decimate_utils.py`
+**Decimate operations on Volumes. Raw primitive args only.**
 
-**Dataclasses:**
-- `ResampleParams(target_polycount, scale)` - Resample parameters
-- `DecimateParams(target_polycount?, reduction_percent?)` - Decimate parameters
-- `VoxelizeParams(suggested_polycount)` - Voxelize parameters
-
-**Configurators:**
-- `configure_resample_dialog(params)` → `Callable`
-- `configure_decimate_dialog(params)` → `Callable`
-- `configure_voxelize_dialog(params)` → `Callable`
-
-**Execute Functions:**
-- `execute_resample(params)` - Run resample with params
-- `execute_decimate(params)` - Run decimate with params
-- `execute_voxelize(params)` - Run voxelize with params
-
-**Convenience Functions:**
-- `resample_to_half(current_polycount)`
-- `resample_to_target(initial, target)`
-- `resample_and_voxelize(volume, multiplier)` - Resample Nx and voxelize
-- `decimate_by_percent(percent)`
-- `decimate_to_target(polycount)`
-- `decimate_to_half()`
+- `configure_decimate_dialog(reduction_percent?, target_polycount?)` → `Callable`
+- `execute_decimate(reduction_percent?, target_polycount?)` - Decimate current object
+- `decimate_by_percent(percent)` - Quick percent-based decimate
+- `decimate_to_target(polycount)` - Decimate to specific polycount
+- `decimate_to_half()` - 50% reduction
 - `decimate_16x()` - Quick 1/16 proxy
-- `subdivide_once()` - Double polycount
-- `make_symmetrical()` - Make object symmetrical along axis
 
-**Conversion Functions:**
+### `Volume_resample_utils.py`
+**Resample operations on Volumes. Raw primitive args only.**
+
+- `configure_resample_dialog(target_polycount, scale?)` → `Callable`
+- `execute_resample(target_polycount, scale?)` - Resample current object
+- `resample_to_half(current_polycount)` - 50% resample
+- `resample_to_target(initial, target)` - Resample to target
+
+### `Volume_subdivide_utils.py`
+**Subdivide and symmetry operations on Volumes. Raw primitive args only.**
+
+- `subdivide_once()` - Double polycount
+- `make_symmetrical()` - Make object symmetrical
+
+### `Volume_mode_utils.py`
+**Mode conversion on Volumes. Raw primitive args only.**
+
 - `convert_to_surface(volume)` - Voxels → surface
 - `convert_to_voxels(volume, polycount?)` - Surface → voxels
 - `ensure_surface_mode(volume)` - Ensure surface mode
-- `voxelize_to_polycount(target)`
+- `resample_and_voxelize(volume, target_polycount)` - Resample then voxelize
 
-**Uniform Density Functions:**
-- `calculate_target_polycount_by_scale(ref_vol, target_vol)` - Calculate matching polycount
-- `resample_to_match_density(element, ref_vol)` - Resample to match reference density
-- `smart_match_density(element, ref_vol, tolerance?)` - Smart density matching using subdivide/decimate/resample
+### `Volume_density_utils.py`
+**Uniform density operations. Raw primitive args only.**
 
-**Cleanup:**
+- `calculate_target_polycount_by_scale(ref_vol, target_vol)` → `int`
+- `resample_to_match_density(element, ref_vol)` - Match reference density
+- `smart_match_density(element, ref_vol, tolerance?)` - Smart density matching
+
+### `Scene_cleanup_utils.py`
+**Scene cleanup after mesh operations.**
+
 - `cleanup_after_mesh_operation()` - Remove empty layers, reset active layer
 
-### `SceneElement_boolean_utils.py` 🆕
+### `SceneElement_boolean_utils.py`
 **Live boolean operations on SceneElements (voxel mode required).**
 
 **Enum:**

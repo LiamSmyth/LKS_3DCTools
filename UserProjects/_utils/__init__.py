@@ -10,7 +10,8 @@ Module Organization:
 - Scene_layer_utils.py: Layer management utilities
 - coat_ui_utils.py: UI command abstractions (magic strings hidden here)
 - object_utils.py: Object validation and manipulation
-- mesh_utils.py: Mesh operations (resample, decimate, subdivide, etc.)
+- Volume_*_utils.py: Volume mesh operations (raw args pattern)
+- Scene_cleanup_utils.py: Scene cleanup after mesh operations
 - lks_settings.py: Persistent settings cache
 - brush_settings_utils.py: Brush configuration utilities
 - autopo_utils.py: Autopo workflow automation
@@ -97,39 +98,46 @@ from _utils.object_utils import (
     scale_elements,
 )
 
-# Mesh utilities (primary module for mesh operations)
-from _utils.mesh_utils import (
-    # Dataclasses
-    ResampleParams,
-    DecimateParams,
-    VoxelizeParams,
-    # Configurators
-    configure_resample_dialog,
-    configure_decimate_dialog,
-    configure_voxelize_dialog,
-    # Execute functions
-    execute_resample,
+# Volume utilities - Decimate (raw args pattern)
+from _utils.Volume_decimate_utils import (
     execute_decimate,
-    execute_voxelize,
-    # Convenience functions
-    resample_to_half,
-    resample_to_target,
-    resample_and_voxelize,
     decimate_by_percent,
     decimate_to_target,
     decimate_to_half,
     decimate_16x,
+)
+
+# Volume utilities - Resample (raw args pattern)
+from _utils.Volume_resample_utils import (
+    execute_resample,
+    resample_to_half,
+    resample_to_target,
+)
+
+# Volume utilities - Subdivide (raw args pattern)
+from _utils.Volume_subdivide_utils import (
     subdivide_once,
     make_symmetrical,
-    voxelize_to_polycount,
+)
+
+# Volume utilities - Mode Convert (raw args pattern)
+from _utils.Volume_mode_utils import (
     convert_to_surface,
     convert_to_voxels,
     ensure_surface_mode,
-    cleanup_after_mesh_operation,
-    # Uniform density utilities
+    resample_and_voxelize,
+)
+
+# Volume utilities - Density Matching (raw args pattern)
+from _utils.Volume_density_utils import (
     calculate_target_polycount_by_scale,
     resample_to_match_density,
     smart_match_density,
+)
+
+# Scene utilities - Cleanup
+from _utils.Scene_cleanup_utils import (
+    cleanup_after_mesh_operation,
 )
 
 # Scene iteration utilities (legacy, prefer SceneAPI)

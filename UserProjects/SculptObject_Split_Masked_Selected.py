@@ -10,7 +10,7 @@ Action: Split frozen geometry into new object
 """
 import coat
 from _utils.object_utils import ObjectUtils
-from _utils.mesh_utils import ensure_surface_mode
+from _utils.Volume_mode_utils import ensure_surface_mode
 from _utils.coat_ui_utils import (
     CMD_HIDE_FROZEN_AREA,
     CMD_SEPARATE_HIDDEN,

@@ -1,18 +1,17 @@
 """
-SculptObject_Decimate Operator
+SculptObject_Resample Operator
 
-Decimate sculpt objects to reduce polygon count.
-Supports: percentage reduction, target polycount, and 16x quick proxy.
+Resample sculpt objects to change polygon count.
+Supports: half polycount, target polycount, or ratio-based resampling.
 
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
-from dataclasses import dataclass
 from _utils.scene_api import SceneAPI
 from _utils.scope_utils import Scope, resolve_scope
-from _utils.Volume_decimate_utils import (
-    execute_decimate,
-    decimate_16x,
+from _utils.Volume_resample_utils import (
+    execute_resample,
+    resample_to_half,
 )
 from _utils.Volume_mode_utils import ensure_surface_mode
 from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
@@ -23,34 +22,24 @@ from _utils.coat_ui_utils import show_message, show_error
 # CONFIGURATION DEFAULTS
 # =============================================================================
 
-DEFAULT_REDUCTION_PERCENT: float = 50.0
-
-
-# =============================================================================
-# CONFIG DATACLASS
-# =============================================================================
-
-@dataclass
-class DecimateConfig:
-    """Configuration for decimate operation."""
-    reduction_percent: float | None = DEFAULT_REDUCTION_PERCENT
-    target_polycount: int | None = None
-    use_16x: bool = False  # Quick 16x proxy mode
+DEFAULT_SCALE: float = 0.5
 
 
 # =============================================================================
 # INTERNAL HELPERS
 # =============================================================================
 
-def _decimate_element(
+def _resample_element(
     element: coat.SceneElement,
-    config: DecimateConfig
+    target_polycount: int | None = None,
+    scale: float = DEFAULT_SCALE,
+    use_half: bool = False,
 ) -> bool:
     """
-    Decimate a single element.
+    Resample a single element.
 
     Returns:
-        True if element was decimated, False if skipped
+        True if element was resampled, False if skipped
     """
     if not element.isSculptObject():
         return False
@@ -61,14 +50,19 @@ def _decimate_element(
     # Select element for operation
     element.selectOne()
 
-    if config.use_16x:
-        decimate_16x()
+    current_polycount: int = vol.getPolycount()
+    if current_polycount <= 0:
+        return False
+
+    if use_half:
+        resample_to_half(current_polycount)
+    elif target_polycount is not None:
+        ratio: float = target_polycount / current_polycount
+        execute_resample(target_polycount=target_polycount, scale=ratio)
     else:
-        # Call utils with raw args (no dataclass)
-        execute_decimate(
-            target_polycount=config.target_polycount,
-            reduction_percent=config.reduction_percent,
-        )
+        # Scale-based resample
+        new_target: int = int(current_polycount * scale)
+        execute_resample(target_polycount=new_target, scale=scale)
 
     return True
 
@@ -79,23 +73,23 @@ def _decimate_element(
 
 def main(
     scope: Scope = Scope.CURRENT,
-    reduction_percent: float | None = DEFAULT_REDUCTION_PERCENT,
     target_polycount: int | None = None,
-    use_16x: bool = False,
+    scale: float = DEFAULT_SCALE,
+    use_half: bool = False,
     preserve_selection: bool = True,
 ) -> int:
     """
-    Decimate objects to reduce polygon count.
+    Resample objects to change polygon count.
 
     Args:
-        scope: Which objects to decimate
-        reduction_percent: Percentage of polygons to remove (e.g., 50.0 = half)
-        target_polycount: Absolute target polycount (overrides percent if set)
-        use_16x: Use quick 16x decimation proxy mode
+        scope: Which objects to resample
+        target_polycount: Absolute target polycount (if set)
+        scale: Scale factor for polycount (e.g., 0.5 = half)
+        use_half: Quick mode to resample to half polycount
         preserve_selection: Whether to restore selection after operation
 
     Returns:
-        Number of objects decimated
+        Number of objects resampled
     """
     # Save selection for restoration
     current: coat.SceneElement | None = None
@@ -107,13 +101,6 @@ def main(
         show_error("No object selected", 2000)
         return 0
 
-    # Build config
-    config = DecimateConfig(
-        reduction_percent=reduction_percent,
-        target_polycount=target_polycount,
-        use_16x=use_16x,
-    )
-
     # Resolve which elements to operate on
     elements: list[coat.SceneElement] = resolve_scope(scope)
 
@@ -121,10 +108,10 @@ def main(
         show_error("No objects to process", 2000)
         return 0
 
-    # Decimate each element
+    # Resample each element
     count: int = 0
     for el in elements:
-        if _decimate_element(el, config):
+        if _resample_element(el, target_polycount, scale, use_half):
             count += 1
 
     # Cleanup after mesh operations
@@ -135,12 +122,12 @@ def main(
         current.selectOne()
 
     # Build status message
-    if use_16x:
-        status: str = f"16x decimated {count}"
+    if use_half:
+        status: str = f"Resampled {count} to half"
     elif target_polycount is not None:
-        status = f"Decimated {count} to {target_polycount:,}"
+        status = f"Resampled {count} to {target_polycount:,}"
     else:
-        status = f"Decimated {count} by {reduction_percent:.0f}%"
+        status = f"Resampled {count} by {scale:.0%}"
 
     show_message(f"{status} objects", 2000)
     return count

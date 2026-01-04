@@ -10,7 +10,8 @@ Action: Toggle between surface and voxel modes, preserving polycount
 import coat
 
 from _utils.object_utils import ObjectUtils
-from _utils.mesh_utils import resample_to_target, convert_to_surface
+from _utils.Volume_resample_utils import resample_to_target
+from _utils.Volume_mode_utils import convert_to_surface
 from _utils.coat_ui_utils import show_message, show_error
 
 

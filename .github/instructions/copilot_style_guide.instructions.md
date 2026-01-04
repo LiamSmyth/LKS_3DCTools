@@ -80,45 +80,131 @@ UserProjects/
 - Subfolders starting with `_` are hidden from 3DCoat but still importable
 - Subfolders without `_` prefix appear as script categories
 
-## 5. Script Types
+## 5. Layered Architecture
 
-### 5.1 Operators (`_ops/`)
+The codebase has three layers with distinct responsibilities:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ACTIONS / PANEL BUTTONS  (Entry Points)                    │
+│  - Thin wrappers, exposed to 3DCoat UI                      │
+│  - Construct Config, call operators                         │
+│  - NO business logic                                        │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  OPERATORS (`_ops/`)      (Workflow Orchestration)          │
+│  - Own their Config dataclass (when >3 params)              │
+│  - Handle scope resolution (SceneElement → list)            │
+│  - Compose utils, manage selection, return counts           │
+│  - Bridge SceneElement ↔ Volume for utils                   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  UTILS (`_utils/`)        (Low-Level Primitives)            │
+│  - Raw primitive arguments ONLY (no dataclasses)            │
+│  - Operate on coat.Volume or coat.SceneElement directly     │
+│  - Abstract magic strings, wrap 3DCoat API                  │
+│  - Single-responsibility, composable fragments              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.1 Config Pattern Rule
+
+**Blend kwargs and Config dataclass based on parameter count:**
+
+| Parameters | Pattern | Example |
+|------------|---------|---------|
+| ≤3 params | Use kwargs directly | `main(scope, ghost=True, mode=GhostMode.SET)` |
+| >3 params | Use Config dataclass | `main(scope, config=DecimateConfig(...))` |
+
+**Config dataclasses live in operators, NOT in utils:**
+```python
+# GOOD - Config in operator
+# _ops/SculptObject_Decimate.py
+@dataclass
+class DecimateConfig:
+    reduction_percent: float = 50.0
+    target_polycount: int | None = None
+    preserve_selection: bool = True
+
+# BAD - Config in utils (don't do this)
+# _utils/Volume_decimate_utils.py
+@dataclass
+class DecimateParams:  # NO - utils take raw args
+    ...
+```
+
+### 5.2 Operators (`_ops/`)
 
 **Location:** `UserProjects/_ops/*.py`
 **Purpose:** Configurable workflows that both action scripts and panel buttons invoke
-**Naming:** `<ObjectType>_<Action>.py` (scope/config are parameters, not in filename)
+**Naming:** `SculptObject_<Action>.py` (user-facing concept, scope/config are parameters)
 
-**Pattern:**
+**Pattern (≤3 params - use kwargs):**
 ```python
-# _ops/SculptObject_Decimate.py
-"""Decimate sculpt objects with configurable scope and parameters."""
+# _ops/SculptObject_SetGhost.py
+"""Ghost/unghost operations with configurable scope and mode."""
+from enum import Enum
 from _utils.scope_utils import Scope, resolve_scope
-from _utils.mesh_utils import execute_decimate, DecimateParams
+from _utils.SceneElement_visibility_utils import set_ghost, invert_ghost_on_elements
+
+class GhostMode(Enum):
+    SET = "set"
+    INVERT = "invert"
+    ISOLATE = "isolate"
 
 def main(
     scope: Scope = Scope.CURRENT,
-    reduction_percent: float = 50.0,
-    target_polycount: int | None = None,
-    preserve_selection: bool = True,
+    ghost: bool = True,
+    mode: GhostMode = GhostMode.SET,
 ) -> int:
-    """Decimate objects. Returns count of objects processed."""
+    """Ghost/unghost objects. Returns count processed."""
     elements = resolve_scope(scope)
-    # ... implementation using _utils functions
+    # ... compose utils
+    return count
+```
+
+**Pattern (>3 params - use Config):**
+```python
+# _ops/SculptObject_Decimate.py
+"""Decimate sculpt objects with configurable scope and parameters."""
+from dataclasses import dataclass
+from _utils.scope_utils import Scope, resolve_scope
+from _utils.Volume_decimate_utils import execute_decimate
+
+@dataclass
+class DecimateConfig:
+    """Configuration for decimate operation."""
+    reduction_percent: float = 50.0
+    target_polycount: int | None = None
+    use_16x: bool = False
+    preserve_selection: bool = True
+
+def main(scope: Scope = Scope.CURRENT, config: DecimateConfig | None = None) -> int:
+    """Decimate objects. Returns count of objects processed."""
+    if config is None:
+        config = DecimateConfig()
+    elements = resolve_scope(scope)
+    # ... bridge SceneElement → Volume, call utils
     return count
 ```
 
 **Key principles:**
 - Operators have a `main()` with explicit typed parameters
+- Own their Config dataclass (when >3 params)
 - Use `Scope` enum for element targeting
+- Bridge SceneElement → Volume when calling Volume_* utils
 - Return count or result for feedback
-- Use `_utils/` for core logic (don't duplicate)
 - Handle selection preservation internally
 
-### 5.2 Action Scripts (Root Level)
+### 5.3 Action Scripts (Root Level)
 
 **Location:** `UserProjects/*.py`
 **Purpose:** Minimal invokers exposed to 3DCoat's script browser
-**Naming:** `<Context>_<Action>_<Config>_<Scope>.py`
+**Naming:** `SculptObject_<Action>_<Config>_<Scope>.py` (user-facing concept)
 
 **Naming components:**
 - **Context:** What type of object/domain (e.g., `SculptObject`, `Brush`, `Layer`, `Scene`, `Autopo`, `Export`)
@@ -154,44 +240,86 @@ def main() -> None:
 main()
 ```
 
-### 5.2 Utility Modules (`_utils/`)
+### 5.4 Utility Modules (`_utils/`)
 
 **Location:** `UserProjects/_utils/*.py`
-**Purpose:** Reusable logic, 3DCoat API abstraction, shared state
-**Pattern:** Static functions with configuration parameters
+**Purpose:** Low-level primitives, 3DCoat API abstraction, single-responsibility functions
+**Pattern:** Static functions with RAW PRIMITIVE ARGUMENTS ONLY (no dataclasses)
 
 **Naming Convention:** `<ObjectType>_<category>_utils.py`
 - **ObjectType:** The 3DCoat type the utils operate on (matches coat.pyi exactly)
-  - `SceneElement` - Scene tree elements
-  - `Volume` - Sculpt volumes/objects  
-  - `Scene` - Global scene operations
+  - `Volume` - Sculpt volumes/objects (mesh operations)
+  - `SceneElement` - Scene tree elements (visibility, hierarchy)
+  - `Scene` - Global scene operations (layers, cleanup)
   - Omit if utilities are generic (e.g., `coat_ui_utils.py`)
-- **Category:** What the utilities do (e.g., `mesh`, `visibility`, `autopo`, `transform`)
+- **Category:** What the utilities do (e.g., `decimate`, `visibility`, `resample`)
 
-Examples:
-- `Volume_mesh_utils.py` - Mesh operations on Volumes (decimate, resample, subdivide)
-- `SceneElement_visibility_utils.py` - Ghost/hide operations on SceneElements
-- `Volume_autopo_utils.py` - Autopo workflow for Volumes
-- `coat_ui_utils.py` - Generic UI command wrappers (no object type prefix)
-- `scene_api.py` - Scene context and iteration (legacy naming, acceptable)
-
+**CRITICAL: Utils take raw arguments, NOT dataclasses:**
 ```python
-# _utils/Volume_mesh_utils.py
-"""Mesh modification operations for Volumes."""
+# GOOD - raw primitive args
+def execute_decimate(reduction_percent: float, target_polycount: int | None = None) -> None:
+    ...
 
-import coat
-
-# Constants - abstract magic strings
-CMD_DIALOG_OK = "$DialogButton#1"
-SETTING_AUTO_SUBDIVIDE = "$BrushConstructor::AutoSubdivide"
-
-def apply_brush_settings(auto_subdivide: bool, details_level: int) -> None:
-    """Apply brush settings to all brush types."""
-    # Implementation with magic strings hidden here
+# BAD - dataclass in utils (belongs in operator)
+def execute_decimate(params: DecimateParams) -> None:
     ...
 ```
 
-### 5.3 Panel Scripts
+**Utils Module Examples:**
+```
+_utils/
+├── Volume_decimate_utils.py    # execute_decimate(), configure_decimate_dialog()
+├── Volume_resample_utils.py    # execute_resample(), resample_to_half()
+├── Volume_subdivide_utils.py   # subdivide_once()
+├── Volume_mode_utils.py        # convert_to_surface(), convert_to_voxels()
+├── Volume_symmetry_utils.py    # make_symmetrical()
+├── SceneElement_visibility_utils.py  # set_ghost(), set_visibility()
+├── Scene_cleanup_utils.py      # cleanup_after_mesh_operation()
+├── coat_ui_utils.py            # confirm_dialog(), switch_room()
+├── scene_api.py                # SceneAPI.get_selected(), SceneAPI.collect_subtree()
+└── scope_utils.py              # Scope enum, resolve_scope()
+```
+
+```python
+# _utils/Volume_decimate_utils.py
+"""Decimate operations for Volumes. Raw args only."""
+
+import coat
+from typing import Callable
+
+# =============================================================================
+# MAGIC UI STRINGS
+# =============================================================================
+CMD_DECIMATE: str = "$DecimateToRetopo"
+CMD_DIALOG_OK: str = "$DialogButton#1"
+SETTING_TARGET_POLYCOUNT: str = "$DecimateParams::TargetPolycount"
+
+# =============================================================================
+# FUNCTIONS (raw primitive args)
+# =============================================================================
+
+def configure_decimate_dialog(
+    reduction_percent: float | None = None,
+    target_polycount: int | None = None,
+) -> Callable[[], None]:
+    """Create callback to configure decimate dialog. Raw args only."""
+    def configurator() -> None:
+        if target_polycount is not None:
+            coat.ui.setEditBoxValue(SETTING_TARGET_POLYCOUNT, target_polycount)
+        # ...
+        coat.ui.cmd(CMD_DIALOG_OK)
+    return configurator
+
+def execute_decimate(
+    reduction_percent: float = 50.0,
+    target_polycount: int | None = None,
+) -> None:
+    """Execute decimate on current object. Raw args only."""
+    callback = configure_decimate_dialog(reduction_percent, target_polycount)
+    coat.ui.cmd(CMD_DECIMATE, callback)
+```
+
+### 5.5 Panel Scripts
 
 **Purpose:** Complex UI panels with multiple controls
 **Pattern:** Class inheriting from `coat.scripted_panel`
@@ -368,59 +496,46 @@ importlib.reload(some_module)
 from _utils.some_module import some_function
 ```
 
-### 6.6 UI Panel Data Injection Pattern
+### 6.6 UI Dialog Configurator Pattern
 
-When injecting data into UI panels/dialogs:
+When injecting data into 3DCoat dialogs, use a configurator function that returns a closure.
 
-1. **Create a dataclass** to represent the panel's data contents
-2. **Create a configurator function** to pass into the panel's callback context
-3. **Use constants for defaults** at the top of the module
+**Note:** Configurators are typically called from OPERATORS or high-level code. The configurator
+function itself lives in utils (with raw args), but Config dataclasses belong in operators.
 
 ```python
-from dataclasses import dataclass
-
-# =============================================================================
-# DEFAULTS
-# =============================================================================
-
-DEFAULT_TARGET_POLYCOUNT: int = 10000
-DEFAULT_REDUCTION_PERCENT: float = 50.0
-DEFAULT_PRESERVE_UVS: bool = True
-
-# =============================================================================
-# DATA CLASS
-# =============================================================================
-
-@dataclass
-class DecimateParams:
-    """Parameters for decimate operation."""
-    target_polycount: int = DEFAULT_TARGET_POLYCOUNT
-    reduction_percent: float = DEFAULT_REDUCTION_PERCENT
-    preserve_uvs: bool = DEFAULT_PRESERVE_UVS
-
-# =============================================================================
-# CONFIGURATOR FUNCTION
-# =============================================================================
-
-def configure_decimate_dialog(params: DecimateParams) -> Callable[[], None]:
+# In utils: configurator takes RAW ARGS
+def configure_decimate_dialog(
+    reduction_percent: float | None = None,
+    target_polycount: int | None = None,
+) -> Callable[[], None]:
     """Create a callback to configure the decimate dialog."""
     def configurator() -> None:
-        coat.ui.setEditBoxValue(SETTING_TARGET_POLYCOUNT, params.target_polycount)
-        coat.ui.setSliderValue(SETTING_REDUCTION_PERCENT, params.reduction_percent)
-        coat.ui.setBoolValue(SETTING_PRESERVE_UVS, params.preserve_uvs)
+        if target_polycount is not None:
+            coat.ui.setEditBoxValue(SETTING_TARGET_POLYCOUNT, target_polycount)
         coat.ui.cmd(CMD_DIALOG_OK)
     return configurator
 
-# Usage:
-params = DecimateParams(target_polycount=5000)
-coat.ui.cmd(CMD_DECIMATE, configure_decimate_dialog(params))
+# In operator: Config dataclass unpacks to raw args
+@dataclass
+class DecimateConfig:
+    reduction_percent: float = 50.0
+    target_polycount: int | None = None
+
+def main(scope: Scope, config: DecimateConfig) -> int:
+    # Unpack config to raw args for utils
+    callback = configure_decimate_dialog(
+        reduction_percent=config.reduction_percent,
+        target_polycount=config.target_polycount,
+    )
+    coat.ui.cmd(CMD_DECIMATE, callback)
 ```
 
 **Key principles:**
-- Defaults live as constants at the top, not scattered in code
-- Dataclass provides typed, documented parameter grouping
-- Configurator returns a closure that captures the params
-- Easy to test and reuse
+- Configurators in utils take raw primitive arguments
+- Config dataclasses belong in operators, unpack to raw args when calling utils
+- Defaults live as constants at the top of the module where Config is defined
+- Configurator returns a closure that captures the args
 
 ## 7. Settings Persistence
 

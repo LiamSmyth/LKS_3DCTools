@@ -13,7 +13,7 @@
   "autopo_tangent_smooth" : "True",
   "autopo_voxelize" : "True",
   "autopo_voxelize_polycount" : 5,
-  "decimate_percent" : 80,
+  "decimate_percent" : 50,
   "details_level" : 2.0,
   "remove_stretching" : "False"
 }

@@ -59,13 +59,21 @@ grep_search: "setEditBoxValue" includePattern="coat.pyi"
 ```
 UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal action invokers
-├── _utils/                    # Hidden from 3DCoat - shared utilities
+├── _ops/                      # Hidden from 3DCoat - configurable operators
 │   ├── __init__.py
-│   ├── coat_ui_utils.py       # 3DCoat UI abstraction layer
-│   ├── coat_scene_utils.py    # Scene/object manipulation
+│   ├── SculptObject_Decimate.py
+│   ├── SculptObject_SetGhost.py
+│   ├── SculptObject_IdColors.py
+│   └── ...
+├── _utils/                    # Hidden from 3DCoat - low-level utilities
+│   ├── __init__.py
+│   ├── Volume_decimate_utils.py  # Decimate ops (raw args)
+│   ├── Volume_resample_utils.py  # Resample ops (raw args)
+│   ├── SceneElement_visibility_utils.py  # Ghost/hide ops
+│   ├── scene_api.py           # Scene iteration wrappers
+│   ├── scope_utils.py         # Scope enum + resolution
+│   ├── coat_ui_utils.py       # UI command abstractions
 │   ├── lks_settings.py        # Persistent settings cache
-│   ├── brush_settings_utils.py # Brush configuration
-│   ├── autopo_utils.py        # Autopo workflow automation
 │   └── ...
 ├── _archive/                  # Old/deprecated scripts
 ├── _example_code/             # Reference implementations
@@ -73,39 +81,64 @@ UserProjects/
     └── <Script>.py
 ```
 
+### Layered Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ACTIONS / PANEL BUTTONS  (Entry Points)                    │
+│  - Thin wrappers, exposed to 3DCoat UI                      │
+│  - Construct Config, call operators                         │
+│  - NO business logic                                        │
+└───────────────────────────┬─────────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  OPERATORS (`_ops/`)      (Workflow Orchestration)          │
+│  - Own their Config dataclass (when >3 params)              │
+│  - Handle scope resolution, compose utils                   │
+│  - Bridge SceneElement ↔ Volume for utils                   │
+└───────────────────────────┬─────────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  UTILS (`_utils/`)        (Low-Level Primitives)            │
+│  - Raw primitive arguments ONLY (no dataclasses)            │
+│  - Abstract magic strings, wrap 3DCoat API                  │
+│  - Single-responsibility, composable fragments              │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### Script Types
 
 #### 1. Action Scripts (Root Level)
 - **Location:** `UserProjects/*.py`
-- **Purpose:** Minimal invokers that configure and call utility functions
-- **Naming:** `<Context>_<Action>_<Variant>.py`
-  - Context: Object type or room (e.g., `SculptObject`, `Brush`, `Layer`)
-  - Action: What it does (e.g., `Scale`, `SetOpacity`, `Decimate`)
-  - Variant: Specific configuration (e.g., `Half`, `Double`, `Zero`)
+- **Purpose:** Minimal invokers that call operators with configuration
+- **Naming:** `SculptObject_<Action>_<Config>_<Scope>.py`
 - **Examples:**
-  - `SculptObject_Scale_Half.py`
+  - `SculptObject_Decimate_Half_Selected.py`
+  - `SculptObject_Ghost_Toggle_Subtree.py`
   - `Brush_IncrementDetailsLevel.py`
-  - `Layer_SetOpacity_Zero.py`
   - `Autopo_ToSculpt.py`
 - **Pattern:**
   ```python
-  """
-  Brief description of what this script does.
-  
-  Room: Sculpt/Retopo/Paint
-  Action: One-line description
-  """
-  from _utils.some_utils import some_function
-  import coat
-  
-  # Minimal logic - just configure and invoke
-  some_function(param1=value1, param2=value2)
+  """Brief description. Room: Sculpt. Action: One-line."""
+  from _ops.SculptObject_Decimate import main as op_main
+  from _utils.scope_utils import Scope
+
+  def main() -> None:
+      op_main(scope=Scope.CURRENT, reduction_percent=50.0)
+
+  main()
   ```
 
-#### 2. Utility Modules (`_utils/`)
+#### 2. Operators (`_ops/`)
+- **Location:** `UserProjects/_ops/*.py`
+- **Purpose:** Configurable workflows called by both actions and panel buttons
+- **Pattern:** `main()` function with explicit typed parameters
+- **Config Rule:** ≤3 params = kwargs, >3 params = Config dataclass
+
+#### 3. Utility Modules (`_utils/`)
 - **Location:** `UserProjects/_utils/*.py`
-- **Purpose:** Reusable logic, 3DCoat API abstraction, shared state
-- **Pattern:** Static functions that take configuration parameters
+- **Purpose:** Low-level primitives with RAW ARGUMENTS ONLY (no dataclasses)
+- **Naming:** `Volume_*` for mesh ops, `SceneElement_*` for tree ops, `Scene_*` for global ops
 - **Goal:** Abstract away 3DCoat's "magic strings" and UI quirks
 
 ---

@@ -9,13 +9,10 @@ Action: Remesh, symmetrize all objects in subtree
 """
 import coat
 from _utils.scene_api import SceneAPI
-from _utils.mesh_utils import (
-    execute_resample,
-    ResampleParams,
-    decimate_to_target,
-    make_symmetrical,
-    cleanup_after_mesh_operation,
-)
+from _utils.Volume_resample_utils import execute_resample
+from _utils.Volume_decimate_utils import decimate_to_target
+from _utils.Volume_subdivide_utils import make_symmetrical
+from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
 from _utils.coat_ui_utils import show_message, show_error
 
 # Default resample scale preserves details during voxel conversion
@@ -45,11 +42,11 @@ def remesh_resymm_safe(element: coat.SceneElement) -> bool:
 
     # Resample to preserve detail if surface
     if not vol.isVoxelized():
-        params = ResampleParams(
-            target_polycount=target_polycount,
-            scale=DEFAULT_RESAMPLE_SCALE
+        resample_target: int = int(target_polycount * DEFAULT_RESAMPLE_SCALE)
+        execute_resample(
+            target_polycount=resample_target,
+            scale=DEFAULT_RESAMPLE_SCALE,
         )
-        execute_resample(params)
         vol.toVoxels()
 
     # Make symmetrical in voxel mode

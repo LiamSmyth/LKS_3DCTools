@@ -406,7 +406,8 @@ class LKSToolsConfig:
 
     def _resample_elements(self, elements: list, scale: float) -> int:
         """Helper to resample a list of elements."""
-        from _utils.mesh_utils import execute_resample, ResampleParams, ensure_surface_mode
+        from _utils.Volume_resample_utils import execute_resample
+        from _utils.Volume_mode_utils import ensure_surface_mode
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -414,8 +415,8 @@ class LKSToolsConfig:
                 ensure_surface_mode(vol)
                 el.selectOne()
                 target = int(vol.getPolycount() * scale)
-                execute_resample(ResampleParams(
-                    target_polycount=target, scale=scale))
+                execute_resample(
+                    target_polycount=target, scale=scale)
                 count += 1
         return count
 
@@ -460,7 +461,7 @@ class LKSToolsConfig:
 
     def Subdivide(self) -> None:
         """Subdivide current (double polys)."""
-        from _utils.mesh_utils import subdivide_once
+        from _utils.Volume_subdivide_utils import subdivide_once
         from _utils.scene_api import SceneAPI
         current = SceneAPI.get_current_element()
         if not current:
@@ -474,7 +475,7 @@ class LKSToolsConfig:
 
     def _convert_to_surface(self, elements: list) -> int:
         """Helper to convert elements to surface."""
-        from _utils.mesh_utils import convert_to_surface
+        from _utils.Volume_mode_utils import convert_to_surface
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -760,7 +761,7 @@ class LKSToolsConfig:
 
     def _uniform_resample_elements(self, reference: 'coat.SceneElement', elements: list) -> int:
         """Helper: Resample elements to match reference density."""
-        from _utils.mesh_utils import resample_to_match_density
+        from _utils.Volume_density_utils import resample_to_match_density
         ref_vol = reference.Volume()
         count: int = 0
         for el in elements:
@@ -771,7 +772,7 @@ class LKSToolsConfig:
 
     def _uniform_smart_elements(self, reference: 'coat.SceneElement', elements: list) -> tuple:
         """Helper: Smart density match elements to reference."""
-        from _utils.mesh_utils import smart_match_density
+        from _utils.Volume_density_utils import smart_match_density
         ref_vol = reference.Volume()
         subdivided: int = 0
         decimated: int = 0
@@ -852,8 +853,9 @@ class LKSToolsConfig:
     def RemeshResymmCur(self) -> None:
         """Remesh and symmetrize current selection."""
         from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import make_symmetrical, ensure_surface_mode
-        from _utils.mesh_utils import cleanup_after_mesh_operation
+        from _utils.Volume_subdivide_utils import make_symmetrical
+        from _utils.Volume_mode_utils import ensure_surface_mode
+        from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
         elements = SceneAPI.get_selected_elements()
         if not elements:
             show_message("No selection", 2000)
@@ -872,8 +874,9 @@ class LKSToolsConfig:
     def RemeshResymmTree(self) -> None:
         """Remesh and symmetrize subtree."""
         from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import make_symmetrical, ensure_surface_mode
-        from _utils.mesh_utils import cleanup_after_mesh_operation
+        from _utils.Volume_subdivide_utils import make_symmetrical
+        from _utils.Volume_mode_utils import ensure_surface_mode
+        from _utils.Scene_cleanup_utils import cleanup_after_mesh_operation
         current = SceneAPI.get_current_element()
         if not current:
             show_message("No selection", 2000)
@@ -900,7 +903,7 @@ class LKSToolsConfig:
     def SplitMasked(self) -> None:
         """Split frozen/masked area to new object."""
         from _utils.scene_api import SceneAPI
-        from _utils.mesh_utils import ensure_surface_mode
+        from _utils.Volume_mode_utils import ensure_surface_mode
         from _utils.coat_ui_utils import (
             CMD_HIDE_FROZEN_AREA,
             CMD_SEPARATE_HIDDEN,
@@ -1046,7 +1049,12 @@ class LKSToolsConfig:
             '_utils.scene_api',
             '_utils.scope_utils',
             '_utils.object_utils',
-            '_utils.mesh_utils',
+            '_utils.Volume_decimate_utils',
+            '_utils.Volume_resample_utils',
+            '_utils.Volume_subdivide_utils',
+            '_utils.Volume_mode_utils',
+            '_utils.Volume_density_utils',
+            '_utils.Scene_cleanup_utils',
             '_utils.Scene_layer_utils',
             '_utils.Scene_tiling_utils',
             '_utils.SceneElement_visibility_utils',

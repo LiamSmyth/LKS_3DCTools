@@ -9,11 +9,8 @@ Action: Decompose, resample each part, merge back
 """
 import coat
 from _utils.scene_api import SceneAPI
-from _utils.mesh_utils import (
-    execute_resample,
-    ResampleParams,
-    ensure_surface_mode,
-)
+from _utils.Volume_resample_utils import execute_resample
+from _utils.Volume_mode_utils import ensure_surface_mode
 from _utils.coat_ui_utils import (
     CMD_DIALOG_OK,
     CMD_DECOMPOSE,
@@ -40,11 +37,10 @@ def remesh_element(element: coat.SceneElement) -> None:
     current_polycount: int = vol.getPolycount()
     target_polycount: int = int(current_polycount * REMESH_RATIO)
 
-    params = ResampleParams(
+    execute_resample(
         target_polycount=target_polycount,
-        scale=REMESH_RATIO
+        scale=REMESH_RATIO,
     )
-    execute_resample(params)
 
     print(
         f"Resampled '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
