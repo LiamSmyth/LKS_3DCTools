@@ -45,6 +45,8 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   └── ...
 ├── utils/                    # Low-level utilities
 │   ├── __init__.py           # Package exports
+│   ├── action_discovery.py   # 🆕 Pure Python action script discovery
+│   ├── coat_menu_utils.py    # 🆕 3DCoat menu registration wrapper
 │   ├── scene_api.py          # Thin wrappers for coat iterators
 │   ├── scope_utils.py        # Scope enum and resolution
 │   ├── SceneElement_visibility_utils.py  # Pure visibility/ghost functions
@@ -216,6 +218,49 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 > **Architecture Note:** Utils take RAW PRIMITIVE ARGUMENTS only (no dataclasses).
 > Dataclasses for configuration belong in operators (`_ops/`).
 > See `copilot_style_guide.instructions.md` Section 5 for details.
+
+> **Naming Convention:** Prefix indicates 3DCoat dependency:
+> - `coat_` prefix: Direct 3DCoat API wrappers (imports `coat`)
+> - `<CoatType>_` prefix: Operations on 3DCoat types (`Volume_`, `Scene_`, `SceneElement_`)
+> - No prefix: Pure Python, testable outside 3DCoat
+
+### `action_discovery.py` 🆕
+**Pure Python module for scanning and categorizing action scripts. NO coat dependency.**
+
+**Dataclasses:**
+- `ActionInfo` - Information about a discovered action (filename, path, context, action_name, display_name, menu_id)
+- `ActionCategory` - Group of actions by context (context, display_name, actions list)
+
+**Functions:**
+- `parse_action_filename(filename)` → `tuple[str, str] | None` - Parse "Context_Action.py" into (context, action_name)
+- `generate_display_name(context, action_name)` → `str` - Human-readable name like "LKS: Decimate Half Selected"
+- `generate_menu_id(context, action_name)` → `str` - Unique ID like "LKS_SculptObject_Decimate_Half_Selected"
+- `discover_actions(actions_dir)` → `list[ActionInfo]` - Discover all valid action scripts
+- `group_actions_by_context(actions)` → `list[ActionCategory]` - Group for submenu organization
+- `iter_actions(actions_dir)` → `Iterator[ActionInfo]` - Generator version
+
+**Constants:**
+- `KNOWN_CONTEXTS` - Set of known context prefixes (SculptObject, Brush, Scene, etc.)
+- `EXCLUDED_SCRIPTS` - Set of scripts to exclude from auto-registration (panels, lifecycle)
+
+### `coat_menu_utils.py` 🆕
+**3DCoat menu registration utilities. Depends on `coat` module.**
+
+**Path Functions:**
+- `get_lks_root()` → `Path` - Get LKS cModule root directory
+- `get_actions_dir()` → `Path` - Get actions folder path
+- `resolve_script_path(script_path)` → `str` - Resolve path to 3DCoat format (forward slashes)
+
+**Registration Functions:**
+- `register_action(menu_id, display_name, script_path, menu_name)` → `bool` - Register single action
+- `register_actions_from_discovery(actions, menu_name)` → `tuple[int, int]` - Register multiple, returns (registered, skipped)
+- `unregister_all_lks_actions()` → `int` - Informational (no unregister API in 3DCoat)
+
+**Debugging:**
+- `log_registration_status()` - Log registration status to 3DCoat console
+
+**Initialization:**
+- `initialize_lks_menu()` → `tuple[int, int]` - Discover and register all actions (call from `__onstartup.py`)
 
 ### `scene_api.py` 🆕
 **Primary interface for 3DCoat scene context and iteration.**

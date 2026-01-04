@@ -30,6 +30,8 @@ This style guide is tailored for the LKS 3DCoat addon workspace. It provides con
 
 9. **Check existing utilities first.** Before writing new code, consult `copilot_codebase_router.instructions.md` and search `_utils/` for existing functions. Reuse and extend existing utilities rather than duplicating functionality.
 
+10. **Update docs with API discoveries.** When discovering 3DCoat API quirks or gotchas, immediately add a concise entry to `copilot_3dcoat_api.instructions.md`. Keep entries brief (these files are always loaded into context).
+
 ---
 
 ## 1. Purpose and Scope
@@ -251,13 +253,25 @@ main()
 **Purpose:** Low-level primitives, 3DCoat API abstraction, single-responsibility functions
 **Pattern:** Static functions with RAW PRIMITIVE ARGUMENTS ONLY (no dataclasses)
 
-**Naming Convention:** `<ObjectType>_<category>_utils.py`
-- **ObjectType:** The 3DCoat type the utils operate on (matches coat.pyi exactly)
-  - `Volume` - Sculpt volumes/objects (mesh operations)
-  - `SceneElement` - Scene tree elements (visibility, hierarchy)
-  - `Scene` - Global scene operations (layers, cleanup)
-  - Omit if utilities are generic (e.g., `coat_ui_utils.py`)
-- **Category:** What the utilities do (e.g., `decimate`, `visibility`, `resample`)
+**Naming Convention:** Prefix indicates 3DCoat dependency
+
+| Prefix | Meaning | Imports `coat`? | Example |
+|--------|---------|-----------------|---------|
+| `coat_` | Direct 3DCoat API wrappers | Yes | `coat_ui_utils.py`, `coat_menu_utils.py` |
+| `<CoatType>_` | Operations on 3DCoat types | Yes | `Volume_decimate_utils.py`, `Scene_layer_utils.py` |
+| (no prefix) | Pure Python, testable outside 3DCoat | No | `action_discovery.py`, `scope_utils.py` |
+
+**CoatType prefixes** (match `coat.pyi` types exactly):
+- `Volume_` - Sculpt volumes/objects (mesh operations)
+- `SceneElement_` - Scene tree elements (visibility, hierarchy)
+- `Scene_` - Global scene operations (layers, cleanup)
+
+**Category suffix:** What the utilities do (e.g., `_decimate_utils`, `_visibility_utils`)
+
+**Why this matters:**
+- Pure Python modules can be unit tested outside 3DCoat
+- Clear at a glance which modules depend on `coat`
+- Easier to identify what can be reused in other contexts
 
 **CRITICAL: Utils take raw arguments, NOT dataclasses:**
 ```python
@@ -272,17 +286,19 @@ def execute_decimate(params: DecimateParams) -> None:
 
 **Utils Module Examples:**
 ```
-_utils/
+utils/
+├── coat_ui_utils.py            # coat.ui.* wrappers (confirm_dialog, switch_room)
+├── coat_menu_utils.py          # coat.ui.insertInMenu, menu registration
 ├── Volume_decimate_utils.py    # execute_decimate(), configure_decimate_dialog()
 ├── Volume_resample_utils.py    # execute_resample(), resample_to_half()
 ├── Volume_subdivide_utils.py   # subdivide_once()
 ├── Volume_mode_utils.py        # convert_to_surface(), convert_to_voxels()
-├── Volume_symmetry_utils.py    # make_symmetrical()
 ├── SceneElement_visibility_utils.py  # set_ghost(), set_visibility()
 ├── Scene_cleanup_utils.py      # cleanup_after_mesh_operation()
-├── coat_ui_utils.py            # confirm_dialog(), switch_room()
-├── scene_api.py                # SceneAPI.get_selected(), SceneAPI.collect_subtree()
-└── scope_utils.py              # Scope enum, resolve_scope()
+├── scene_api.py                # SceneAPI wrappers (depends on coat)
+├── action_discovery.py         # Pure Python: scan actions folder, parse filenames
+├── scope_utils.py              # Scope enum, resolve_scope (depends on coat)
+└── lks_settings.py             # Settings persistence (minimal coat dependency)
 ```
 
 ```python

@@ -170,6 +170,29 @@ abs_path: str = coat.io.documents(rel_path)
 
 ---
 
+## 📂 cModule Location & Path Resolution
+
+cModules live in `StdScripts/cModules/` under the 3DCoat installation folder, NOT in Documents.
+
+**Get installation path:**
+```python
+import cPy.cCore
+install_path: str = cPy.cCore.cExtension.getCoatInstallForder()
+# Returns: "C:/Program Files/3DCoat-2025"
+```
+
+**Junction/symlink support:** cModules can be junctioned from another location. Use `Path(__file__).resolve()` to get the real path if needed.
+
+**Path for script registration:**
+```python
+from pathlib import Path
+# Use __file__ to get the cModule's actual location
+_LKS_ROOT: Path = Path(__file__).parent.resolve()
+script_path: str = str(_LKS_ROOT / "actions" / "MyScript.py").replace("\\", "/")
+```
+
+---
+
 ## 🔄 Singleton Settings Staleness in Action Scripts
 
 Action scripts (root-level .py files) may be re-executed with stale module state.
@@ -268,12 +291,78 @@ class MyExtension(coat.cExtension):
 
 ---
 
-## �📋 Adding to This Document
+## 📋 Menu Registration System
 
-**Keep this file lean.** Only add:
-- ✅ Non-obvious gotchas that could trip someone up
-- ✅ Critical patterns needed during development
+3DCoat has TWO menu systems—understanding this is critical for action script visibility.
 
-**Move to `_docs/magic_ui_strings.md`:**
-- Comprehensive magic string tables
-- Detailed parameter lists
+### 1. Template System (`coat.menu_*`)
+Used in `cTemplates/` to build menus at startup. **Cannot be used from cModules.**
+
+```python
+# Only works in cTemplates menu-making scripts
+coat.start_main_menu("MenuName")
+coat.menu_item("$CommandID")
+coat.menu_submenu("Submenu")
+coat.menu_item("$execute:path/to/script.py")  # Execute script
+coat.menu_exit()
+coat.menu_separator()
+coat.menu_hotkey("key", Shift, Ctrl, Alt)
+```
+
+### 2. Runtime Registration (`coat.ui.insertInMenu`)
+Used by cModules to add items to existing menus. Items appear where `coat.menu_insert_extensions("MenuName")` is called in cTemplates.
+
+```python
+# Register action in Scripts menu (from __onstartup.py or utils)
+coat.ui.addTranslation("MyActionID", "My Action Display Name")
+if not coat.ui.checkIfMenuItemInserted("MyActionID"):
+    coat.ui.insertInMenu("Scripts", "MyActionID", "/full/path/to/script.py")
+```
+
+### Valid Menu Names for `insertInMenu`
+From `menu_sections.txt` and cTemplates source:
+- `Scripts` - Most reliable for cModule actions
+- `File`, `File.Import`, `File.Export`
+- `Edit`, `View`, `Windows`, `Windows.Popups`, `Windows.Sliders`
+- `Help`, `Symmetry`, `Freeze`, `Voxels`, `Geometry`
+- `Textures`, `Textures.Import`, `Textures.Export`, `Textures.Adjust`
+- `Layers`, `Layers.Import`, `Layers.Export`
+
+### Path Resolution for Scripts
+For cModules in StdScripts, use installation-relative paths:
+
+```python
+import cPy.cCore
+
+# Get 3DCoat installation folder
+install_folder: str = cPy.cCore.cExtension.getCoatInstallForder()
+# Returns: "C:/Program Files/3DCoat-2025"
+
+# Build path to cModule script
+script_path: str = f"{install_folder}/UserPrefs/StdScripts/cModules/LKS/actions/MyScript.py"
+```
+
+**Note:** `coat.io.documents()` is for Documents/3DCoat/, NOT for StdScripts.
+
+### Why Actions May Not Appear
+1. **Path not found** - Use absolute paths or installation-relative paths
+2. **Timing** - Registration must happen before menu is built (use `__onstartup.py`)
+3. **Already registered** - Check with `coat.ui.checkIfMenuItemInserted(id)`
+4. **Missing translation** - Always call `coat.ui.addTranslation()` first
+
+---
+
+## 📝 Adding to This Document (MANDATORY)
+
+**LLM agents MUST update this file** when discovering API quirks during development.
+
+**Keep entries brief** - this file is always loaded into context. Use:
+- ✅ One-paragraph gotchas with code examples
+- ✅ Tables for quick reference
+- ❌ Avoid lengthy explanations (move to `_docs/` if needed)
+
+**Add entries for:**
+- Non-obvious API behaviors that caused debugging time
+- Methods that don't work as expected
+- Timing/async patterns that are required
+- Magic string patterns discovered

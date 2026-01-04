@@ -56,63 +56,18 @@ except Exception as e:
 
 try:
     import coat
+    from utils.coat_menu_utils import initialize_lks_menu, get_actions_dir
 
-    # Path to actions folder (use forward slashes for 3DCoat)
-    _ACTIONS_PATH: str = str(_LKS_ROOT / "actions").replace("\\", "/")
+    # Auto-discover and register all action scripts
+    registered, skipped = initialize_lks_menu()
 
-    def _register_action(action_id: str, script_name: str, translation: str) -> None:
-        """Register an action script as a menu item."""
-        script_path: str = f"{_ACTIONS_PATH}/{script_name}"
-        coat.ui.addTranslation(action_id, translation)
-        if not coat.ui.checkIfMenuItemInserted(action_id):
-            # Valid menu names: File, File.Import, File.Export, Edit, View,
-            # Windows.Popups, Windows.Sliders, Windows, Scripts, Help, Symmetry, Freeze, Voxels
-            coat.ui.insertInMenu("Scripts", action_id, script_path)
-
-    # Register key action scripts for hotkey assignment
-    # Users can assign hotkeys via Edit → Preferences → Hotkeys → search "LKS"
-    _register_action("LKS_Decimate_Half_Selected",
-                     "SculptObject_Decimate_Half_Selected.py", "LKS: Decimate Selected 50%")
-    _register_action("LKS_Decimate_Half_Subtree",
-                     "SculptObject_Decimate_Half_Subtree.py", "LKS: Decimate Subtree 50%")
-    _register_action("LKS_ProxyToggle_Decimate16X",
-                     "SculptObject_ProxyToggle_Decimate16X_Selected.py", "LKS: Proxy Toggle Decimate 16X")
-    _register_action("LKS_Ghost_Toggle_Subtree",
-                     "SculptObject_Ghost_Toggle_Subtree.py", "LKS: Ghost Toggle Subtree")
-    _register_action("LKS_Ghost_Invert_All",
-                     "SculptObject_Ghost_Invert_All.py", "LKS: Ghost Invert All")
-    _register_action("LKS_Ghost_Isolate_Selected",
-                     "SculptObject_Ghost_Isolate_Selected.py", "LKS: Ghost Isolate Selected")
-    _register_action("LKS_Unghost_All",
-                     "SculptObject_Unghost_All.py", "LKS: Unghost All")
-    _register_action("LKS_Visibility_Toggle_Subtree",
-                     "SculptObject_Visibility_Toggle_Subtree.py", "LKS: Visibility Toggle Subtree")
-    _register_action("LKS_Scale_Down100x",
-                     "SculptObject_Scale_Down100x_Selected.py", "LKS: Scale Down 100x")
-    _register_action("LKS_Scale_Up100x",
-                     "SculptObject_Scale_Up100x_Selected.py", "LKS: Scale Up 100x")
-    _register_action("LKS_ToSurface_All",
-                     "SculptObject_ToSurface_All.py", "LKS: Convert All to Surface")
-    _register_action(
-        "LKS_ToVoxel_All", "SculptObject_ToVoxel_All.py", "LKS: Convert All to Voxel")
-    _register_action("LKS_Subdivide_Double_Subtree",
-                     "SculptObject_Subdivide_Double_Subtree.py", "LKS: Subdivide Double Subtree")
-    _register_action("LKS_Resample_Half_Subtree",
-                     "SculptObject_Resample_Half_Subtree.py", "LKS: Resample Half Subtree")
-    _register_action("LKS_RemeshResymm_Selected",
-                     "SculptObject_RemeshResymm_Safe_Selected.py", "LKS: Remesh+Resymm Selected")
-    _register_action("LKS_IdColors_FromParts",
-                     "SculptObject_IdColors_FromParts.py", "LKS: ID Colors from Parts")
-    _register_action("LKS_Autopo_Run", "Autopo_Run.py", "LKS: Autopo Run")
-    _register_action("LKS_Autopo_ToSculpt",
-                     "Autopo_ToSculpt.py", "LKS: Autopo to Sculpt")
-    _register_action("LKS_Brush_IncrementDetails",
-                     "Brush_IncrementDetailsLevel.py", "LKS: Brush Increment Details")
-    _register_action("LKS_Brush_DecrementDetails",
-                     "Brush_DecrementDetailsLevel.py", "LKS: Brush Decrement Details")
-
-    print(f"[LKS] Registered action scripts to Scripts menu")
+    actions_dir = get_actions_dir()
+    print(f"[LKS] Scanned actions directory: {actions_dir}")
+    print(
+        f"[LKS] Registered {registered} action scripts ({skipped} already registered)")
     print("[LKS] Assign hotkeys via Edit → Preferences → Hotkeys → search 'LKS'")
 
 except Exception as e:
+    import traceback
     print(f"[LKS] Error registering menu items: {e}")
+    traceback.print_exc()
