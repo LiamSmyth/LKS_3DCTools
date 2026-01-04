@@ -206,7 +206,69 @@ SETTING_MY_PARAM: str = "$MyParams::Value"
 
 ---
 
-## 📋 Adding to This Document
+## � Python Environment & Dependencies
+
+3DCoat embeds **Python 3.8.10** with its own site-packages. Key APIs:
+
+| API | Purpose |
+|-----|---------|
+| `coat.io.pythonPath()` | Returns site-packages folder path |
+| `coat.io.pipInstall("pkg")` | Install packages (what menu "Install Python packages" does) |
+| `coat.io.pipUninstall("pkg")` | Uninstall packages |
+| `coat.io.installPath()` | 3DCoat installation directory |
+| `coat.io.documents(rel)` | Convert relative path to documents folder absolute path |
+
+**Check if package installed:**
+```python
+def is_installed(module: str) -> bool:
+    try:
+        __import__(module.replace("-", "_"))
+        return True
+    except ImportError:
+        return False
+```
+
+---
+
+## 🚀 External Process Execution
+
+For launching external programs (including Python scripts as separate processes):
+
+| API | Behavior |
+|-----|----------|
+| `coat.io.exec(cmd, args)` | Launch non-blocking (fire and forget) |
+| `coat.io.execAndWait(cmd, args)` | Launch and wait, returns stdout as string |
+
+**Use 3DCoat's own Python for external scripts:**
+```python
+import sys
+python_exe: str = sys.executable  # 3DCoat's Python interpreter
+script_path: str = coat.io.documents("UserProjects/_external/app.py")
+coat.io.exec(python_exe, script_path)  # Runs as separate process
+```
+
+---
+
+## 🔌 cExtension: Per-Frame Hooks
+
+`cExtension` class provides hooks that run every frame WITHOUT blocking viewport:
+
+```python
+class MyExtension(coat.cExtension):
+    def preprocess(self):   # Before tools processing
+    def postprocess(self):  # After tools processing  
+    def afterUI(self):      # After UI rendering
+    def onNew(self):        # New scene created
+    def onChangeTool(self): # Tool changed
+    def onChangeRoom(self): # Room changed
+```
+
+**Register extension:** Instantiate the class; it auto-registers.
+**Send messages:** `coat.cExtension.Message("ExtName", "msg")` → received in `onMessage(msg)`
+
+---
+
+## �📋 Adding to This Document
 
 **Keep this file lean.** Only add:
 - ✅ Non-obvious gotchas that could trip someone up

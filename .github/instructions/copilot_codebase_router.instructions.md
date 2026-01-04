@@ -24,6 +24,8 @@ A ledger of existing code, utilities, and resources. This file provides quick li
 UserProjects/
 ├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
 ├── LKS_Tools_Panel.py         # Main tools panel (comprehensive, all features)
+├── LKS_ExternalPanel_Launch.py  # Launch external panel
+├── LKS_ExternalPanel_Stop.py    # Stop external panel
 ├── _ops/                      # Hidden from 3DCoat - configurable operators
 │   ├── __init__.py            # Package docstring
 │   ├── SculptObject_Decimate.py    # Decimate with scope/config
@@ -54,7 +56,19 @@ UserProjects/
 │   ├── lks_settings.py        # Persistent settings singleton
 │   ├── brush_settings_utils.py # Brush configuration
 │   ├── autopo_utils.py        # Autopo workflow automation
+│   ├── ipc_protocol.py        # IPC data structures for external panel
+│   ├── ipc_server.py          # IPC command handlers
+│   ├── lks_extension.py       # cExtension for IPC polling
 │   └── scene_iteration_utils.py # Legacy - prefer scene_api.py
+├── _external/                 # External panel app (separate process)
+│   ├── lks_panel_app.py       # Entry point with dep checking
+│   └── lks_panel/             # Panel package
+│       ├── __init__.py
+│       ├── app.py             # Main tkinter application
+│       ├── ipc_client.py      # IPC client for panel
+│       ├── widgets.py         # Reusable widgets
+│       └── tooltip.py         # Tooltip utility
+├── _ipc/                      # IPC exchange folder (JSON files)
 ├── _archive/                  # Old/deprecated scripts
 ├── _example_code/             # Reference implementations
 └── <Category>/                # Visible subfolders become categories
@@ -180,6 +194,10 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 - `Scene_SetupTiling_BoxGrid.py` - Setup box grid tiling
 - `Scene_SetupTiling_PlaneGrid.py` - Setup plane grid tiling
 - `Export_ScaleSave_Meshes.py` - Scale and save meshes
+
+### External Panel
+- `LKS_ExternalPanel_Launch.py` - Launch external panel and register extension
+- `LKS_ExternalPanel_Stop.py` - Stop external panel and unregister extension
 
 ## 🛠️ Utility Modules (`_utils/`)
 
@@ -496,6 +514,124 @@ to the appropriate JSON files (brush, autopo, general).
 ### Reference Docs (`_docs/` - Load on Demand)
 - `_docs/magic_ui_strings.md` - **Comprehensive registry of all magic UI strings**
 - `_docs/session_recovery.md` - Recovery doc for rebuilding lost work
+- `_docs/external_panel_architecture.md` - **External panel IPC system architecture**
+
+---
+
+## 🔌 External Panel System (`_external/`)
+
+The external panel is a standalone tkinter/ttkbootstrap app that communicates with 3DCoat via IPC files. It runs in a separate process to avoid blocking the viewport.
+
+### Architecture
+
+See `_docs/external_panel_architecture.md` for full details.
+
+```
+3DCoat Process          External Python Process
+┌─────────────────┐     ┌─────────────────────┐
+│ LKSExtension    │◄───►│ LKS Panel App       │
+│ (cExtension)    │ IPC │ (tkinter)           │
+└─────────────────┘     └─────────────────────┘
+         │                       │
+         └───────┬───────────────┘
+                 ▼
+          _ipc/ folder
+          (JSON files)
+```
+
+### Entry Points
+
+- `LKS_ExternalPanel_Launch.py` - Register extension and launch panel
+- `LKS_ExternalPanel_Stop.py` - Shutdown panel and unregister extension
+
+### IPC Protocol (`_utils/ipc_protocol.py`)
+
+Shared data structures and atomic file operations for IPC communication.
+
+**Dataclasses:**
+- `IPCCommand` - Command from UI → 3DCoat (action, params, id, timestamp)
+- `IPCResult` - Result from 3DCoat → UI (command_id, success, data, error)
+- `SceneElement` - Simplified element info (name, visible, ghosted, polycount)
+- `SceneState` - Scene snapshot (elements, current_room, selected_names)
+- `Heartbeat` - Extension alive signal
+
+**File Operations:**
+- `atomic_write_json(path, data)` - Atomic write via temp+rename
+- `safe_read_json(path, default)` - Safe read with fallback
+- `send_command(command)` - Send command to 3DCoat
+- `read_pending_commands()` - Read and clear pending commands
+- `write_result(result)` - Write result from 3DCoat
+- `read_scene_state()` - Read scene state snapshot
+- `write_heartbeat()` - Write extension heartbeat
+- `is_extension_alive(timeout)` - Check heartbeat recency
+- `request_shutdown()` / `is_shutdown_requested()` - Shutdown coordination
+
+### IPC Server (`_utils/ipc_server.py`)
+
+Command dispatch and handlers running inside 3DCoat.
+
+**Built-in Handlers:**
+- `ping` - Connection test
+- `list_elements` - List sculpt tree elements
+- `get_scene_state` - Full scene snapshot
+- `select_element` - Select by name
+- `ghost_element` - Ghost/unghost by name
+- `hide_element` - Hide/show by name
+- `run_action` - Run action script by name
+- `run_operator` - Run operator with params
+- `ui_command` - Execute raw UI command
+- `switch_room` - Switch to room
+- `list_handlers` - List available handlers
+
+**Adding Custom Handlers:**
+```python
+from _utils.ipc_server import register_handler
+
+@register_handler("my_custom_action")
+def handle_my_action(params: dict) -> dict:
+    # Do something
+    return {"result": "success"}
+```
+
+### cExtension (`_utils/lks_extension.py`)
+
+Extension running inside 3DCoat for per-frame IPC polling.
+
+**Key Functions:**
+- `register_extension()` - Create and register extension singleton
+- `unregister_extension()` - Graceful shutdown
+- `is_extension_registered()` - Check registration status
+- `send_message(msg)` - Send message to extension
+
+**Extension Hooks Used:**
+- `preprocess()` - Poll commands, broadcast state, write heartbeat
+- `onNew()`, `onChangeRoom()` - Broadcast state on scene changes
+
+### External Panel App (`_external/`)
+
+Standalone Python app launched via `coat.io.exec()`.
+
+**Structure:**
+```
+_external/
+├── lks_panel_app.py      # Entry point with dep checking
+└── lks_panel/
+    ├── __init__.py
+    ├── app.py            # Main tkinter application
+    ├── ipc_client.py     # High-level IPC client
+    ├── widgets.py        # Reusable widgets
+    └── tooltip.py        # Tooltip utility
+```
+
+**Self-Healing Dependencies:**
+The entry point (`lks_panel_app.py`) checks for ttkbootstrap and offers to install it via pip if missing.
+
+**IPC Client (`ipc_client.py`):**
+- `IPCClient` class with convenient methods
+- `is_connected()` - Check extension heartbeat
+- `send_and_wait(action, params)` - Synchronous command
+- `list_elements()`, `select_element()`, `ghost_element()` - Helpers
+- `run_action(script)`, `run_operator(op, **args)` - Action execution
 
 ---
 
