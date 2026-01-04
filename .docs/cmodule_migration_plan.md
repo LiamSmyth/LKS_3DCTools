@@ -92,12 +92,29 @@ PySide6
 
 ### 5. Import Paths in cModules
 
-```python
-# From within cModule files, use:
-from cModules.LKS._utils.scene_api import SceneAPI
-from cModules.LKS._ops.SculptObject_Decimate import main as decimate_op
+**Solution: Add module root to sys.path in `__onstartup.py`:**
 
-# The cModules path is automatically in sys.path
+```python
+# __onstartup.py - add at the very top
+import sys
+from pathlib import Path
+
+_LKS_ROOT: Path = Path(__file__).parent.resolve()
+if str(_LKS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LKS_ROOT))
+```
+
+This allows keeping the original relative imports:
+```python
+# These work after the sys.path fix:
+from _utils.scene_api import SceneAPI
+from _ops.SculptObject_Decimate import main as decimate_op
+```
+
+Alternative (not recommended - requires updating all files):
+```python
+# Full cModules path import:
+from cModules.LKS._utils.scene_api import SceneAPI
 ```
 
 ---
@@ -147,19 +164,20 @@ UserPrefs/StdScripts/cModules/LKS/
 - [x] Create minimal Qt stub UI
 
 ### Phase 2: Move to cModules Location
-- [ ] Copy/move `LKS/` folder to `UserPrefs/StdScripts/cModules/LKS/`
+- [x] Copy/move `LKS/` folder to `UserPrefs/StdScripts/cModules/LKS/`
 - [ ] Restart 3DCoat to load the cModule
 - [ ] Verify cExtension hooks are firing (check console output)
 - [ ] Verify Qt panel appears and doesn't block viewport
 
-### Phase 3: Update Imports
-- [ ] Update all imports from `from _utils.` to `from cModules.LKS._utils.`
-- [ ] Update all imports from `from _ops.` to `from cModules.LKS._ops.`
+### Phase 3: Update Imports (SOLVED via sys.path)
+- [x] ~~Update all imports from `from _utils.` to `from cModules.LKS._utils.`~~
+- [x] ~~Update all imports from `from _ops.` to `from cModules.LKS._ops.`~~
+- [x] **SOLUTION**: Added LKS root to `sys.path` in `__onstartup.py` - relative imports now work!
 - [ ] Test all operators still work
 
 ### Phase 4: Register Menu Items
-- [ ] Register all actions as menu items in `__onstartup.py`
-- [ ] Reassign shortcuts via Edit → Preferences → Hotkeys
+- [x] Register all actions as menu items in `__onstartup.py`
+- [ ] Reassign shortcuts via Edit → Preferences → Hotkeys → search "LKS"
 - [ ] Remove old Addon from `UserPrefs/Addons/`
 
 ---
