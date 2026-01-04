@@ -2,82 +2,89 @@
 applyTo: '**'
 ---
 
-# LKS 3DCoat Addon - Codebase Router
+# LKS 3DCoat cModule - Codebase Router
 
 A ledger of existing code, utilities, and resources. This file provides quick links to what currently exists in the repository.
 
 ## 🚦 Start Here
 
 - `copilot_style_guide.instructions.md`: Python scripting conventions for this workspace
-- `copilot_3dcoat.instructions.md`: 3DCoat-specific patterns, folder visibility, panel development
-- `copilot_3dcoat_api.instructions.md`: 3DCoat API reference, magic strings, known commands
+- `copilot_3dcoat.instructions.md`: 3DCoat-specific patterns, cModule development, Qt UI
+- `copilot_3dcoat_api.instructions.md`: 3DCoat API gotchas and quirks
 
 ## 🖥️ Environment
 
 - **Windows + PowerShell** - Chain commands with `;`, normalize paths with `Resolve-Path`
-- **Self-contained** - No pip, no venv, no external dependencies
+- **cModule format** - Located at `StdScripts/cModules/LKS/` for working cExtension hooks
+- **Dependencies via requirements.txt** - Auto-installed by 3DCoat (PySide6, etc.)
 - **3DCoat embedded Python** - The `coat` module is provided at runtime
 
 ## 🗺️ Folder Structure
 
 ```
-UserProjects/
-├── <ActionScript>.py          # Exposed to 3DCoat - minimal invokers
-├── LKS_Tools_Panel.py         # Main tools panel (comprehensive, all features)
-├── LKS_ExternalPanel_Launch.py  # Launch external panel
-├── LKS_ExternalPanel_Stop.py    # Stop external panel
-├── _ops/                      # Hidden from 3DCoat - configurable operators
-│   ├── __init__.py            # Package docstring
+LKS/                           # cModule root (in StdScripts/cModules/)
+├── __init__.py               # Package marker
+├── __onstartup.py            # Runs on 3DCoat startup (Qt init)
+├── requirements.txt          # PySide6, etc. (auto-installed)
+├── LKS.py                    # Main extension (cExtension + Qt panel)
+├── coat.pyi                  # Type hints for IDE
+├── actions/                  # Action scripts for menu registration
+│   ├── Autopo_*.py           # Autopo workflow actions
+│   ├── Brush_*.py            # Brush setting actions
+│   ├── SculptObject_*.py     # Sculpt object actions
+│   └── ...
+├── _ops/                     # Operators (workflow orchestration)
+│   ├── __init__.py
 │   ├── SculptObject_Decimate.py    # Decimate with scope/config
 │   ├── SculptObject_SetGhost.py    # Ghost/unghost/invert/isolate
 │   ├── SculptObject_IdColors.py    # Fill with ID colors
 │   ├── SculptObject_Scale.py       # Scale elements
-│   ├── SculptObject_Visibility.py  # Visibility operations
 │   ├── SculptObject_Resample.py    # Resample operations
 │   ├── SculptObject_ModeConvert.py # Mode conversion
 │   ├── SculptObject_Subdivide.py   # Subdivide operations
 │   └── ...
-├── _utils/                    # Hidden from 3DCoat - shared utilities
-│   ├── __init__.py            # Package exports
-│   ├── scene_api.py           # Thin wrappers for coat iterators
-│   ├── scope_utils.py         # Scope enum and resolution
+├── _utils/                   # Low-level utilities
+│   ├── __init__.py           # Package exports
+│   ├── scene_api.py          # Thin wrappers for coat iterators
+│   ├── scope_utils.py        # Scope enum and resolution
 │   ├── SceneElement_visibility_utils.py  # Pure visibility/ghost functions
-│   ├── Scene_layer_utils.py   # Layer management
-│   ├── coat_ui_utils.py       # UI command abstractions
-│   ├── object_utils.py        # Object manipulation
+│   ├── Scene_layer_utils.py  # Layer management
+│   ├── coat_ui_utils.py      # UI command abstractions
+│   ├── object_utils.py       # Object manipulation
 │   ├── Volume_decimate_utils.py  # Decimate operations (raw args)
 │   ├── Volume_resample_utils.py  # Resample operations (raw args)
 │   ├── Volume_subdivide_utils.py # Subdivide/symmetry (raw args)
-│   ├── Volume_mode_utils.py      # Mode conversion (raw args)
+│   ├── Volume_mode_utils.py  # Mode conversion (raw args)
 │   ├── Volume_density_utils.py   # Density matching (raw args)
 │   ├── Scene_cleanup_utils.py    # Cleanup after mesh ops
 │   ├── SceneElement_boolean_utils.py # Live boolean operations
-│   ├── Scene_tiling_utils.py  # Tiling grid setup
-│   ├── lks_settings.py        # Persistent settings singleton
+│   ├── Scene_tiling_utils.py # Tiling grid setup
+│   ├── lks_settings.py       # Persistent settings singleton
 │   ├── brush_settings_utils.py # Brush configuration
-│   ├── autopo_utils.py        # Autopo workflow automation
-│   ├── ipc_protocol.py        # IPC data structures for external panel
-│   ├── ipc_server.py          # IPC command handlers
-│   ├── lks_extension.py       # cExtension for IPC polling
+│   ├── autopo_utils.py       # Autopo workflow automation
 │   └── scene_iteration_utils.py # Legacy - prefer scene_api.py
-├── _external/                 # External panel app (separate process)
-│   ├── lks_panel_app.py       # Entry point with dep checking
-│   └── lks_panel/             # Panel package
-│       ├── __init__.py
-│       ├── app.py             # Main tkinter application
-│       ├── ipc_client.py      # IPC client for panel
-│       ├── widgets.py         # Reusable widgets
-│       └── tooltip.py         # Tooltip utility
-├── _ipc/                      # IPC exchange folder (JSON files)
-├── _archive/                  # Old/deprecated scripts
-├── _example_code/             # Reference implementations
-└── <Category>/                # Visible subfolders become categories
+├── _docs/                    # Documentation
+│   ├── cmodule_migration_plan.md  # Migration from Addon to cModule
+│   └── magic_ui_strings.md   # Registry of 3DCoat magic strings
+├── _example_code/            # Reference implementations
+├── _external/                # Legacy external panel (deprecated)
+└── .github/instructions/     # Copilot instruction files
 ```
 
-**Visibility rules:**
-- Root `.py` files appear in 3DCoat's script browser
-- `_` prefixed folders are hidden but importable
-- Non-prefixed subfolders appear as categories
+## 🔌 cModule Entry Points
+
+### `LKS.py` - Main Extension
+- Defines `LKSExtension(cPy.cCore.cExtension)` with per-frame hooks
+- Contains `LKSPanel` Qt widget for non-blocking UI
+- Auto-registers extension on import, shows panel when run
+
+### `__onstartup.py` - Startup Initialization
+- Configures Qt/PySide6 for 3DCoat compatibility
+- Creates QApplication with OpenGL workarounds
+
+### `requirements.txt` - Dependencies
+- Lists pip packages auto-installed by 3DCoat
+- Currently: `PySide6`
 
 ## 🎯 Operators (`_ops/`)
 
@@ -91,19 +98,11 @@ def main(scope: Scope, ghost: bool = True, mode: GhostMode = GhostMode.SET) -> i
     ...
 ```
 
-**Usage from action script:**
+**Usage from action script (cModule import path):**
 ```python
-from _ops.SculptObject_SetGhost import main as op_main
-from _utils.scope_utils import Scope
+from cModules.LKS._ops.SculptObject_SetGhost import main as op_main
+from cModules.LKS._utils.scope_utils import Scope
 op_main(scope=Scope.ALL, ghost=False)
-```
-
-**Usage from panel button:**
-```python
-def UnghostAll(self) -> None:
-    from _ops.SculptObject_SetGhost import main as op_main
-    from _utils.scope_utils import Scope
-    op_main(scope=Scope.ALL, ghost=False)
 ```
 
 ### Available Operators

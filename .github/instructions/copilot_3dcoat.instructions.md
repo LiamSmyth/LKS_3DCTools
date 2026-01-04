@@ -2,9 +2,38 @@
 applyTo: '**'
 ---
 
-# 3DCoat Python Scripting Guidelines
+# 3DCoat cModule Development Guidelines
 
-This document describes the conventions, constraints, and patterns specific to Python scripting within the 3DCoat addon environment. Use in conjunction with `copilot_style_guide.instructions.md` (general patterns) and `copilot_3dcoat_api.instructions.md` (gotchas only).
+This document describes the conventions, constraints, and patterns specific to Python scripting within the **3DCoat cModule environment**. This workspace is a **cModule** (located at `StdScripts/cModules/LKS/`), NOT an Addon.
+
+Use in conjunction with `copilot_style_guide.instructions.md` (general patterns) and `copilot_3dcoat_api.instructions.md` (gotchas only).
+
+---
+
+## 🔴 MANDATORY: This is a cModule, NOT an Addon
+
+### Key Differences from Addons
+
+| Feature | Addon (Old) | cModule (Current) |
+|---------|-------------|-------------------|
+| **Location** | `UserPrefs/Addons/LKS/UserProjects/` | `UserPrefs/StdScripts/cModules/LKS/` |
+| **cExtension hooks** | ❌ Don't work | ✅ Work (preprocess, postprocess, etc.) |
+| **Dependencies** | Manual install | Auto-install via `requirements.txt` |
+| **Startup code** | None | `__onstartup.py` runs on 3DCoat launch |
+| **Qt/PySide6 UI** | Not available | ✅ Full Qt support, non-blocking |
+| **Import prefix** | `from _utils.` | `from cModules.LKS._utils.` |
+
+### cModule Entry Points
+
+```
+LKS/                           # Root of cModule
+├── __init__.py               # Package marker (required)
+├── __onstartup.py            # Runs on 3DCoat startup
+├── requirements.txt          # Auto-installed dependencies
+├── LKS.py                    # Main extension (cExtension + UI)
+├── coat.pyi                  # Type hints for IDE
+└── ...
+```
 
 ---
 
@@ -14,7 +43,7 @@ This document describes the conventions, constraints, and patterns specific to P
 
 ### Always Check `coat.pyi`
 
-The file `UserProjects/coat.pyi` is the authoritative type stub. Before using ANY `coat` method:
+The file `coat.pyi` is the authoritative type stub. Before using ANY `coat` method:
 
 1. **Search coat.pyi** using `grep_search` to verify the method exists
 2. **Check the exact signature** - parameter names, types, return type
@@ -34,51 +63,96 @@ grep_search: "setEditBoxValue" includePattern="coat.pyi"
 
 ---
 
+## 🔌 cExtension Pattern (Per-Frame Hooks)
+
+### Working cExtension (cModule Only!)
+
+```python
+import cPy.cCore  # NOT coat.cExtension!
+import coat
+
+class LKSExtension(cPy.cCore.cExtension):
+    def __init__(self):
+        cPy.cCore.cExtension.__init__(self)
+        self._frame_count = 0
+
+    def preprocess(self):
+        """Called EVERY FRAME before tools processing."""
+        self._frame_count += 1
+
+    def postprocess(self):
+        """Called EVERY FRAME after tools processing."""
+        pass
+
+    def onNew(self):
+        """Called when new scene is created."""
+        pass
+
+    def onChangeRoom(self):
+        """Called when room changes."""
+        pass
+
+    def onExit(self):
+        """Called when 3DCoat exits."""
+        pass
+
+# Just instantiate - auto-registers with 3DCoat's frame loop!
+lksExtension = LKSExtension()
+```
+
+**CRITICAL:** This ONLY works in cModules. Addons cannot use cExtension hooks.
+
+---
+
 ## ⚠️ Critical Constraints
 
-### 1. Self-Contained Environment (MANDATORY)
-- **No external dependencies.** This workspace cannot use pip, cannot install packages, and cannot reference external repos.
-- All code must be self-contained within this workspace.
-- All utilities must live in `_utils/` within the workspace.
+### 1. Dependencies via requirements.txt
+- cModules CAN use pip packages via `requirements.txt`
+- 3DCoat auto-installs on module load
+- Example: `PySide6` for Qt UI
 
 ### 2. 3DCoat's Embedded Python
-- 3DCoat embeds its own Python interpreter.
-- The `coat` module is provided by 3DCoat at runtime.
+- 3DCoat embeds its own Python interpreter
+- The `coat` module is provided by 3DCoat at runtime
+- Additional APIs available: `cPy.cCore`, `cPy.cIDE`, `cPy.cRender`
 
-### 3. Folder Visibility to 3DCoat
-- **Root `UserProjects/` folder** is exposed directly to 3DCoat's script browser.
-- Any `.py` file in root becomes a runnable script in 3DCoat.
-- Subfolders starting with `_` (e.g., `_utils/`, `_archive/`) are hidden from 3DCoat's UI but still importable.
-- Subfolders without `_` prefix appear as script categories in 3DCoat.
+### 3. Import Paths in cModules
+```python
+# From within cModule files, use full path:
+from cModules.LKS._utils.scene_api import SceneAPI
+from cModules.LKS._ops.SculptObject_Decimate import main as decimate_op
+
+# The cModules path is automatically in sys.path
+```
 
 ---
 
 ## 🏗️ Architecture Overview
 
-### Folder Structure
+### Folder Structure (cModule Format)
 ```
-UserProjects/
-├── <ActionScript>.py          # Exposed to 3DCoat - minimal action invokers
-├── _ops/                      # Hidden from 3DCoat - configurable operators
+LKS/                           # cModule root (in StdScripts/cModules/)
+├── __init__.py               # Package marker
+├── __onstartup.py            # Runs on 3DCoat startup
+├── requirements.txt          # PySide6, etc.
+├── LKS.py                    # Main extension (cExtension + Qt panel)
+├── coat.pyi                  # Type hints
+├── _ops/                     # Operators (workflow orchestration)
 │   ├── __init__.py
 │   ├── SculptObject_Decimate.py
 │   ├── SculptObject_SetGhost.py
-│   ├── SculptObject_IdColors.py
 │   └── ...
-├── _utils/                    # Hidden from 3DCoat - low-level utilities
+├── _utils/                   # Low-level utilities
 │   ├── __init__.py
-│   ├── Volume_decimate_utils.py  # Decimate ops (raw args)
-│   ├── Volume_resample_utils.py  # Resample ops (raw args)
-│   ├── SceneElement_visibility_utils.py  # Ghost/hide ops
-│   ├── scene_api.py           # Scene iteration wrappers
-│   ├── scope_utils.py         # Scope enum + resolution
-│   ├── coat_ui_utils.py       # UI command abstractions
-│   ├── lks_settings.py        # Persistent settings cache
+│   ├── scene_api.py
+│   ├── scope_utils.py
+│   ├── coat_ui_utils.py
 │   └── ...
-├── _archive/                  # Old/deprecated scripts
-├── _example_code/             # Reference implementations
-└── <Category>/                # Visible subfolders become categories
-    └── <Script>.py
+├── actions/                  # Thin scripts for menu items
+│   ├── decimate_half_selected.py
+│   └── ghost_toggle_subtree.py
+├── _docs/                    # Documentation
+└── .github/instructions/     # Copilot instructions
 ```
 
 ### Layered Architecture
@@ -108,20 +182,15 @@ UserProjects/
 
 ### Script Types
 
-#### 1. Action Scripts (Root Level)
-- **Location:** `UserProjects/*.py`
+#### 1. Action Scripts (`actions/`)
+- **Location:** `LKS/actions/*.py` or registered via `coat.ui.insertInMenu()`
 - **Purpose:** Minimal invokers that call operators with configuration
-- **Naming:** `SculptObject_<Action>_<Config>_<Scope>.py`
-- **Examples:**
-  - `SculptObject_Decimate_Half_Selected.py`
-  - `SculptObject_Ghost_Toggle_Subtree.py`
-  - `Brush_IncrementDetailsLevel.py`
-  - `Autopo_ToSculpt.py`
+- **Naming:** `decimate_half_selected.py` (lowercase, descriptive)
 - **Pattern:**
   ```python
   """Brief description. Room: Sculpt. Action: One-line."""
-  from _ops.SculptObject_Decimate import main as op_main
-  from _utils.scope_utils import Scope
+  from cModules.LKS._ops.SculptObject_Decimate import main as op_main
+  from cModules.LKS._utils.scope_utils import Scope
 
   def main() -> None:
       op_main(scope=Scope.CURRENT, reduction_percent=50.0)
@@ -129,14 +198,27 @@ UserProjects/
   main()
   ```
 
-#### 2. Operators (`_ops/`)
-- **Location:** `UserProjects/_ops/*.py`
+#### 2. Menu Registration (User-Assignable Hotkeys)
+```python
+# In LKS.py or __onstartup.py
+import coat
+
+# Register action script in menu - user assigns hotkey via Preferences
+coat.ui.insertInMenu(
+    "Sculpt",                                    # Menu location
+    "$LKS_DecimateHalf",                        # Unique ID
+    coat.io.documents("StdScripts/cModules/LKS/actions/decimate_half_selected.py")
+)
+```
+
+#### 3. Operators (`_ops/`)
+- **Location:** `LKS/_ops/*.py`
 - **Purpose:** Configurable workflows called by both actions and panel buttons
 - **Pattern:** `main()` function with explicit typed parameters
 - **Config Rule:** ≤3 params = kwargs, >3 params = Config dataclass
 
-#### 3. Utility Modules (`_utils/`)
-- **Location:** `UserProjects/_utils/*.py`
+#### 4. Utility Modules (`_utils/`)
+- **Location:** `LKS/_utils/*.py`
 - **Purpose:** Low-level primitives with RAW ARGUMENTS ONLY (no dataclasses)
 - **Naming:** `Volume_*` for mesh ops, `SceneElement_*` for tree ops, `Scene_*` for global ops
 - **Goal:** Abstract away 3DCoat's "magic strings" and UI quirks
@@ -233,7 +315,74 @@ coat.io.step(4)  # Wait 4 frames for operation to complete
 
 ---
 
-## 📦 Settings Persistence
+## �️ Qt/PySide6 UI (cModule Feature)
+
+### Why Qt for UI?
+
+- `coat.dialog()` BLOCKS the viewport - you cannot sculpt while a dialog is open
+- Qt/PySide6 panels run non-blocking alongside 3DCoat
+- Requires `requirements.txt` with `PySide6` (auto-installed by 3DCoat)
+
+### Qt Initialization (in `__onstartup.py`)
+
+```python
+import sys
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
+
+# CRITICAL: Configure OpenGL before QApplication
+QApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
+
+# Create QApplication with flag to avoid OpenGL conflicts
+if not QApplication.instance():
+    app = QApplication(["-no-opengl"])
+```
+
+### Processing Qt Events (in cExtension)
+
+```python
+import cPy.cCore
+from PySide6.QtWidgets import QApplication
+
+class LKSExtension(cPy.cCore.cExtension):
+    def preprocess(self):
+        """Called every frame - process Qt events."""
+        app = QApplication.instance()
+        if app:
+            app.processEvents()
+```
+
+### Simple Panel Example
+
+```python
+from PySide6.QtWidgets import QWidget, QPushButton, QVBoxLayout
+
+class LKSPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("LKS Tools")
+        self.setMinimumSize(200, 100)
+        
+        layout = QVBoxLayout()
+        btn = QPushButton("Decimate 50%")
+        btn.clicked.connect(self.on_decimate_clicked)
+        layout.addWidget(btn)
+        
+        self.setLayout(layout)
+    
+    def on_decimate_clicked(self):
+        from cModules.LKS._ops.SculptObject_Decimate import main as decimate
+        from cModules.LKS._utils.scope_utils import Scope
+        decimate(scope=Scope.CURRENT, reduction_percent=50.0)
+
+# Create and show panel
+panel = LKSPanel()
+panel.show()
+```
+
+---
+
+## �📦 Settings Persistence
 
 ### LKS Settings System
 Use a centralized settings cache for persistent configuration:
@@ -387,7 +536,7 @@ f"$BrushConstructor::RemoveStretching[{brush_type}]"
 
 ## 🚫 What NOT to Do
 
-1. **Don't use pip or external packages** - Not available in 3DCoat Python
+1. ~~**Don't use pip or external packages**~~ - cModules CAN use pip via `requirements.txt`
 2. **Don't create .venv** - 3DCoat has its own interpreter
 3. **Don't put complex logic in root scripts** - Keep them as thin invokers
 4. **Don't hardcode magic strings in action scripts** - Abstract to utilities
