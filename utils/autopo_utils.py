@@ -311,6 +311,34 @@ def clear_retopo_mesh() -> None:
 
 
 # =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def _load_params_from_settings() -> AutopoParams:
+    """
+    Load AutopoParams from cached LKS settings.
+
+    Returns:
+        AutopoParams populated from settings cache
+    """
+    from utils.lks_settings import get_autopo_settings
+    settings = get_autopo_settings()
+
+    return AutopoParams(
+        target_polycount=settings.autopo_polycount,
+        capture_details=settings.autopo_capture_details,
+        auto_density=settings.autopo_auto_density,
+        hardsurface=settings.autopo_hardsurface,
+        voxelize=settings.autopo_voxelize,
+        voxelize_polycount=settings.autopo_voxelize_polycount,
+        decimate_if_above=settings.autopo_decimate_if_above,
+        decimation_limit=settings.autopo_decimation_limit,
+        tangent_smooth=settings.autopo_tangent_smooth,
+        bypass_density_modal=settings.autopo_bypass_density_modal,
+    )
+
+
+# =============================================================================
 # HIGH-LEVEL WORKFLOW FUNCTIONS
 # =============================================================================
 
@@ -322,13 +350,13 @@ def autopo_to_sculpt(params: AutopoParams | None = None) -> bool:
     object (as a sibling), rather than as a child of the original.
 
     Args:
-        params: AutopoParams (uses defaults if None)
+        params: AutopoParams (loads from settings if None)
 
     Returns:
         True if successful, False on error
     """
     if params is None:
-        params = AutopoParams()
+        params = _load_params_from_settings()
 
     # Cache original object info
     current = coat.Scene.current()
@@ -390,13 +418,13 @@ def autopo_to_multiresolution(params: AutopoParams | None = None) -> bool:
     Run autopo and import as multiresolution lowest level.
 
     Args:
-        params: AutopoParams (uses defaults if None)
+        params: AutopoParams (loads from settings if None)
 
     Returns:
         True if successful, False on error
     """
     if params is None:
-        params = AutopoParams()
+        params = _load_params_from_settings()
 
     # Run autopo
     if not execute_autopo(params):
@@ -423,19 +451,5 @@ def run_autopo_with_settings() -> bool:
 
     Reads all autopo parameters from the autopo settings cache.
     """
-    from utils.lks_settings import get_autopo_settings
-    settings = get_autopo_settings()
-
-    params = AutopoParams(
-        target_polycount=settings.autopo_polycount,
-        capture_details=settings.autopo_capture_details,
-        auto_density=settings.autopo_auto_density,
-        hardsurface=settings.autopo_hardsurface,
-        voxelize=settings.autopo_voxelize,
-        voxelize_polycount=settings.autopo_voxelize_polycount,
-        decimate_if_above=settings.autopo_decimate_if_above,
-        decimation_limit=settings.autopo_decimation_limit,
-        tangent_smooth=settings.autopo_tangent_smooth,
-        bypass_density_modal=settings.autopo_bypass_density_modal,
-    )
+    params = _load_params_from_settings()
     return execute_autopo(params)

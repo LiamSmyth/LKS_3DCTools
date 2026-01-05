@@ -109,11 +109,13 @@ def _split_element(element: coat.SceneElement, close_holes: bool) -> int:
     Returns:
         Number of new elements created
     """
-    # Cache parent and existing children names
+    # Cache parent and existing children BEFORE split
     parent: coat.SceneElement = element.parent()
-    existing_names: set[str] = set()
+
+    # Build a set of existing child element pointers (more reliable than names)
+    existing_children: list[coat.SceneElement] = []
     for i in range(parent.childCount()):
-        existing_names.add(parent.child(i).name())
+        existing_children.append(parent.child(i))
 
     # Ensure element is selected and in surface mode
     element.selectOne()
@@ -125,24 +127,31 @@ def _split_element(element: coat.SceneElement, close_holes: bool) -> int:
     coat.ui.cmd(CMD_SEPARATE_HIDDEN)
     wait_frames(DEFAULT_WAIT_FRAMES)
 
-    # Close holes on original element
-    if close_holes:
-        element.selectOne()
-        coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
-        wait_frames(DEFAULT_WAIT_FRAMES)
-
-    # Find newly created elements (by name comparison)
+    # Find newly created elements (elements not in our cached list)
     new_elements: list[coat.SceneElement] = []
     for i in range(parent.childCount()):
         child: coat.SceneElement = parent.child(i)
-        if child.name() not in existing_names:
+        is_existing: bool = False
+        for existing in existing_children:
+            if child == existing:
+                is_existing = True
+                break
+        if not is_existing:
             new_elements.append(child)
 
-    # Close holes on all new elements
+    # Close holes ONLY on original element and newly created elements
     if close_holes:
+        # Close holes on original element
+        element.selectOne()
+        wait_frames(1)
+        coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
+        wait_frames(DEFAULT_WAIT_FRAMES)
+
+        # Close holes on each new element individually
         for new_elem in new_elements:
             new_elem.selectOne()
+            wait_frames(1)
             coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
-            wait_frames(2)
+            wait_frames(DEFAULT_WAIT_FRAMES)
 
     return len(new_elements)

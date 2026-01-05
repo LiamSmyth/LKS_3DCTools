@@ -210,6 +210,39 @@ def create_extension_tab(
 
     layout.addWidget(info_section)
 
+    # =========================================================================
+    # TOOLS SECTION
+    # =========================================================================
+    tools_section = CollapsibleSection(
+        title="🔧 Tools", color="#ce93d8", collapsed=False)
+
+    # Keep reference to editor window to prevent garbage collection
+    _editor_window_ref: list = []
+
+    def on_launch_hotkey_editor() -> None:
+        try:
+            from utils.hotkey_editor import launch_hotkey_editor
+            log_info("Launching Hotkey Editor...")
+            window = launch_hotkey_editor()
+            if window:
+                _editor_window_ref.clear()
+                _editor_window_ref.append(window)
+                log_success("Hotkey Editor opened")
+            else:
+                log_error("Failed to launch Hotkey Editor (PySide6 required)")
+        except Exception as e:
+            log_error(f"Failed to launch Hotkey Editor: {e}")
+
+    tools_grid = ButtonGrid(columns=1)
+    tools_grid.add_button(
+        "🔑 Hotkey Editor",
+        on_launch_hotkey_editor,
+        "Edit and clean up 3DCoat hotkey bindings"
+    )
+    tools_section.content_layout.addWidget(tools_grid)
+
+    layout.addWidget(tools_section)
+
     layout.addStretch()
 
     return container

@@ -315,6 +315,86 @@ def create_autopo_section(
                         "Autopo then import as multires")
     layout.addWidget(run_grid)
 
+    # --- Show Retopo in Sculpt checkbox ---
+    show_retopo_row = QHBoxLayout()
+    show_retopo_row.setContentsMargins(0, 0, 0, 0)
+    show_retopo_cb = QCheckBox("Show Retopo in Sculpt")
+    show_retopo_cb.setToolTip("Show retopo objects while in sculpt room")
+    widgets["show_retopo"] = show_retopo_cb
+
+    # Query initial state from 3DCoat
+    try:
+        import coat
+        initial_state: bool = coat.ui.getBoolValue(
+            "$ShowRetopoObjectsInVoxelRoom")
+        show_retopo_cb.setChecked(initial_state)
+    except Exception:
+        pass  # If we can't query, leave unchecked
+
+    def on_show_retopo_changed(state: int) -> None:
+        try:
+            import coat
+            coat.ui.setBoolValue("$ShowRetopoObjectsInVoxelRoom", state != 0)
+        except Exception as e:
+            log_error(f"Failed to toggle show retopo: {e}")
+
+    show_retopo_cb.stateChanged.connect(on_show_retopo_changed)
+    show_retopo_row.addWidget(show_retopo_cb)
+    show_retopo_row.addStretch()
+
+    show_retopo_container = QWidget()
+    show_retopo_container.setLayout(show_retopo_row)
+    show_retopo_container.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(show_retopo_container)
+
+    # --- Delete matching retopo objects ---
+    def delete_matching_retopos() -> None:
+        """Delete retopo objects whose names match selected sculpt elements."""
+        try:
+            import coat
+            from utils.scene_api import SceneAPI
+
+            # Get selected sculpt element names
+            selected_elements: list[coat.SceneElement] = SceneAPI.get_selected_elements(
+            )
+            if not selected_elements:
+                log_error("No sculpt objects selected")
+                return
+
+            sculpt_names: set[str] = {el.name() for el in selected_elements}
+
+            # Get retopo model
+            retopo_model: coat.Model = coat.Model.fromRetopo()
+            objects_count: int = retopo_model.getObjectsCount()
+
+            if objects_count == 0:
+                log_error("No retopo objects found")
+                return
+
+            # Find matching retopo objects (iterate in reverse to safely delete)
+            deleted_count: int = 0
+            for i in range(objects_count - 1, -1, -1):
+                retopo_name: str = retopo_model.getObjectName(i)
+                if retopo_name in sculpt_names:
+                    retopo_model.removeObject(i)
+                    deleted_count += 1
+
+            if deleted_count > 0:
+                log_success(f"Deleted {deleted_count} retopo object(s)")
+            else:
+                log_error("No matching retopo objects found")
+
+        except Exception as e:
+            log_error(f"Failed to delete retopos: {e}")
+
+    delete_grid = ButtonGrid(columns=1)
+    delete_grid.add_button(
+        "🗑️ Delete Retopos",
+        delete_matching_retopos,
+        "Delete retopo objects matching selected sculpt elements"
+    )
+    layout.addWidget(delete_grid)
+
     return section
 
 

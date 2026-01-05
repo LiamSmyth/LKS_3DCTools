@@ -127,7 +127,15 @@ def _remesh_resymm_element(
     # Decimate back to target if polycount increased significantly
     attempt: int = 0
     while new_polycount > target_polycount + POLYCOUNT_TOLERANCE and attempt < MAX_DECIMATE_ATTEMPTS:
-        decimate_to_target(target_polycount)
+        # Calculate actual reduction percent needed
+        reduction_percent: float = 100.0 * \
+            (1.0 - target_polycount / new_polycount)
+        # Use percent-based decimation for accuracy
+        from utils.Volume_decimate_utils import execute_decimate
+        execute_decimate(
+            target_polycount=target_polycount,
+            reduction_percent=reduction_percent
+        )
         new_polycount = vol.getPolycount()
         attempt += 1
 
