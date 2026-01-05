@@ -8,7 +8,9 @@ Uses ghost isolation pattern to ensure fill only affects one object at a time.
 """
 import coat
 import random
-from utils.scene_api import SceneAPI
+from pathlib import Path
+from datetime import datetime
+from utils.scene_api import SceneAPI, get_element_path
 from utils.scope_utils import Scope, resolve_scope
 from utils.coat_ui_utils import (
     CMD_FILL_LAYER,
@@ -22,9 +24,43 @@ from utils.SceneElement_visibility_utils import (
     ghost_elements,
 )
 
+
+# =============================================================================
+# DEBUG MODE - set to True to enable debug output to file
+# =============================================================================
+
+DEBUG_MODE: bool = True
+DEBUG_LOG_PATH: Path = Path(__file__).parent.parent / \
+    "data" / "idcolors_debug.log"
+
+
+def _debug_log(message: str) -> None:
+    """Write debug message to log file."""
+    if not DEBUG_MODE:
+        return
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            timestamp: str = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass  # Ignore logging errors
+
+
+def _debug_clear() -> None:
+    """Clear the debug log file."""
+    if not DEBUG_MODE:
+        return
+    try:
+        with open(DEBUG_LOG_PATH, "w", encoding="utf-8") as f:
+            f.write(
+                f"=== IdColors Debug Log - {datetime.now().isoformat()} ===\n\n")
+    except Exception:
+        pass
+
 # =============================================================================
 # CONFIGURATION DEFAULTS
 # =============================================================================
+
 
 DEFAULT_LAYER_NAME: str = "IDMap"
 DEFAULT_MIN_COLOR: int = 0
@@ -79,12 +115,32 @@ def main(
     # Get current element for reference (needed for TREE scope and selection restore)
     active_element: coat.SceneElement | None = SceneAPI.get_current_element()
 
+    # DEBUG: Clear and start new log session
+    if DEBUG_MODE:
+        _debug_clear()
+        _debug_log(f"=== ID Colors Operation Started ===")
+        _debug_log(f"Scope: {scope}")
+        _debug_log(
+            f"Active element: {active_element.name() if active_element else 'None'}")
+
     if not active_element and scope == Scope.TREE:
         show_error("No object selected", 2000)
         return 0
 
     # Resolve which elements to operate on
     elements: list[coat.SceneElement] = resolve_scope(scope)
+
+    # DEBUG: Log all resolved elements with their paths
+    if DEBUG_MODE:
+        _debug_log(
+            f"\n=== resolve_scope() returned {len(elements)} elements ===")
+        for i, el in enumerate(elements):
+            path: str = get_element_path(el)
+            name: str = el.name() if el else "?"
+            is_sculpt: bool = el.isSculptObject() if el else False
+            py_id: int = id(el)
+            _debug_log(
+                f"  [{i:3d}] name={name:<20} sculpt={is_sculpt}  id={py_id}  path={path}")
 
     if not elements:
         show_error("No objects to process", 2000)
@@ -104,6 +160,16 @@ def main(
     # Collect ALL scene elements for ghost management
     all_elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects()
 
+    # DEBUG: Log all scene elements
+    if DEBUG_MODE:
+        _debug_log(
+            f"\n=== collect_all_sculpt_objects() returned {len(all_elements)} elements ===")
+        for i, el in enumerate(all_elements):
+            path: str = get_element_path(el)
+            name: str = el.name() if el else "?"
+            py_id: int = id(el)
+            _debug_log(f"  [{i:3d}] name={name:<20} id={py_id}  path={path}")
+
     # Cache ghost states for restoration
     ghost_cache: dict[int, bool] = cache_ghost_states(all_elements)
 
@@ -112,10 +178,29 @@ def main(
 
     # Fill each element (unghost one at a time)
     count: int = 0
+    sculpt_count: int = 0
+
+    if DEBUG_MODE:
+        _debug_log(f"\n=== Fill Loop ===")
+
     for el in elements:
         if el.isSculptObject():
+            sculpt_count += 1
+            if DEBUG_MODE:
+                path: str = get_element_path(el)
+                py_id: int = id(el)
+                _debug_log(
+                    f"  Fill #{sculpt_count}: {el.name()} id={py_id} path={path}")
             _fill_element_with_random_color(el, min_color)
             count += 1
+
+    # DEBUG: Summary
+    if DEBUG_MODE:
+        _debug_log(f"\n=== Summary ===")
+        _debug_log(f"Total elements in loop: {len(elements)}")
+        _debug_log(f"Sculpt objects filled: {count}")
+        _debug_log(f"Log file: {DEBUG_LOG_PATH}")
+        show_message(f"Debug log: {DEBUG_LOG_PATH.name}", 3000)
 
     # Restore original ghost states
     restore_ghost_states(all_elements, ghost_cache)

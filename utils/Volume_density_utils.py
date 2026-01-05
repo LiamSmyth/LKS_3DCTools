@@ -39,8 +39,14 @@ def calculate_target_polycount_by_scale(
         target_volume: The volume to calculate target polycount for
 
     Returns:
-        Target polycount to match the reference density
+        Target polycount to match the reference density, or 0 if calculation
+        is not possible (zero dimensions or zero polycount)
     """
+    # Guard: Check reference has polygons
+    ref_polycount: int = reference_volume.getPolycount()
+    if ref_polycount <= 0:
+        return 0
+
     # Get bounding boxes
     ref_aabb: coat.boundbox = reference_volume.calcWorldSpaceAABB()
     tgt_aabb: coat.boundbox = target_volume.calcWorldSpaceAABB()
@@ -52,11 +58,14 @@ def calculate_target_polycount_by_scale(
     tgt_size: coat.vec3 = tgt_aabb.GetSize()
     tgt_dimension: float = (tgt_size.x + tgt_size.y + tgt_size.z) / 3.0
 
+    # Guard: Check dimensions are valid (prevent divide by zero)
+    if ref_dimension <= 0.0 or tgt_dimension <= 0.0:
+        return 0
+
     # Polycount scales with square of size ratio
     scale_ratio: float = tgt_dimension / ref_dimension
     polycount_ratio: float = scale_ratio ** 2
 
-    ref_polycount: int = reference_volume.getPolycount()
     target_polycount: int = math.floor(ref_polycount * polycount_ratio)
 
     return target_polycount
@@ -87,15 +96,21 @@ def resample_to_match_density(
 
     vol: coat.Volume = element.Volume()
 
+    # Guard: Skip elements with zero polygons
+    current_polycount: int = vol.getPolycount()
+    if current_polycount <= 0:
+        print(f"Skipped '{element.name()}' - zero polygons")
+        return
+
     # Ensure surface mode
     if not vol.isSurface():
         vol.toSurface()
 
     target_polycount: int = calculate_target_polycount_by_scale(
         reference_volume, vol)
-    current_polycount: int = vol.getPolycount()
 
-    if target_polycount <= 0 or current_polycount <= 0:
+    if target_polycount <= 0:
+        print(f"Skipped '{element.name()}' - invalid target polycount")
         return
 
     # Calculate resample ratio
@@ -142,20 +157,32 @@ def smart_match_density(
 
     vol: coat.Volume = element.Volume()
 
+    # Guard: Skip elements with zero polygons BEFORE any calculations
+    current_polycount: int = vol.getPolycount()
+    if current_polycount <= 0:
+        print(
+            f"[SmartDensity] '{element.name()}' has zero polygons, skipping")
+        return "skipped"
+
     # Ensure surface mode
     if not vol.isSurface():
         vol.toSurface()
         wait_frames(MESH_OP_WAIT_FRAMES)
+        # Re-check polycount after mode conversion
+        current_polycount = vol.getPolycount()
+        if current_polycount <= 0:
+            print(
+                f"[SmartDensity] '{element.name()}' has zero polygons after surface conversion, skipping")
+            return "skipped"
 
     target_polycount: int = calculate_target_polycount_by_scale(
         reference_volume, vol)
-    current_polycount: int = vol.getPolycount()
 
     print(
         f"[SmartDensity] '{element.name()}': current={current_polycount:,}, target={target_polycount:,}")
 
-    if target_polycount <= 0 or current_polycount <= 0:
-        print("[SmartDensity] Invalid polycount, skipping")
+    if target_polycount <= 0:
+        print("[SmartDensity] Invalid target polycount, skipping")
         return "skipped"
 
     polycount_ratio: float = target_polycount / current_polycount

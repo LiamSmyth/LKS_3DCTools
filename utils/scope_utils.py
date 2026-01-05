@@ -16,7 +16,12 @@ import coat
 from typing import Callable
 from enum import Enum
 
-from utils.scene_api import SceneAPI, SelectionAPI, deduplicate_elements
+from utils.scene_api import (
+    SceneAPI,
+    SelectionAPI,
+    deduplicate_elements,
+    get_element_path,
+)
 
 
 class Scope(Enum):
@@ -34,7 +39,7 @@ class Scope(Enum):
 def resolve_scope(
     scope: Scope,
     selected: list[coat.SceneElement] | None = None,
-    include_hidden: bool = False
+    include_hidden: bool = False,
 ) -> list[coat.SceneElement]:
     """
     Resolve a scope enum to a list of elements.
@@ -73,22 +78,44 @@ def _resolve_tree_scope(
     include_hidden: bool = False
 ) -> list[coat.SceneElement]:
     """
-    Resolve TREE scope: selection + all descendants.
+    Resolve TREE scope: selection + all direct descendants.
+
+    Uses custom traversal via childCount()/child(index) to avoid
+    3DCoat's iterateSubtree which traverses instance links.
+
+    WORKAROUND (3DCoat 2025): Two API bugs require special handling:
+    1. collectSelected() returns ALL instances when user selects one instance
+    2. iterateSubtree() and child() traverse through instance links
+
+    We take only the FIRST selected element to avoid processing both
+    original and instance (which share mesh data). This workaround may
+    become unnecessary if 3DCoat API is updated to not auto-select instances.
 
     Args:
         selected: Currently selected elements
         include_hidden: If True, include hidden elements
 
     Returns:
-        Selected elements plus all their descendants
+        Selected elements plus all their direct descendants (no instance traversal)
     """
-    tree_elements: list[coat.SceneElement] = []
-    for sel in selected:
-        if include_hidden:
-            tree_elements.extend(SceneAPI.collect_all_subtree(sel))
-        else:
-            tree_elements.extend(SceneAPI.collect_subtree(sel))
-    return deduplicate_elements(tree_elements)
+    if not selected:
+        return []
+
+    # WORKAROUND: When user selects one instance, 3DCoat returns BOTH instances.
+    # We only want to process the FIRST one (the one user actually clicked).
+    # Deduplicate first, then take only the first element.
+    unique_selected: list[coat.SceneElement] = deduplicate_elements(selected)
+
+    # WORKAROUND: Process only first selected element's subtree to avoid
+    # processing both original and instance when they share mesh data
+    first_selected: coat.SceneElement = unique_selected[0]
+
+    # Use direct traversal - avoids instance link traversal
+    tree_elements: list[coat.SceneElement] = SceneAPI.collect_subtree_direct(
+        first_selected, include_hidden=include_hidden
+    )
+
+    return tree_elements
 
 
 def _resolve_other_scope(
@@ -110,20 +137,20 @@ def _resolve_other_scope(
     if not root:
         return []
 
-    # Build set of IDs in selection trees
-    tree_ids: set[int] = set()
+    # Build set of paths in selection trees (path-based, not id-based)
+    tree_paths: set[str] = set()
     for sel in selected:
-        subtree = SceneAPI.collect_all_subtree(
-            sel) if include_hidden else SceneAPI.collect_subtree(sel)
+        subtree: list[coat.SceneElement] = SceneAPI.collect_subtree_direct(
+            sel, include_hidden=include_hidden
+        )
         for el in subtree:
-            tree_ids.add(id(el))
+            tree_paths.add(get_element_path(el))
 
     # Collect all elements NOT in selection trees
-    all_elements: list[coat.SceneElement] = (
-        SceneAPI.collect_all_subtree(
-            root) if include_hidden else SceneAPI.collect_subtree(root)
+    all_elements: list[coat.SceneElement] = SceneAPI.collect_subtree_direct(
+        root, include_hidden=include_hidden
     )
-    return [el for el in all_elements if id(el) not in tree_ids]
+    return [el for el in all_elements if get_element_path(el) not in tree_paths]
 
 
 def _resolve_all_scope(
@@ -133,18 +160,18 @@ def _resolve_all_scope(
     """
     Resolve ALL scope: entire sculpt tree.
 
+    Uses direct parent→child traversal to avoid instance link issues.
+
     Args:
         root: Scene root element
         include_hidden: If True, include hidden elements
 
     Returns:
-        All elements in the scene
+        All elements in the scene (direct descendants only)
     """
     if not root:
         return []
-    if include_hidden:
-        return SceneAPI.collect_all_subtree(root)
-    return SceneAPI.collect_subtree(root)
+    return SceneAPI.collect_subtree_direct(root, include_hidden=include_hidden)
 
 
 # =============================================================================

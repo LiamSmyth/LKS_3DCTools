@@ -66,62 +66,105 @@ class SceneAPI:
         """
         Get all currently selected sculpt elements as a list.
 
+        WORKAROUND (3DCoat 2025): collectSelected() returns duplicates AND
+        instance-linked elements when user selects a single instance.
+        For example, selecting LeftLeg returns [LeftLeg, RightLeg, LeftLeg, RightLeg]
+        when RightLeg is an instance of LeftLeg.
+        This may be fixed in a future 3DCoat API update.
+
         Returns:
-            List of selected SceneElement objects (may be empty)
+            List of selected SceneElement objects (deduplicated by path)
         """
         root: coat.SceneElement | None = coat.Scene.sculptRoot()
         if not root:
             return []
-        return root.collectSelected()
+        raw_selected: list[coat.SceneElement] = root.collectSelected()
+        # WORKAROUND: Deduplicate - collectSelected() returns duplicates and instance links
+        return deduplicate_elements(raw_selected)
 
     @staticmethod
-    def collect_subtree(root: coat.SceneElement) -> list[coat.SceneElement]:
+    def collect_subtree(
+        root: coat.SceneElement,
+        max_elements: int = 10000,
+    ) -> list[coat.SceneElement]:
         """
         Collect all elements in a subtree (root + all visible descendants).
 
-        Uses iterateVisibleSubtree internally.
+        Uses path-based deduplication to prevent infinite loops when
+        instances or circular references exist in the scene.
 
         Args:
             root: Root element of the subtree
+            max_elements: Safety limit to prevent runaway iteration
 
         Returns:
             List containing root and all visible descendants
         """
-        elements: list[coat.SceneElement] = [root]
-
-        def collector(el: coat.SceneElement) -> bool:
-            elements.append(el)
-            return False  # Continue iteration
-
-        root.iterateVisibleSubtree(collector)
-        return elements
+        return collect_subtree_safe(
+            root, include_hidden=False, max_elements=max_elements
+        )
 
     @staticmethod
-    def collect_all_subtree(root: coat.SceneElement) -> list[coat.SceneElement]:
+    def collect_all_subtree(
+        root: coat.SceneElement,
+        max_elements: int = 10000,
+    ) -> list[coat.SceneElement]:
         """
         Collect all elements in a subtree (root + ALL descendants).
 
-        Uses iterateSubtree (not just visible).
+        Uses path-based deduplication to prevent infinite loops when
+        instances or circular references exist in the scene.
+
+        NOTE: Uses 3DCoat's iterateSubtree which may traverse instance links.
+        For mesh operations, use collect_subtree_direct() instead.
 
         Args:
             root: Root element of the subtree
+            max_elements: Safety limit to prevent runaway iteration
 
         Returns:
             List containing root and all descendants
         """
-        elements: list[coat.SceneElement] = [root]
-
-        def collector(el: coat.SceneElement) -> bool:
-            elements.append(el)
-            return False  # Continue iteration
-
-        root.iterateSubtree(collector)
-        return elements
+        return collect_subtree_safe(
+            root, include_hidden=True, max_elements=max_elements
+        )
 
     @staticmethod
-    def collect_all_sculpt_objects() -> list[coat.SceneElement]:
+    def collect_subtree_direct(
+        root: coat.SceneElement,
+        include_hidden: bool = False,
+        max_elements: int = 10000,
+    ) -> list[coat.SceneElement]:
+        """
+        Collect subtree using direct parent→child traversal only.
+
+        This is the PREFERRED method for operations that modify mesh data.
+        Unlike iterateSubtree, this only follows direct parent→child links
+        and will not traverse instance references.
+
+        Args:
+            root: Root element of the subtree
+            include_hidden: If True, include hidden elements
+            max_elements: Safety limit to prevent runaway iteration
+
+        Returns:
+            List containing root and all direct descendants (no instances)
+        """
+        return collect_subtree_direct(
+            root, include_hidden=include_hidden, max_elements=max_elements
+        )
+
+    @staticmethod
+    def collect_all_sculpt_objects(
+        max_elements: int = 10000,
+    ) -> list[coat.SceneElement]:
         """
         Collect all sculpt objects in the entire scene.
+
+        Uses path-based deduplication to prevent infinite loops.
+
+        Args:
+            max_elements: Safety limit to prevent runaway iteration
 
         Returns:
             List of all sculpt objects (elements where isSculptObject() is True)
@@ -130,22 +173,25 @@ class SceneAPI:
         if not root:
             return []
 
-        objects: list[coat.SceneElement] = []
+        # Use safe subtree collection
+        all_elements: list[coat.SceneElement] = collect_subtree_safe(
+            root, include_hidden=True, max_elements=max_elements
+        )
 
-        def collector(el: coat.SceneElement) -> bool:
-            if el.isSculptObject():
-                objects.append(el)
-            return False  # Continue iteration
-
-        if root.isSculptObject():
-            objects.append(root)
-        root.iterateSubtree(collector)
-        return objects
+        # Filter to sculpt objects only
+        return [el for el in all_elements if el.isSculptObject()]
 
     @staticmethod
-    def collect_visible_sculpt_objects() -> list[coat.SceneElement]:
+    def collect_visible_sculpt_objects(
+        max_elements: int = 10000,
+    ) -> list[coat.SceneElement]:
         """
         Collect all visible sculpt objects in the scene.
+
+        Uses path-based deduplication to prevent infinite loops.
+
+        Args:
+            max_elements: Safety limit to prevent runaway iteration
 
         Returns:
             List of visible sculpt objects
@@ -154,17 +200,13 @@ class SceneAPI:
         if not root:
             return []
 
-        objects: list[coat.SceneElement] = []
+        # Use safe subtree collection
+        all_elements: list[coat.SceneElement] = collect_subtree_safe(
+            root, include_hidden=False, max_elements=max_elements
+        )
 
-        def collector(el: coat.SceneElement) -> bool:
-            if el.isSculptObject():
-                objects.append(el)
-            return False  # Continue iteration
-
-        if root.isSculptObject():
-            objects.append(root)
-        root.iterateVisibleSubtree(collector)
-        return objects
+        # Filter to sculpt objects only
+        return [el for el in all_elements if el.isSculptObject()]
 
 
 # =============================================================================
@@ -287,6 +329,10 @@ def get_element_ids(elements: list[coat.SceneElement]) -> set[int]:
     """
     Get Python object IDs for a list of elements (for fast set operations).
 
+    WARNING: Python id() is unreliable for 3DCoat elements - each API call
+    may return a new wrapper object with a different id(). Use path-based
+    deduplication instead (deduplicate_elements_by_path).
+
     Args:
         elements: List of elements
 
@@ -298,7 +344,34 @@ def get_element_ids(elements: list[coat.SceneElement]) -> set[int]:
 
 def deduplicate_elements(elements: list[coat.SceneElement]) -> list[coat.SceneElement]:
     """
-    Remove duplicate elements while preserving order.
+    Remove duplicate elements using path-based comparison.
+
+    NOTE: This uses element paths, not Python id(), because 3DCoat creates
+    new Python wrapper objects on each API call. Two wrappers with different
+    id() values may represent the same underlying element.
+
+    Args:
+        elements: List that may contain duplicates
+
+    Returns:
+        List with duplicates removed (preserves first occurrence)
+    """
+    seen_paths: set[str] = set()
+    unique: list[coat.SceneElement] = []
+    for el in elements:
+        path: str = get_element_path(el)
+        if path not in seen_paths:
+            seen_paths.add(path)
+            unique.append(el)
+    return unique
+
+
+def deduplicate_elements_by_id(elements: list[coat.SceneElement]) -> list[coat.SceneElement]:
+    """
+    Remove duplicate elements using Python id() - UNRELIABLE for 3DCoat.
+
+    WARNING: This is unreliable because 3DCoat creates new wrapper objects.
+    Prefer deduplicate_elements() which uses path-based comparison.
 
     Args:
         elements: List that may contain duplicates
@@ -317,94 +390,185 @@ def deduplicate_elements(elements: list[coat.SceneElement]) -> list[coat.SceneEl
 
 
 # =============================================================================
-# INSTANCE DETECTION (EXPERIMENTAL)
+# ELEMENT PATH UTILITIES
 # =============================================================================
 
-def get_volume_tree_id(element: coat.SceneElement) -> int | None:
+def get_element_path(element: coat.SceneElement) -> str:
     """
-    Get the underlying VoxTreeBranch pointer ID for an element's volume.
+    Build a unique path string for an element by walking up the parent chain.
 
-    Instances share the same VoxTreeBranch, so comparing these IDs can
-    detect whether two elements are instances of each other.
+    This creates a path like "Root/Arm/Hand/Finger" that uniquely identifies
+    an element's position in the scene tree. Stops at "Root" which is the
+    consistent base of the sculpt tree.
 
     Args:
-        element: SceneElement to check
+        element: SceneElement to get path for
 
     Returns:
-        Integer ID of the tree pointer, or None if not a sculpt object
+        Path string from root to element
     """
-    if not element.isSculptObject():
-        return None
-    volume: coat.Volume = element.Volume()
-    if not volume or not volume.valid():
-        return None
-    tree_ptr = volume.tree()
-    # tree() returns a raw pointer - id() gives us a unique integer
-    return id(tree_ptr) if tree_ptr else None
+    parts: list[str] = []
+    current: coat.SceneElement | None = element
+
+    # Walk up the parent chain (limit iterations for safety)
+    max_depth: int = 100
+    depth: int = 0
+
+    while current is not None and depth < max_depth:
+        try:
+            name: str = current.name()
+            if name:
+                parts.append(name)
+                # Stop at Root - it's the consistent base of the sculpt tree
+                if name == "Root":
+                    break
+            # Skip unnamed elements (don't add to path)
+        except Exception:
+            pass  # Skip elements we can't get names for
+
+        try:
+            parent: coat.SceneElement = current.parent()
+            # Check if parent is valid (not null/empty)
+            if parent is None:
+                break
+            # Check if we've reached the root (parent == current)
+            if parent == current:
+                break
+            current = parent
+        except Exception:
+            break
+
+        depth += 1
+
+    # Reverse to get root-to-element order
+    parts.reverse()
+    return "/".join(parts)
 
 
-def deduplicate_instances(
-    elements: list[coat.SceneElement]
+def collect_subtree_safe(
+    root: coat.SceneElement,
+    include_hidden: bool = False,
+    max_elements: int = 10000,
 ) -> list[coat.SceneElement]:
     """
-    Remove elements that are instances of already-processed geometry.
+    Safely collect subtree elements with path-based deduplication.
 
-    When iterating a subtree with instances (e.g., left/right leg),
-    operations like decimate would be applied twice to the same geometry.
-    This function returns only the first occurrence of each unique geometry.
+    This prevents infinite loops when the scene contains instances or
+    circular references by tracking visited element paths.
 
-    Args:
-        elements: List of elements (may contain instances)
-
-    Returns:
-        List with only one element per unique underlying geometry
-    """
-    seen_trees: set[int] = set()
-    unique: list[coat.SceneElement] = []
-
-    for el in elements:
-        tree_id: int | None = get_volume_tree_id(el)
-
-        if tree_id is None:
-            # Not a sculpt object - keep it (could be a folder/group)
-            unique.append(el)
-            continue
-
-        if tree_id not in seen_trees:
-            seen_trees.add(tree_id)
-            unique.append(el)
-        # else: skip - this is an instance of geometry we've already seen
-
-    return unique
-
-
-def partition_instances(
-    elements: list[coat.SceneElement]
-) -> tuple[list[coat.SceneElement], list[coat.SceneElement]]:
-    """
-    Partition elements into unique geometry and instance duplicates.
+    NOTE: This uses 3DCoat's iterateSubtree which may traverse instance links,
+    causing duplicate operations on shared data. For operations that modify
+    mesh data, prefer collect_subtree_direct() which only follows parent→child
+    relationships.
 
     Args:
-        elements: List of elements
+        root: Root element to start from
+        include_hidden: If True, include hidden elements
+        max_elements: Maximum elements to collect (safety limit)
 
     Returns:
-        Tuple of (unique_elements, instance_duplicates)
+        List of unique elements in the subtree
     """
-    seen_trees: set[int] = set()
-    unique: list[coat.SceneElement] = []
-    instances: list[coat.SceneElement] = []
+    elements: list[coat.SceneElement] = [root]
+    visited_paths: set[str] = {get_element_path(root)}
 
-    for el in elements:
-        tree_id: int | None = get_volume_tree_id(el)
+    def collector(el: coat.SceneElement) -> bool:
+        # Safety limit
+        if len(elements) >= max_elements:
+            return True  # Stop iteration
 
-        if tree_id is None:
-            unique.append(el)
+        # Get unique path for this element
+        path: str = get_element_path(el)
+
+        # Skip if we've already visited this path
+        if path in visited_paths:
+            return False  # Continue but don't add
+
+        visited_paths.add(path)
+        elements.append(el)
+        return False  # Continue iteration
+
+    if include_hidden:
+        root.iterateSubtree(collector)
+    else:
+        root.iterateVisibleSubtree(collector)
+
+    return elements
+
+
+def collect_subtree_direct(
+    root: coat.SceneElement,
+    include_hidden: bool = False,
+    max_elements: int = 10000,
+) -> list[coat.SceneElement]:
+    """
+    Collect subtree using direct parent→child traversal only.
+
+    WORKAROUND (3DCoat 2025): Two API bugs require custom traversal:
+    1. iterateSubtree() traverses through instance links to unrelated branches
+    2. child(index) ALSO returns instance-linked elements from other branches
+
+    This function uses childCount() + child(index) with path-prefix filtering
+    to ensure only true descendants are returned. Elements whose path doesn't
+    start with root's path are filtered out.
+
+    This workaround may become unnecessary if 3DCoat API is updated to
+    properly isolate instance links during iteration.
+
+    Uses iterative BFS to avoid Python recursion limits.
+
+    Args:
+        root: Root element to start from
+        include_hidden: If True, include hidden elements
+        max_elements: Maximum elements to collect (safety limit)
+
+    Returns:
+        List of unique elements in the subtree (direct descendants only)
+    """
+    # Get the root path - all valid children must have paths starting with this
+    root_path: str = get_element_path(root)
+
+    elements: list[coat.SceneElement] = []
+    queue: list[coat.SceneElement] = [root]
+    visited_paths: set[str] = set()
+
+    while queue and len(elements) < max_elements:
+        current: coat.SceneElement = queue.pop(0)
+
+        # Get path for deduplication and ancestry check
+        path: str = get_element_path(current)
+
+        # Skip if already visited
+        if path in visited_paths:
+            continue
+        visited_paths.add(path)
+
+        # CRITICAL: Only include elements whose path starts with root path
+        # This filters out instance-linked elements that child() may return
+        if not path.startswith(root_path):
             continue
 
-        if tree_id not in seen_trees:
-            seen_trees.add(tree_id)
-            unique.append(el)
-        else:
-            instances.append(el)
+        # Check visibility if required
+        if not include_hidden:
+            try:
+                if not current.visible():
+                    continue
+            except Exception:
+                pass  # If we can't check visibility, include it
 
-    return unique, instances
+        elements.append(current)
+
+        # Add direct children to queue using childCount() + child(index)
+        try:
+            child_count: int = current.childCount()
+            for i in range(child_count):
+                try:
+                    child: coat.SceneElement = current.child(i)
+                    if child is not None:
+                        queue.append(child)
+                except Exception:
+                    pass  # Skip children we can't access
+        except Exception:
+            pass  # Skip if we can't get child count
+
+    return elements

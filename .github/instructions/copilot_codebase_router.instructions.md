@@ -167,7 +167,7 @@ Low-level primitives. Prefix indicates coat dependency: `coat_*` or `Volume_*`/`
 
 | File | Description |
 |------|-------------|
-| `scene_api.py` | Primary interface for scene context and iteration (SceneAPI, SelectionAPI) |
+| `scene_api.py` | Primary interface for scene context and iteration (SceneAPI, SelectionAPI); `collect_subtree_direct()` for instance-safe traversal |
 | `scope_utils.py` | Scope enum (CURRENT/TREE/OTHER/ALL) and resolution |
 | `SceneElement_visibility_utils.py` | Pure visibility/ghost functions, isolation toggle |
 | `Scene_layer_utils.py` | Layer management, UI command workarounds, `consolidate_layers()` |
