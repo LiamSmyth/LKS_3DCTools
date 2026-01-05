@@ -350,9 +350,51 @@ script_path: str = f"{install_folder}/UserPrefs/StdScripts/cModules/LKS/actions/
 3. **Already registered** - Check with `coat.ui.checkIfMenuItemInserted(id)`
 4. **Missing translation** - Always call `coat.ui.addTranslation()` first
 
+### Menu Item Persistence (No Removal API)
+Menu items registered via `insertInMenu()` are persisted as XML files in:
+```
+Documents/3DCoat/UserPrefs/Scripts/ExtraMenuItems/LKS_*.xml
+```
+
+**There is NO `removeFromMenu` API.** To remove stale entries:
+1. Delete the corresponding XML files from `ExtraMenuItems/`
+2. Restart 3DCoat (menu items are loaded from XML on startup)
+
+Use `utils.menu_cleanup.cleanup_lks_menu()` to programmatically delete all `LKS_*.xml` files.
+
 ---
 
-## 📝 Adding to This Document (MANDATORY)
+## 🔥 Hot-Reload During Development
+
+**cExtensions CANNOT be unregistered** once instantiated—they persist until 3DCoat exits.
+**Menu items also persist** once registered (no removal API).
+
+For iterating on code without restarting 3DCoat, use `importlib.reload()`:
+
+```python
+from utils.hot_reload import reload_all
+
+# Reload all LKS modules (utils → ops → ui order)
+reloaded, failed = reload_all()
+```
+
+**Action script pattern** - Use `@action` decorator to auto-reload before each execution:
+
+```python
+from utils.action_base import action
+
+@action
+def main() -> None:
+    # Imports go INSIDE function, after reload happens
+    from ops.SomeOp import main as op_main
+    op_main(...)
+
+main()
+```
+
+---
+
+## �📝 Adding to This Document (MANDATORY)
 
 **LLM agents MUST update this file** when discovering API quirks during development.
 

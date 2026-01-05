@@ -7,15 +7,18 @@ then converts to voxels to lock in the new density.
 Room: Sculpt
 Action: Resample to half, then convert to voxels
 """
-import coat
-from utils.object_utils import ObjectUtils
-from utils.Volume_resample_utils import resample_to_half
-from utils.Volume_mode_utils import ensure_surface_mode
-from utils.coat_ui_utils import show_message
+from utils.action_base import action
 
 
+@action
 def main() -> None:
     """Reduce polycount by half using resample + voxel conversion."""
+    import coat
+    from utils.object_utils import ObjectUtils
+    from utils.Volume_resample_utils import resample_to_half
+    from utils.Volume_mode_utils import ensure_surface_mode
+    from utils.coat_ui_utils import show_message
+
     # Get current sculpt object and volume with validation
     result = ObjectUtils.get_current_sculpt_volume()
     if not result:
@@ -44,6 +47,8 @@ def main() -> None:
 
     new_polycount: int = vol.getPolycount()
     show_message(f"Reduced to {new_polycount:,} polys", 3000)
+
+
 
 
 main()

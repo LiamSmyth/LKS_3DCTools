@@ -60,8 +60,10 @@ def main(
         show_error("No object selected", 2000)
         return 0
 
-    # Resolve elements
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    # Resolve elements - use include_hidden=True for visibility ops
+    # so we can show hidden elements
+    elements: list[coat.SceneElement] = resolve_scope(
+        scope, include_hidden=True)
 
     if not elements:
         show_error("No objects to process", 2000)

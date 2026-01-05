@@ -111,20 +111,17 @@ def parse_action_filename(filename: str) -> tuple[str, str] | None:
     return (context, rest)
 
 
-def generate_display_name(context: str, action_name: str) -> str:
+def generate_display_name(filename: str) -> str:
     """
-    Generate human-readable display name from context and action name.
+    Generate human-readable display name from script filename.
 
     Args:
-        context: e.g., "SculptObject"
-        action_name: e.g., "Decimate_Half_Selected"
+        filename: Full script filename like "SculptObject_Decimate_Half_Selected.py"
 
     Returns:
-        Display name like "LKS: Decimate Half Selected"
+        Display name like "LKS: SculptObject_Decimate_Half_Selected.py"
     """
-    # Convert underscores to spaces
-    readable: str = action_name.replace("_", " ")
-    return f"LKS: {readable}"
+    return f"LKS: {filename}"
 
 
 def generate_menu_id(context: str, action_name: str) -> str:
@@ -178,7 +175,7 @@ def discover_actions(actions_dir: Path) -> list[ActionInfo]:
             path=py_file,
             context=context,
             action_name=action_name,
-            display_name=generate_display_name(context, action_name),
+            display_name=generate_display_name(py_file.name),
             menu_id=generate_menu_id(context, action_name),
         )
         actions.append(action)

@@ -221,7 +221,10 @@ class LKSToolsConfig:
 
         # ==================== DEV TOOLS ====================
         items.append("#Dev Tools")
+        items.append("[1 1]")
         items.append("ReloadScripts")
+        items.append("RefreshMenu")
+        items.append("MenuStatus")
 
         return items
 
@@ -1035,7 +1038,7 @@ class LKSToolsConfig:
         self._save_general_settings_to_cache()
         show_message("All settings saved", 2000)
 
-    # ==================== DEV TOOLS HANDLER ====================
+    # ==================== DEV TOOLS HANDLERS ====================
 
     def ReloadScripts(self) -> None:
         """Reload all _utils modules to pick up code changes."""
@@ -1075,6 +1078,26 @@ class LKSToolsConfig:
                     print(f"[LKS] Failed to reload {module_name}: {e}")
             else:
                 print(f"[LKS] Not loaded: {module_name}")
+
+        show_message(f"Reloaded {reloaded_count} modules", 2000)
+
+    def RefreshMenu(self) -> None:
+        """Re-discover and register LKS action scripts in the menu."""
+        from utils.coat_menu_utils import initialize_lks_menu
+
+        registered, skipped = initialize_lks_menu()
+
+        show_message(
+            f"Menu: {registered} added, {skipped} already exist", 2000)
+        print(
+            f"[LKS] Menu refresh: {registered} registered, {skipped} skipped")
+
+    def MenuStatus(self) -> None:
+        """Log current menu registration status to console."""
+        from utils.coat_menu_utils import log_registration_status
+
+        log_registration_status()
+        show_message("Menu status logged to console", 2000)
 
         show_message(f"Reloaded {reloaded_count} modules", 2000)
 

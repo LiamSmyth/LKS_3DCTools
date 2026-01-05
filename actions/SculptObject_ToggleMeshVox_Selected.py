@@ -7,16 +7,18 @@ while attempting to maintain approximately the same polycount.
 Room: Sculpt
 Action: Toggle between surface and voxel modes, preserving polycount
 """
-import coat
-
-from utils.object_utils import ObjectUtils
-from utils.Volume_resample_utils import resample_to_target
-from utils.Volume_mode_utils import convert_to_surface
-from utils.coat_ui_utils import show_message, show_error
+from utils.action_base import action
 
 
+@action
 def main() -> None:
     """Toggle between mesh and voxel modes while preserving polycount."""
+    import coat
+    from utils.object_utils import ObjectUtils
+    from utils.Volume_resample_utils import resample_to_target
+    from utils.Volume_mode_utils import convert_to_surface
+    from utils.coat_ui_utils import show_message, show_error
+
     # Get current object with validation
     result = ObjectUtils.get_current_sculpt_volume()
     if not result:
@@ -42,6 +44,8 @@ def main() -> None:
 
         new_polycount: int = vol.getPolycount()
         show_message(f"Converted to Surface: {new_polycount:,} polys", 3000)
+
+
 
 
 main()

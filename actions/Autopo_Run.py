@@ -6,7 +6,16 @@ Runs autopo on current sculpt object using cached settings.
 Room: Sculpt
 Action: Execute autopo with density/options from settings cache
 """
-from utils.autopo_utils import run_autopo_with_settings
+from utils.action_base import action
 
-# Execute autopo with cached settings
-run_autopo_with_settings()
+
+@action
+def main() -> None:
+    """Execute the action."""
+    from utils.autopo_utils import run_autopo_with_settings
+
+    # Execute autopo with cached settings
+    run_autopo_with_settings()
+
+
+main()

@@ -1,10 +1,14 @@
 """
 SculptObject_UniformDensity Operator
 
-Match polygon density across sculpt objects in a subtree.
+Match polygon density across sculpt objects using a reference.
 
-Uses the selected (root) element as the reference density and
-resamples all other elements in the subtree to match.
+Uses the selected element as the reference density and
+resamples other elements to match that density.
+
+Scopes:
+- TREE: Match density of all children to the selected root element
+- ALL: Match density of ALL sculpt objects to the selected element
 
 Two modes:
 - RESAMPLE: Standard resampling to match density
@@ -13,7 +17,7 @@ Two modes:
 import coat
 from enum import Enum
 from utils.scene_api import SceneAPI
-from utils.scope_utils import Scope
+from utils.scope_utils import Scope, resolve_scope
 from utils.Volume_density_utils import (
     resample_to_match_density,
     smart_match_density
@@ -36,14 +40,16 @@ class DensityMode(Enum):
 # =============================================================================
 
 def main(
+    scope: Scope = Scope.TREE,
     mode: DensityMode = DensityMode.SMART,
     tolerance: float = 0.1,
     preserve_selection: bool = True,
 ) -> int:
     """
-    Match density of subtree elements to the selected root.
+    Match density of elements to the selected reference.
 
     Args:
+        scope: TREE = children only, ALL = all sculpt objects
         mode: Density matching mode (RESAMPLE or SMART)
         tolerance: Tolerance for smart matching (fraction, e.g., 0.1 = 10%)
         preserve_selection: Whether to restore selection after operation
@@ -53,7 +59,7 @@ def main(
     """
     from utils.scene_api import SelectionAPI
 
-    # Get the reference element (selected root)
+    # Get the reference element (selected)
     current: coat.SceneElement | None = SceneAPI.get_current_element()
     if not current:
         show_error("No object selected", 2000)
@@ -71,12 +77,17 @@ def main(
     # Get reference volume
     ref_vol: coat.Volume = current.Volume()
 
-    # Get subtree (excluding root)
-    subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+    # Get elements to process based on scope
+    if scope == Scope.ALL:
+        # All sculpt objects
+        elements: list[coat.SceneElement] = SceneAPI.collect_all_sculpt_objects()
+    else:
+        # Subtree of selected element
+        elements = SceneAPI.collect_subtree(current)
 
     count: int = 0
-    for el in subtree:
-        # Skip root element and non-sculpt objects
+    for el in elements:
+        # Skip reference element and non-sculpt objects
         if el == current or not el.isSculptObject():
             continue
 
@@ -90,8 +101,9 @@ def main(
     if preserve_selection and saved_selection:
         SelectionAPI.restore_selection(saved_selection)
 
+    scope_str: str = "all" if scope == Scope.ALL else "subtree"
     mode_str: str = "smart matched" if mode == DensityMode.SMART else "resampled"
-    show_message(f"Density {mode_str} {count} objects", 2000)
+    show_message(f"Density {mode_str} {count} {scope_str} objects", 2000)
     return count
 
 
@@ -101,9 +113,19 @@ def main(
 
 def resample_tree() -> int:
     """Resample subtree to match root density."""
-    return main(mode=DensityMode.RESAMPLE)
+    return main(scope=Scope.TREE, mode=DensityMode.RESAMPLE)
 
 
 def smart_match_tree(tolerance: float = 0.1) -> int:
     """Smart match subtree density with tolerance."""
-    return main(mode=DensityMode.SMART, tolerance=tolerance)
+    return main(scope=Scope.TREE, mode=DensityMode.SMART, tolerance=tolerance)
+
+
+def resample_all() -> int:
+    """Resample all sculpt objects to match selected density."""
+    return main(scope=Scope.ALL, mode=DensityMode.RESAMPLE)
+
+
+def smart_match_all(tolerance: float = 0.1) -> int:
+    """Smart match all objects to selected density."""
+    return main(scope=Scope.ALL, mode=DensityMode.SMART, tolerance=tolerance)

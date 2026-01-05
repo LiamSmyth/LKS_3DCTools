@@ -178,9 +178,59 @@ def create_box_mesh(size: int, thickness: int) -> Mesh:
 # MAIN TILING SETUP FUNCTION
 # =============================================================================
 
+def tile_existing_object(
+    source: coat.SceneElement,
+    tile_size: int = DEFAULT_BASE_SIZE,
+    enable_symmetry: bool = True,
+) -> list[coat.SceneElement]:
+    """
+    Create a 3x3 tiling grid around an existing sculpt object.
+
+    Creates 8 instances around the source object and optionally enables
+    translational symmetry for seamless editing.
+
+    Args:
+        source: The source sculpt element to tile
+        tile_size: Spacing between instances (default 64)
+        enable_symmetry: Whether to enable translational symmetry
+
+    Returns:
+        List of created instance elements (excludes source)
+    """
+    # Disable symmetry during setup
+    disable_symmetry()
+
+    # Create instance locations
+    locations: list[vec3] = create_grid_instance_locations(tile_size)
+    instances: list[coat.SceneElement] = []
+
+    # Create instances
+    for loc in locations:
+        inst: coat.SceneElement = duplicate_as_instance(source, loc)
+        instances.append(inst)
+
+    # Parent all instances under source
+    for inst in instances:
+        inst.changeParent(source)
+
+    # Select source element
+    source.selectOne()
+
+    # Optionally setup translational symmetry
+    if enable_symmetry:
+        setup_translation_symmetry(float(tile_size), float(tile_size))
+
+    show_message(
+        f"Instance tiling complete ({len(instances)} instances created)",
+        4000
+    )
+
+    return instances
+
+
 def setup_tiling_grid(params: TilingParams) -> coat.SceneElement:
     """
-    Setup a complete tiling grid with instances and symmetry.
+    Setup a complete tiling grid with a new primitive and symmetry.
 
     Args:
         params: TilingParams with configuration

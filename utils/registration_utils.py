@@ -3,7 +3,7 @@ LKS addon registration utilities.
 
 This module handles registering and unregistering the LKS addon with 3DCoat.
 It provides:
-- Menu action registration for hotkey assignment
+- Menu action registration using dynamic discovery
 - Extension lifecycle management
 - Module reload utilities
 
@@ -21,13 +21,24 @@ from typing import Callable
 
 import coat
 
+# Import discovery system
+from utils.action_discovery import discover_actions, ActionInfo
+from utils.coat_menu_utils import get_lks_root, resolve_script_path
+
+# Import hot reload utilities (cache clearing + dynamic discovery)
+from utils.hot_reload import (
+    discover_lks_modules,
+    clear_pycache,
+    invalidate_import_caches,
+)
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
 # LKS module root
-_LKS_ROOT: Path = Path(__file__).parent.parent.resolve()
-_ACTIONS_PATH: str = str(_LKS_ROOT / "actions").replace("\\", "/")
+_LKS_ROOT: Path = get_lks_root()
+_ACTIONS_DIR: Path = _LKS_ROOT / "actions"
 
 # Menu name for LKS actions (uses Scripts menu - items prefixed with "LKS: " for grouping)
 # Note: Custom top-level menus require cTemplates menu-making scripts.
@@ -41,106 +52,43 @@ _REGISTERED_ACTIONS: list[str] = []
 
 
 # =============================================================================
-# ACTION DEFINITIONS
+# REGISTRATION FUNCTIONS (Using Dynamic Discovery)
 # =============================================================================
 
-# Format: (action_id, script_name, translation)
-ACTION_DEFINITIONS: list[tuple[str, str, str]] = [
-    # Decimate
-    ("LKS_Decimate_Half_Selected", "SculptObject_Decimate_Half_Selected.py",
-     "LKS: Decimate Selected 50%"),
-    ("LKS_Decimate_Half_Subtree", "SculptObject_Decimate_Half_Subtree.py",
-     "LKS: Decimate Subtree 50%"),
-    ("LKS_ProxyToggle_Decimate16X", "SculptObject_ProxyToggle_Decimate16X_Selected.py",
-     "LKS: Proxy Toggle Decimate 16X"),
-
-    # Ghost/Visibility
-    ("LKS_Ghost_Toggle_Subtree", "SculptObject_Ghost_Toggle_Subtree.py",
-     "LKS: Ghost Toggle Subtree"),
-    ("LKS_Ghost_Invert_All", "SculptObject_Ghost_Invert_All.py",
-     "LKS: Ghost Invert All"),
-    ("LKS_Ghost_Isolate_Selected", "SculptObject_Ghost_Isolate_Selected.py",
-     "LKS: Ghost Isolate Selected"),
-    ("LKS_Unghost_All", "SculptObject_Unghost_All.py",
-     "LKS: Unghost All"),
-    ("LKS_Visibility_Toggle_Subtree", "SculptObject_Visibility_Toggle_Subtree.py",
-     "LKS: Visibility Toggle Subtree"),
-
-    # Scale
-    ("LKS_Scale_Down100x", "SculptObject_Scale_Down100x_Selected.py",
-     "LKS: Scale Down 100x"),
-    ("LKS_Scale_Up100x", "SculptObject_Scale_Up100x_Selected.py",
-     "LKS: Scale Up 100x"),
-
-    # Mode
-    ("LKS_ToSurface_All", "SculptObject_ToSurface_All.py",
-     "LKS: Convert All to Surface"),
-    ("LKS_ToVoxel_All", "SculptObject_ToVoxel_All.py",
-     "LKS: Convert All to Voxel"),
-
-    # Mesh Operations
-    ("LKS_Subdivide_Double_Subtree", "SculptObject_Subdivide_Double_Subtree.py",
-     "LKS: Subdivide Double Subtree"),
-    ("LKS_Resample_Half_Subtree", "SculptObject_Resample_Half_Subtree.py",
-     "LKS: Resample Half Subtree"),
-    ("LKS_RemeshResymm_Selected", "SculptObject_RemeshResymm_Safe_Selected.py",
-     "LKS: Remesh+Resymm Selected"),
-    ("LKS_IdColors_FromParts", "SculptObject_IdColors_FromParts.py",
-     "LKS: ID Colors from Parts"),
-
-    # Autopo
-    ("LKS_Autopo_Run", "Autopo_Run.py",
-     "LKS: Autopo Run"),
-    ("LKS_Autopo_ToSculpt", "Autopo_ToSculpt.py",
-     "LKS: Autopo to Sculpt"),
-
-    # Brush
-    ("LKS_Brush_IncrementDetails", "Brush_IncrementDetailsLevel.py",
-     "LKS: Brush Increment Details"),
-    ("LKS_Brush_DecrementDetails", "Brush_DecrementDetailsLevel.py",
-     "LKS: Brush Decrement Details"),
-]
-
-
-# =============================================================================
-# REGISTRATION FUNCTIONS
-# =============================================================================
-
-def _register_action(action_id: str, script_name: str, translation: str) -> bool:
+def _register_action(action: ActionInfo) -> bool:
     """
-    Register a single action script as a menu item in the LKS menu.
+    Register a single action script as a menu item in the Scripts menu.
 
     Args:
-        action_id: Unique identifier for the action
-        script_name: Filename of the action script
-        translation: User-facing name for hotkey assignment
+        action: ActionInfo from discovery system
 
     Returns:
         True if registered, False if already registered
     """
-    script_path: str = f"{_ACTIONS_PATH}/{script_name}"
+    script_path: str = resolve_script_path(action.path)
 
-    # Add translation for localization
-    coat.ui.addTranslation(action_id, translation)
+    # Add translation for localization (display name like "LKS: SculptObject_Decimate_Half_Selected.py")
+    coat.ui.addTranslation(action.menu_id, action.display_name)
 
     # Only insert if not already in menu
-    if not coat.ui.checkIfMenuItemInserted(action_id):
-        coat.ui.insertInMenu(LKS_MENU_NAME, action_id, script_path)
-        _REGISTERED_ACTIONS.append(action_id)
+    if not coat.ui.checkIfMenuItemInserted(action.menu_id):
+        coat.ui.insertInMenu(LKS_MENU_NAME, action.menu_id, script_path)
+        _REGISTERED_ACTIONS.append(action.menu_id)
         return True
     return False
 
 
 def register_actions() -> int:
     """
-    Register all LKS action scripts to the menu.
+    Register all LKS action scripts to the menu using dynamic discovery.
 
     Returns:
         Number of actions registered
     """
+    actions: list[ActionInfo] = discover_actions(_ACTIONS_DIR)
     count: int = 0
-    for action_id, script_name, translation in ACTION_DEFINITIONS:
-        if _register_action(action_id, script_name, translation):
+    for action in actions:
+        if _register_action(action):
             count += 1
     return count
 
@@ -151,48 +99,10 @@ def get_registered_actions() -> list[str]:
 
 
 # =============================================================================
-# MODULE MANAGEMENT
+# MODULE MANAGEMENT (uses dynamic discovery from hot_reload)
 # =============================================================================
 
-# Modules to reload (in dependency order)
-LKS_MODULES: list[str] = [
-    # Core utilities
-    'utils.lks_settings',
-    'utils.coat_ui_utils',
-    'utils.scene_api',
-    'utils.scope_utils',
-    'utils.object_utils',
-    # Volume utilities
-    'utils.Volume_decimate_utils',
-    'utils.Volume_resample_utils',
-    'utils.Volume_subdivide_utils',
-    'utils.Volume_mode_utils',
-    'utils.Volume_density_utils',
-    'utils.Volume_proxy_utils',
-    # Scene utilities
-    'utils.Scene_cleanup_utils',
-    'utils.Scene_layer_utils',
-    'utils.Scene_tiling_utils',
-    'utils.SceneElement_visibility_utils',
-    'utils.SceneElement_boolean_utils',
-    # Feature utilities
-    'utils.brush_settings_utils',
-    'utils.autopo_utils',
-    'utils.scene_iteration_utils',
-    'utils.registration_utils',
-    # Operators
-    'ops.SculptObject_Decimate',
-    'ops.SculptObject_SetGhost',
-    'ops.SculptObject_Scale',
-    'ops.SculptObject_ModeConvert',
-    'ops.SculptObject_Resample',
-    'ops.SculptObject_IdColors',
-    'ops.SculptObject_Proxy',
-    # UI
-    'ui.styles',
-    'ui.widgets',
-    'ui.activity_log',
-]
+# Import dynamic discovery
 
 
 def reload_modules(
@@ -202,15 +112,17 @@ def reload_modules(
     """
     Reload LKS modules to pick up code changes.
 
+    Uses dynamic discovery from hot_reload.discover_lks_modules().
+
     Args:
-        modules: List of module names to reload (default: all LKS modules)
+        modules: List of module names to reload (default: discovered LKS modules)
         log_callback: Optional callback for log messages
 
     Returns:
         Tuple of (reloaded_count, failed_count)
     """
     if modules is None:
-        modules = LKS_MODULES
+        modules = discover_lks_modules()
 
     def log(msg: str) -> None:
         print(f"[LKS] {msg}")
@@ -237,14 +149,16 @@ def unload_modules(modules: list[str] | None = None) -> int:
     """
     Remove LKS modules from sys.modules.
 
+    Uses dynamic discovery from hot_reload.discover_lks_modules().
+
     Args:
-        modules: List of module names to unload (default: all LKS modules)
+        modules: List of module names to unload (default: discovered LKS modules)
 
     Returns:
         Number of modules unloaded
     """
     if modules is None:
-        modules = LKS_MODULES
+        modules = discover_lks_modules()
 
     count: int = 0
     for module_name in modules:
@@ -356,18 +270,21 @@ def unregister_addon(
 
 
 def full_reload(
-    log_callback: Callable[[str], None] | None = None
+    log_callback: Callable[[str], None] | None = None,
+    clear_cache: bool = True,
 ) -> bool:
     """
     Perform a full reload of the LKS addon.
 
     This:
-    1. Unregisters the addon
-    2. Reloads all modules
-    3. Re-registers the addon
+    1. Clears __pycache__ and invalidates import caches (if clear_cache=True)
+    2. Unregisters the addon
+    3. Reloads all modules
+    4. Re-registers the addon
 
     Args:
         log_callback: Optional callback for log messages
+        clear_cache: If True (default), clear all caches before reload
 
     Returns:
         True if successful
@@ -378,6 +295,12 @@ def full_reload(
             log_callback(msg)
 
     log("Starting full reload...")
+
+    # Clear caches first
+    if clear_cache:
+        pycache_count = clear_pycache(silent=True)
+        invalidate_import_caches()
+        log(f"Cleared {pycache_count} __pycache__ folders")
 
     # Unregister
     unregister_addon(log_callback)

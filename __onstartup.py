@@ -51,23 +51,30 @@ except Exception as e:
     print(f"[LKS] Error initializing Qt: {e}")
 
 # =============================================================================
-# MENU ITEM REGISTRATION (for user-assignable hotkeys)
+# MENU ITEM REGISTRATION (DISABLED - use panel buttons instead)
 # =============================================================================
+# Menu registration is now manual via the LKS panel:
+# - "📋 Menu" button: Register action scripts
+# - "🗑️ Clear" button: Remove stale menu entries (requires restart)
+#
+# To re-enable auto-registration, uncomment the block below.
 
-try:
-    import coat
-    from utils.coat_menu_utils import initialize_lks_menu, get_actions_dir
+# try:
+#     import coat
+#     from utils.coat_menu_utils import initialize_lks_menu, get_actions_dir
+#
+#     # Auto-discover and register all action scripts
+#     registered, skipped = initialize_lks_menu()
+#
+#     actions_dir = get_actions_dir()
+#     print(f"[LKS] Scanned actions directory: {actions_dir}")
+#     print(
+#         f"[LKS] Registered {registered} action scripts ({skipped} already registered)")
+#     print("[LKS] Assign hotkeys via Edit → Preferences → Hotkeys → search 'LKS'")
+#
+# except Exception as e:
+#     import traceback
+#     print(f"[LKS] Error registering menu items: {e}")
+#     traceback.print_exc()
 
-    # Auto-discover and register all action scripts
-    registered, skipped = initialize_lks_menu()
-
-    actions_dir = get_actions_dir()
-    print(f"[LKS] Scanned actions directory: {actions_dir}")
-    print(
-        f"[LKS] Registered {registered} action scripts ({skipped} already registered)")
-    print("[LKS] Assign hotkeys via Edit → Preferences → Hotkeys → search 'LKS'")
-
-except Exception as e:
-    import traceback
-    print(f"[LKS] Error registering menu items: {e}")
-    traceback.print_exc()
+print("[LKS] Startup complete. Use panel buttons for menu registration.")

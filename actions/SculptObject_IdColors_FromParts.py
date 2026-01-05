@@ -7,13 +7,18 @@ subtree gets a unique random color.
 Room: Sculpt
 Action: Fill each subtree object with unique random color
 """
-from ops.SculptObject_IdColors import main as op_main
-from utils.scope_utils import Scope
+from utils.action_base import action
 
 
+@action
 def main() -> None:
     """Fill subtree with ID colors using operator."""
+    from ops.SculptObject_IdColors import main as op_main
+    from utils.scope_utils import Scope
+
     op_main(scope=Scope.TREE)
+
+
 
 
 main()

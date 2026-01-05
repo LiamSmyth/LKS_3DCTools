@@ -1,45 +1,24 @@
 """
 Increment Details Level
 
-fIncrements the brush details level by 1 and applies to current brush.
+Increments the brush details level by 1 and applies to current brush.
 Use 'Apply to Brushes' in LKS panel to apply to all brush types.
 
 Room: Sculpt
 Action: Increment details level, apply to current brush
 """
-from utils.brush_settings_utils import apply_auto_subdivide_current, apply_details_level_current
-from utils.lks_settings import get_brush_settings, save_brush_settings, reload_brush_settings
-from utils.coat_ui_utils import show_message
-from utils.object_utils import validate_and_ensure_surface_mode
+from utils.action_base import action
 
 
-def increment_details_level():
-    """Increment the current details level by 1."""
-    # Ensure we're in surface mode (required for dynamic subdiv to work)
-    if not validate_and_ensure_surface_mode():
-        show_message("Select a sculpt object in surface mode", 2000)
-        return
+@action
+def main() -> None:
+    """Increment brush details level."""
+    from ops.Brush_DetailsLevel import adjust_details_level, DetailsLevelMode, ApplyScope
 
-    # Force reload from disk to get latest value (avoid stale singleton)
-    reload_brush_settings()
-
-    # Load current settings from cache
-    settings = get_brush_settings()
-    current: int = int(settings.details_level)
-
-    # Clamp to 16 (UI max)
-    new_value: int = min(16, current + 1)
-
-    # Update cache and save to disk
-    settings.details_level = new_value
-    settings.auto_subdivide = True
-    save_brush_settings()
-
-    # Apply to current brush only (fast - instant)
-    apply_auto_subdivide_current(True)
-    apply_details_level_current(float(new_value))
-
-    show_message(f"Details Level: {new_value}", 1000)
+    adjust_details_level(
+        mode=DetailsLevelMode.INCREMENT,
+        apply_scope=ApplyScope.CURRENT,
+    )
 
 
-increment_details_level()
+main()

@@ -152,10 +152,16 @@ if HAS_QT:
 
             layout.addWidget(header_frame)
 
-            # Content frame (holds user widgets)
+            # Content frame (holds user widgets) with left border for visual hierarchy
             self._content_frame = QFrame()
+            self._content_frame.setStyleSheet(f"""
+                QFrame {{
+                    border-left: 2px solid {color};
+                    margin-left: 8px;
+                }}
+            """)
             self._content_layout = QVBoxLayout(self._content_frame)
-            self._content_layout.setContentsMargins(16, 4, 0, 4)
+            self._content_layout.setContentsMargins(12, 4, 0, 4)
             self._content_layout.setSpacing(4)
             layout.addWidget(self._content_frame)
 
@@ -554,6 +560,123 @@ if HAS_QT:
             """)
 
     # =========================================================================
+    # TAB WIDGET
+    # =========================================================================
+
+    class TabWidget(QWidget):
+        """
+        A styled tab widget for organizing content into tabs.
+
+        Features:
+        - Dark theme styling matching LKS panel
+        - Tab bar with horizontal tabs
+        - Emoji support in tab labels
+        - Scroll area in each tab content
+
+        Args:
+            parent: Parent widget
+            tabs: List of (tab_label, content_widget) tuples
+        """
+
+        tab_changed = Signal(int)
+
+        def __init__(
+            self,
+            parent: QWidget | None = None,
+        ) -> None:
+            super().__init__(parent)
+            from PySide6.QtWidgets import QTabWidget, QScrollArea
+
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+
+            # Create tab widget with dark styling
+            self._tab_widget = QTabWidget()
+            self._tab_widget.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #444;
+                    background: #2d2d2d;
+                }
+                QTabBar::tab {
+                    background: #353535;
+                    border: 1px solid #444;
+                    border-bottom: none;
+                    padding: 6px 12px;
+                    margin-right: 2px;
+                    color: #bbb;
+                    font-size: 11px;
+                }
+                QTabBar::tab:selected {
+                    background: #2d2d2d;
+                    color: #90caf9;
+                    border-bottom: 2px solid #90caf9;
+                }
+                QTabBar::tab:hover {
+                    background: #404040;
+                    color: #fff;
+                }
+            """)
+            self._tab_widget.currentChanged.connect(self._on_tab_changed)
+            layout.addWidget(self._tab_widget)
+
+        def add_tab(self, label: str, widget: QWidget) -> int:
+            """
+            Add a tab with the given label and content widget.
+
+            Args:
+                label: Tab label text (emojis supported)
+                widget: Content widget for the tab
+
+            Returns:
+                Index of the new tab
+            """
+            return self._tab_widget.addTab(widget, label)
+
+        def add_scrollable_tab(self, label: str) -> QVBoxLayout:
+            """
+            Add a tab with scrollable content area.
+
+            Args:
+                label: Tab label text (emojis supported)
+
+            Returns:
+                Layout to add content widgets to
+            """
+            from PySide6.QtWidgets import QScrollArea
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setStyleSheet(
+                "QScrollArea { border: none; background: transparent; }")
+
+            content = QWidget()
+            content_layout = QVBoxLayout(content)
+            content_layout.setContentsMargins(4, 4, 4, 4)
+            content_layout.setSpacing(4)
+
+            scroll.setWidget(content)
+            self._tab_widget.addTab(scroll, label)
+
+            return content_layout
+
+        def current_index(self) -> int:
+            """Get current tab index."""
+            return self._tab_widget.currentIndex()
+
+        def set_current_index(self, index: int) -> None:
+            """Set current tab by index."""
+            self._tab_widget.setCurrentIndex(index)
+
+        def tab_count(self) -> int:
+            """Get number of tabs."""
+            return self._tab_widget.count()
+
+        def _on_tab_changed(self, index: int) -> None:
+            """Handle tab change."""
+            self.tab_changed.emit(index)
+
+    # =========================================================================
     # TOOLTIP (utility for custom tooltips)
     # =========================================================================
 
@@ -596,6 +719,15 @@ else:
 
     class SectionHeader:  # type: ignore
         def __init__(self, *args, **kwargs): pass
+
+    class TabWidget:  # type: ignore
+        tab_changed = None
+        def __init__(self, *args, **kwargs): pass
+        def add_tab(self, *args, **kwargs): return 0
+        def add_scrollable_tab(self, *args, **kwargs): return None
+        def current_index(self): return 0
+        def set_current_index(self, index): pass
+        def tab_count(self): return 0
 
     def add_tooltip(widget, text: str) -> None:
         pass

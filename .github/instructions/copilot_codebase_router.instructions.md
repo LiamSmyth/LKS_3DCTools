@@ -45,8 +45,11 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 │   └── ...
 ├── utils/                    # Low-level utilities
 │   ├── __init__.py           # Package exports
+│   ├── action_base.py        # 🆕 @action decorator, Action base class for hot-reload
 │   ├── action_discovery.py   # 🆕 Pure Python action script discovery
 │   ├── coat_menu_utils.py    # 🆕 3DCoat menu registration wrapper
+│   ├── menu_cleanup.py       # 🆕 Delete stale LKS_*.xml menu entries
+│   ├── hot_reload.py         # 🆕 Dynamic module discovery and reload
 │   ├── scene_api.py          # Thin wrappers for coat iterators
 │   ├── scope_utils.py        # Scope enum and resolution
 │   ├── SceneElement_visibility_utils.py  # Pure visibility/ghost functions
@@ -68,7 +71,13 @@ LKS/                           # cModule root (in StdScripts/cModules/)
 ├── ui/                       # Qt UI components
 │   ├── __init__.py           # Exports DARK_STYLESHEET
 │   ├── styles.py             # Qt stylesheets and color constants
-│   └── widgets.py            # Reusable Qt widgets (CollapsibleSection, ButtonGrid, ActivityLog)
+│   ├── widgets.py            # Reusable Qt widgets (CollapsibleSection, ButtonGrid, ActivityLog)
+│   ├── ui_main.py            # Main panel window
+│   ├── ui_tab_tools.py       # Tools tab container
+│   ├── ui_tab_extension.py   # Extension tab (reload, register)
+│   ├── ui_tab_outliner.py    # Scene outliner tab
+│   ├── ui_widget_sub_header.py # Sub-header widget for sections
+│   └── ui_collapsible_*.py   # Collapsible tool sections (see UI Components)
 ├── data/                     # Runtime state and settings
 │   ├── lks_settings.json     # General settings
 │   ├── lks_brush_settings.json # Brush settings
@@ -243,6 +252,63 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 - `KNOWN_CONTEXTS` - Set of known context prefixes (SculptObject, Brush, Scene, etc.)
 - `EXCLUDED_SCRIPTS` - Set of scripts to exclude from auto-registration (panels, lifecycle)
 
+### `action_base.py` 🆕
+**Base class and decorator for action scripts with automatic hot-reload.**
+
+**Decorator:**
+- `@action` - Wraps a function to call `reload_all()` before execution
+
+**Base Class:**
+- `Action` - Abstract base for action scripts with room validation
+  - `ROOM: str | None` - Override to require specific room (e.g., "Sculpt")
+  - `execute()` - Abstract method to implement action logic
+  - `run()` - Calls reload_all() then execute(), validates room if set
+
+**Functions:**
+- `run_action(action_fn, room?)` - Convenience wrapper for simple functions
+
+**Usage:**
+```python
+# Simple decorator pattern (preferred)
+from utils.action_base import action
+
+@action
+def main() -> None:
+    from ops.SculptObject_Decimate import main as op_main
+    op_main(scope=Scope.CURRENT, reduction_percent=50.0)
+
+main()
+
+# Class pattern (for room validation)
+from utils.action_base import Action
+
+class MyAction(Action):
+    ROOM = "Sculpt"  # Require sculpt room
+    
+    def execute(self) -> None:
+        from ops.SomeOp import main as op_main
+        op_main()
+
+MyAction().run()
+```
+
+### `hot_reload.py` 🆕
+**Dynamic module discovery and hot-reload for development workflow.**
+
+**Functions:**
+- `discover_lks_modules()` → `list[tuple[str, int]]` - Discover loaded LKS modules from sys.modules
+- `reload_all()` → `tuple[int, int]` - Reload all discovered modules, returns (reloaded, failed)
+- `reload_by_prefix(prefix)` → `tuple[int, int]` - Reload modules matching prefix
+- `reload_for_panel()` → `tuple[int, int]` - Reload UI modules for panel refresh
+
+**Constants:**
+- `PACKAGE_ORDER` - Priority order: utils (0) → ops (1) → ui (2)
+
+**Notes:**
+- Uses dynamic discovery from `sys.modules` (no static lists)
+- Skips `utils.hot_reload` itself to avoid mid-reload corruption
+- Used by `@action` decorator and panel reload button
+
 ### `coat_menu_utils.py` 🆕
 **3DCoat menu registration utilities. Depends on `coat` module.**
 
@@ -261,6 +327,28 @@ Scripts exposed to 3DCoat. Naming: `<Context>_<Action>_<Config>_<Scope>.py`
 
 **Initialization:**
 - `initialize_lks_menu()` → `tuple[int, int]` - Discover and register all actions (call from `__onstartup.py`)
+
+### `menu_cleanup.py` 🆕
+**Menu cleanup utilities for removing stale LKS menu entries.**
+
+3DCoat persists menu registrations as XML files in `ExtraMenuItems/`. This module removes them.
+
+**Functions:**
+- `get_extra_menu_items_path()` → `Path | None` - Get ExtraMenuItems folder path
+- `find_lks_menu_files(path?)` → `list[Path]` - Find all LKS_*.xml files
+- `delete_lks_menu_files(path?)` → `tuple[int, list[str]]` - Delete all LKS_*.xml files
+- `cleanup_lks_menu()` → `tuple[int, list[str]]` - Main cleanup function
+- `get_menu_cleanup_status()` → `dict` - Get file count and names for reporting
+
+**CLI Entry Point:**
+- `python -m utils.menu_cleanup` - Interactive cleanup with confirmation
+
+**Usage from panel:**
+```python
+from utils.menu_cleanup import cleanup_lks_menu
+deleted_count, deleted_names = cleanup_lks_menu()
+# Requires 3DCoat restart to take effect
+```
 
 ### `scene_api.py` 🆕
 **Primary interface for 3DCoat scene context and iteration.**
@@ -309,6 +397,15 @@ Scope enum and resolution for batch operations.
 Pure functions for visibility/ghost manipulation on SceneElements.
 All functions receive elements as arguments - no context fetching.
 
+**Parent Chain Utilities:**
+- `collect_parent_chain(element)` → `list[coat.SceneElement]` - Get all parents up to root
+- `collect_elements_with_parents(elements)` → `list` - Elements + all their parents (deduplicated)
+
+**Isolation State Detection:**
+- `is_visibility_isolated(keep_visible, all_elements)` → `bool` - Check if scene is visibility isolated
+- `is_ghost_isolated(keep_unghosted, all_elements)` → `bool` - Check if scene is ghost isolated
+
+**Basic Operations:**
 - `set_visibility(elements, visible)` → `int`
 - `hide_elements(elements)` → `int`
 - `show_elements(elements)` → `int`
@@ -317,8 +414,13 @@ All functions receive elements as arguments - no context fetching.
 - `unghost_elements(elements)` → `int`
 - `invert_visibility_on_elements(elements)` → `int`
 - `invert_ghost_on_elements(elements)` → `int`
+
+**Filtered Operations:**
 - `hide_except(all_elements, keep_visible)` → `int`
 - `ghost_except(all_elements, keep_unghosted)` → `int`
+- `isolate_visible_with_parents(all_elements, selection)` → `int` - Isolate considering parent chain
+- `toggle_visibility_isolation(all_elements, selection)` → `tuple[bool, int]` - Toggle isolation state
+- `toggle_ghost_isolation(all_elements, selection)` → `tuple[bool, int]` - Toggle ghost isolation
 
 ### `Scene_layer_utils.py`
 Layer management for standard 2-layer setup.
@@ -584,6 +686,34 @@ section.content_layout.addWidget(grid)
 self._log = ActivityLog()
 self._log.log_success("Operation completed")
 ```
+
+### Collapsible Tool Sections (`ui_collapsible_*.py`)
+
+Modular UI sections that plug into the Tools tab. Each file exports a `create_section()` function
+that returns a `CollapsibleSection` widget.
+
+**Pattern for creating a collapsible section:**
+```python
+# ui/ui_collapsible_example_tools.py
+def create_section() -> CollapsibleSection:
+    """Create the Example Tools section."""
+    section = CollapsibleSection(title="Example Tools", color="#4fc3f7", collapsed=False)
+    # Add widgets to section.content_layout
+    return section
+```
+
+**Available sections:**
+- `ui_collapsible_decimate_tools.py` - Quick decimate (50%, 80%) + reduction slider with scope buttons
+- `ui_collapsible_proxy_tools.py` - Proxy/cache mode radio buttons (Decimate 16x/8x/4x, Reduce 8x/4x/2x)
+- `ui_collapsible_resample_tools.py` - Half/Double resample with scope buttons
+- `ui_collapsible_mode_tools.py` - Surface/Voxels conversion with scope buttons
+- `ui_collapsible_scale_tools.py` - Quick scale + slider with apply scope buttons
+- `ui_collapsible_visibility_tools.py` - Hide/Show with scope buttons, toggle isolate
+- `ui_collapsible_ghost_tools.py` - Ghost/Unghost with scope buttons, invert, toggle isolate
+- `ui_collapsible_subdiv_tools.py` - Subdivide, symmetry tools
+- `ui_collapsible_smart_tools.py` - Uniform density, remesh, ID colors
+- `ui_collapsible_autopo_tools.py` - Autopo configuration and workflow
+- `ui_collapsible_layers_tools.py` - Layer management
 
 ## 🖼️ Panels
 

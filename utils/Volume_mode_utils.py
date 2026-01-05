@@ -95,6 +95,13 @@ def ensure_surface_mode(volume: coat.Volume) -> None:
     convert_to_surface(volume)
 
 
+def ensure_voxel_mode(volume: coat.Volume) -> None:
+    """Ensure volume is in voxel mode (convert from surface if needed)."""
+    if volume.isSurface():
+        volume.toVoxels()
+        wait_frames(MESH_OP_WAIT_FRAMES)
+
+
 def voxelize_to_polycount(target_polycount: int) -> None:
     """Voxelize current Volume to target polycount."""
     execute_voxelize(target_polycount)

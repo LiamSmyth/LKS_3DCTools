@@ -227,7 +227,7 @@ Examples:
 - `Brush_IncrementDetailsLevel.py` - Increment brush detail level
 - `Autopo_ToSculpt.py` - Run autopo and import to sculpt
 
-**Pattern (action scripts call operators):**
+**Pattern (action scripts with @action decorator for hot-reload):**
 ```python
 """
 Brief description.
@@ -235,17 +235,25 @@ Brief description.
 Room: Sculpt
 Action: One-line description
 """
-from ops.SculptObject_Decimate import main as op_main
-from utils.scope_utils import Scope
+from utils.action_base import action
 
 
+@action
 def main() -> None:
     """Decimate selected object to half polycount."""
+    from ops.SculptObject_Decimate import main as op_main
+    from utils.scope_utils import Scope
+    
     op_main(scope=Scope.CURRENT, reduction_percent=50.0)
 
 
 main()
 ```
+
+**Key points:**
+- Use `@action` decorator for automatic hot-reload during development
+- Imports go INSIDE `main()` so they're reloaded each time
+- The decorator calls `reload_all()` before executing the function
 
 ### 5.4 Utility Modules (`_utils/`)
 
@@ -720,6 +728,59 @@ LLM agents should maintain todo lists for multi-step tasks.
 - Typo fixes
 - Small bug fixes
 - Changes <100 LOC in ≤2 files
+
+### Development Iteration Workflow
+
+The preferred workflow for building new functionality follows a **"prove it first, then refactor"** pattern:
+
+#### Phase 1: Prototype in Action Script
+1. Create a new action script (e.g., `SculptObject_MyFeature_Selected.py`)
+2. Write the logic inline - imports, business logic, and execution all in one file
+3. Test directly in 3DCoat using Scripts menu or hotkey
+4. Iterate quickly until the behavior is correct
+
+**Example prototype action script:**
+```python
+"""Quick prototype - proves the concept works."""
+import coat
+from utils.scene_api import SceneAPI
+
+# All logic inline for rapid iteration
+element = SceneAPI.get_current_element()
+if element and element.isSculptObject():
+    vol = element.Volume()
+    # ... inline logic here
+    coat.ui.showInfoMessage("Done!", 1000)
+```
+
+#### Phase 2: Extract to Operator + Utils
+Once the prototype works:
+1. **Identify reusable primitives** → move to `utils/` (raw args only)
+2. **Create operator** → move orchestration to `ops/` with Config dataclass if needed
+3. **Convert action to thin wrapper** → just `@action` decorator + operator call
+4. **Add hot-reload** → use `@action` decorator for automatic module reloading
+
+**Converted thin wrapper:**
+```python
+"""Thin wrapper - delegates to operator."""
+from utils.action_base import action
+
+@action
+def main() -> None:
+    from ops.SculptObject_MyFeature import main as op_main
+    from utils.scope_utils import Scope
+    op_main(scope=Scope.CURRENT)
+
+main()
+```
+
+#### Hot-Reload Development
+The `@action` decorator calls `reload_all()` before execution, enabling:
+- Edit `ops/` or `utils/` files
+- Run the action script again immediately
+- Changes take effect without restarting 3DCoat
+
+**Note:** Complex inline scripts (those with nested functions or module-level state) require manual conversion - the automated converter may break indentation.
 
 ## 13. What NOT to Do
 

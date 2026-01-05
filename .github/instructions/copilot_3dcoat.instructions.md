@@ -382,6 +382,175 @@ panel.show()
 
 ---
 
+## 🎨 Qt Panel Widget Patterns
+
+### Zero-Margin Pattern (Compact UI)
+
+Use `setContentsMargins(0, 0, 0, 0)` on all containers and layouts to eliminate spacing:
+
+```python
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+
+# For layouts
+row_layout = QHBoxLayout()
+row_layout.setContentsMargins(0, 0, 0, 0)
+row_layout.setSpacing(4)  # Optional: minimal spacing between items
+
+# For widget containers
+container = QWidget()
+container.setContentsMargins(0, 0, 0, 0)
+container.setLayout(row_layout)
+```
+
+### Label + Scope Button Pattern
+
+For operations that apply to different scopes (Selection, Tree, All), use inline labels:
+
+```python
+# Pattern: "Action:" [Sel] [Tree] [All]
+row_layout = QHBoxLayout()
+row_layout.setContentsMargins(0, 0, 0, 0)
+row_layout.setSpacing(4)
+
+label = QLabel("To Surface:")
+label.setFixedWidth(80)  # Consistent label width
+row_layout.addWidget(label)
+
+grid = ButtonGrid(columns=3)
+grid.add_button("Sel", lambda: op(scope=Scope.CURRENT), "Apply to selected")
+grid.add_button("Tree", lambda: op(scope=Scope.TREE), "Apply to subtree")
+grid.add_button("All", lambda: op(scope=Scope.ALL), "Apply to all")
+row_layout.addWidget(grid)
+```
+
+**Key principles:**
+- Fixed-width labels (80px typical) for alignment
+- Short button text: "Sel" not "Selection", "Tree" not "Subtree"
+- Tooltips provide full context
+- One row per action type
+
+### Imports Inside Callbacks (Hot-Reload)
+
+Import operators inside callback lambdas to enable hot-reload:
+
+```python
+# GOOD - imports inside callback for hot-reload
+def _on_decimate_sel():
+    from ops.SculptObject_Decimate import main as op_decimate
+    from utils.scope_utils import Scope
+    op_decimate(scope=Scope.CURRENT, reduction_percent=50.0)
+
+btn.clicked.connect(_on_decimate_sel)
+
+# BAD - imports at module level break hot-reload
+from ops.SculptObject_Decimate import main as op_decimate  # Cached at import!
+btn.clicked.connect(lambda: op_decimate(scope=Scope.CURRENT))
+```
+
+### Radio Button Rows Pattern
+
+For mutually exclusive options that need organization:
+
+```python
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QRadioButton, QButtonGroup
+
+# Create a button group (ensures mutual exclusivity)
+self._mode_group = QButtonGroup()
+
+# Row 1: "Decimate:" [16x] [8x] [4x]
+row1_layout = QHBoxLayout()
+row1_layout.setContentsMargins(0, 0, 0, 0)
+label1 = QLabel("Decimate:")
+label1.setFixedWidth(60)
+row1_layout.addWidget(label1)
+
+for text, value in [("16x", 16), ("8x", 8), ("4x", 4)]:
+    radio = QRadioButton(text)
+    radio.setProperty("value", value)
+    self._mode_group.addButton(radio)
+    row1_layout.addWidget(radio)
+
+# Row 2: "Reduce:" [8x] [4x] [2x]
+row2_layout = QHBoxLayout()
+row2_layout.setContentsMargins(0, 0, 0, 0)
+label2 = QLabel("Reduce:")
+label2.setFixedWidth(60)
+row2_layout.addWidget(label2)
+
+for text, value in [("8x", 8), ("4x", 4), ("2x", 2)]:
+    radio = QRadioButton(text)
+    radio.setProperty("value", value)
+    self._mode_group.addButton(radio)  # Same group = mutual exclusivity
+    row2_layout.addWidget(radio)
+```
+
+### Enum Parameters Over Booleans
+
+Use enums in operators for clarity, not booleans:
+
+```python
+# GOOD - enum is clear
+from ops.SculptObject_ModeConvert import main as op_mode, ConvertMode
+op_mode(scope=Scope.CURRENT, mode=ConvertMode.TO_SURFACE)
+op_mode(scope=Scope.CURRENT, mode=ConvertMode.TO_VOXELS)
+
+# BAD - boolean is ambiguous
+op_mode(scope=Scope.CURRENT, to_voxels=True)   # What is True? Surface or Voxels?
+```
+
+### Collapsible Section Pattern
+
+Use CollapsibleSection for organizing related controls:
+
+```python
+from ui.widgets import CollapsibleSection, ButtonGrid
+
+section = CollapsibleSection(
+    title="Decimate",
+    color="#ffb74d",  # Orange accent
+    collapsed=False
+)
+
+# Add content to section.content_layout
+grid = ButtonGrid(columns=3)
+grid.add_button("50%", lambda: decimate(50), "Reduce to 50%")
+grid.add_button("80%", lambda: decimate(80), "Reduce to 80%")
+section.content_layout.addWidget(grid)
+```
+
+### Slider with Value Display Pattern
+
+For sliders that need a visible value:
+
+```python
+from PySide6.QtWidgets import QHBoxLayout, QSlider, QLabel
+from PySide6.QtCore import Qt
+
+row_layout = QHBoxLayout()
+row_layout.setContentsMargins(0, 0, 0, 0)
+
+label = QLabel("Scale:")
+label.setFixedWidth(50)
+row_layout.addWidget(label)
+
+slider = QSlider(Qt.Horizontal)
+slider.setRange(-200, 200)  # Log scale mapping
+slider.setValue(0)
+row_layout.addWidget(slider, stretch=1)
+
+value_label = QLabel("1.0x")
+value_label.setFixedWidth(50)
+row_layout.addWidget(value_label)
+
+# Update value label on slider change
+def update_value():
+    factor = 10 ** (slider.value() / 100.0)  # Log scale
+    value_label.setText(f"{factor:.2f}x")
+slider.valueChanged.connect(update_value)
+```
+
+---
+
 ## �📦 Settings Persistence
 
 ### LKS Settings System

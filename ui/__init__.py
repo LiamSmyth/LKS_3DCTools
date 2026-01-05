@@ -1,32 +1,26 @@
 """
-LKS UI module.
+LKS UI Package.
 
-Contains PySide6/Qt-based UI components and styles for the LKS cModule.
+Modular UI components for the LKS Tools panel.
 
-Widgets:
-    CollapsibleSection: Expandable/collapsible group with header
-    ButtonGrid: Grid of buttons with scope-based layout
-    ActivityLog: Scrollable log display with timestamped messages
-    LabeledSlider: Slider with label and value display
-    SectionHeader: Styled section header label
-    add_tooltip: Utility to add tooltips to widgets
+Structure:
+    ui_main.py              - Main panel (header, tabs, footer, log)
+    ui_tab_*.py             - Tab content factories
+    ui_collapsible_*.py     - Collapsible section factories
+
+Usage:
+    from ui.ui_main import LKSMainPanel
+    panel = LKSMainPanel()
+    panel.show()
 """
-from .styles import DARK_STYLESHEET
-from .widgets import (
-    CollapsibleSection,
-    ButtonGrid,
-    ActivityLog,
-    LabeledSlider,
-    SectionHeader,
-    add_tooltip,
-)
+from __future__ import annotations
 
-__all__ = [
-    "DARK_STYLESHEET",
-    "CollapsibleSection",
-    "ButtonGrid",
-    "ActivityLog",
-    "LabeledSlider",
-    "SectionHeader",
-    "add_tooltip",
+# Re-export main panel for convenience
+try:
+    from ui.ui_main import LKSMainPanel
+except ImportError:
+    LKSMainPanel = None  # type: ignore
+
+__all__: list[str] = [
+    "LKSMainPanel",
 ]

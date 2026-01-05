@@ -6,7 +6,16 @@ Runs autopo and imports result as multiresolution lowest level.
 Room: Sculpt
 Action: Autopo -> import as multiresolution
 """
-from utils.autopo_utils import autopo_to_multiresolution
+from utils.action_base import action
 
-# Execute autopo and import as multiresolution
-autopo_to_multiresolution()
+
+@action
+def main() -> None:
+    """Execute the action."""
+    from utils.autopo_utils import autopo_to_multiresolution
+
+    # Execute autopo and import as multiresolution
+    autopo_to_multiresolution()
+
+
+main()

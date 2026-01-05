@@ -168,6 +168,15 @@ from utils.registration_utils import (
     full_reload,
     reload_modules,
     register_actions,
-    LKS_MODULES,
-    ACTION_DEFINITIONS,
+)
+
+# Hot reload utilities (dynamic module discovery)
+from utils.hot_reload import (
+    reload_all,
+    discover_lks_modules,
+    clear_pycache,
+    invalidate_import_caches,
+    clear_lks_from_sys_modules,
+    fresh_reload,
+    reload_for_panel,
 )

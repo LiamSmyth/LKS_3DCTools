@@ -11,7 +11,8 @@ Pattern:
 import coat
 from enum import IntEnum
 
-from utils.coat_ui_utils import wait_frames, show_message, CMD_DIALOG_OK
+from utils.coat_ui_utils import wait_frames, show_message, show_error, CMD_DIALOG_OK
+from utils.Volume_mode_utils import ensure_voxel_mode
 
 
 # =============================================================================
@@ -84,6 +85,18 @@ def create_boolean_child(
     if not parent:
         show_message("No parent element provided", 3000)
         return None
+
+    # Ensure parent is a sculpt object
+    if not parent.isSculptObject():
+        show_error("Parent must be a sculpt object", 3000)
+        return None
+
+    # Ensure parent is in voxel mode (required for live booleans)
+    parent_vol: coat.Volume = parent.Volume()
+    if parent_vol.isSurface():
+        show_message("Converting parent to voxel mode...", 2000)
+        ensure_voxel_mode(parent_vol)
+        wait_frames(BOOLEAN_WAIT_FRAMES)
 
     # Duplicate parent (child inherits voxel mode from parent)
     child: coat.SceneElement = parent.duplicate()

@@ -11,38 +11,28 @@ This prevents meshes from being merged and preserves shape better.
 Room: Sculpt
 Action: Subdivide or decimate children to match parent's polygon density
 """
-import coat
-from utils.scene_api import SceneAPI
-from utils.Volume_density_utils import smart_match_density
-from utils.coat_ui_utils import show_message, show_error
+from utils.action_base import action
 
 
+@action
 def main() -> None:
     """Smart density matching for all subtree objects."""
-    reference: coat.SceneElement | None = SceneAPI.get_current_element()
-    if not reference:
-        show_error("No object selected", 2000)
-        return
+    from ops.SculptObject_UniformDensity import main as op_main, DensityMode
+    from utils.scope_utils import Scope
 
-    if not reference.isSculptObject():
-        show_error("Selected element is not a sculpt object", 2000)
-        return
+    op_main(scope=Scope.TREE, mode=DensityMode.SMART)
 
-    ref_vol: coat.Volume = reference.Volume()
-    ref_polycount: int = ref_vol.getPolycount()
 
-    if ref_polycount <= 0:
-        show_error("Reference object has no polygons", 2000)
-        return
+main()
 
-    # Collect subtree elements (excluding the reference itself)
-    subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(reference)
-    children: list[coat.SceneElement] = [
-        el for el in subtree
-        if el != reference and el.isSculptObject()
-    ]
+ # Collect subtree elements (excluding the reference itself)
+ subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(reference)
+  children: list[coat.SceneElement] = [
+       el for el in subtree
+       if el != reference and el.isSculptObject()
+       ]
 
-    if not children:
+   if not children:
         show_message("No child objects to process", 2000)
         return
 

@@ -89,14 +89,14 @@ def register_action(
         menu_name: Target menu (default: "Scripts")
 
     Returns:
-        True if registered successfully, False if already exists or failed
+        True if newly registered, False if already existed (translation still updated)
     """
-    # Check if already registered
+    # Always update translation (in case display name changed)
+    coat.ui.addTranslation(menu_id, display_name)
+
+    # Check if already registered in menu
     if coat.ui.checkIfMenuItemInserted(menu_id):
         return False
-
-    # Add translation for display name
-    coat.ui.addTranslation(menu_id, display_name)
 
     # Get path in 3DCoat format
     path_str: str = resolve_script_path(script_path)
@@ -114,6 +114,9 @@ def register_actions_from_discovery(
     """
     Register multiple actions from discovery results.
 
+    Actions are sorted by display_name before registration so they
+    appear alphabetically in the menu.
+
     Args:
         actions: List of ActionInfo from action_discovery
         menu_name: Target menu (default: "Scripts")
@@ -124,7 +127,12 @@ def register_actions_from_discovery(
     registered: int = 0
     skipped: int = 0
 
-    for action in actions:
+    # Sort by display_name for alphabetical menu ordering
+    sorted_actions: list[ActionInfo] = sorted(
+        actions, key=lambda a: a.display_name
+    )
+
+    for action in sorted_actions:
         if register_action(
             menu_id=action.menu_id,
             display_name=action.display_name,
