@@ -51,7 +51,7 @@ def create_proxy_section(
     import coat
 
     section = CollapsibleSection(
-        title="⚡ Proxy / Cache", color="#80deea", collapsed=True)
+        title="📦 Proxy / Cache", collapsed=True, state_key="section_proxy")
     layout = section.content_layout
 
     # --- Proxy Mode Radio Buttons (shared button group for mutual exclusivity) ---

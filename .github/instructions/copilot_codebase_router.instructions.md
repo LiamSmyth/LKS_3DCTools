@@ -203,9 +203,9 @@ PySide6 widgets for the LKS panel.
 ### Core UI Files
 | File | Description |
 |------|-------------|
-| `styles.py` | Dark theme stylesheet and color constants |
+| `styles.py` | Dark theme stylesheet with 20+ COLOR_* constants and f-string generation |
 | `ui_main.py` | Main panel window |
-| `ui_tab_tools.py` | Tools tab container |
+| `ui_tab_tools.py` | Tools tab with reorderable sections via GripBoxContainer |
 | `ui_tab_extension.py` | Extension tab (reload, register) |
 | `ui_tab_outliner.py` | Scene outliner (objects + layer stub) |
 | `ui_widget_sub_header.py` | Sub-header widget |
@@ -213,17 +213,16 @@ PySide6 widgets for the LKS panel.
 ### Collapsible Sections
 | File | Description |
 |------|-------------|
-| `ui_collapsible_decimate_tools.py` | Decimate section |
-| `ui_collapsible_proxy_tools.py` | Proxy/cache mode section |
-| `ui_collapsible_resample_tools.py` | Resample section |
-| `ui_collapsible_mode_tools.py` | Surface/Voxels conversion section |
-| `ui_collapsible_scale_tools.py` | Scale section |
-| `ui_collapsible_visibility_tools.py` | Hide/Show section |
-| `ui_collapsible_ghost_tools.py` | Ghost/Unghost section |
-| `ui_collapsible_subdiv_tools.py` | Subdivide/symmetry section |
-| `ui_collapsible_smart_tools.py` | Uniform density, remesh, ID colors |
-| `ui_collapsible_autopo_tools.py` | Autopo configuration |
-| `ui_collapsible_layers_tools.py` | Layer management (setup, clean, consolidate) |
+| `ui_collapsible_decimate_tools.py` | 🔻 Decimate section with emoji header |
+| `ui_collapsible_proxy_tools.py` | 📦 Proxy/cache mode section |
+| `ui_collapsible_resample_tools.py` | 🔄 Resample section |
+| `ui_collapsible_mode_tools.py` | ⚙️ Surface/Voxels conversion section |
+| `ui_collapsible_scale_tools.py` | 📏 Scale section |
+| `ui_collapsible_visibility_ghost_tools.py` | 👁️👻 Visibility & Ghost combined section |
+| `ui_collapsible_smart_tools.py` | ✨ Smart Actions (uniform density, remesh, ID colors) |
+| `ui_collapsible_autopo_tools.py` | 🤖 Autopo configuration (polycount max 100k) |
+| `ui_collapsible_subdiv_tools.py` | 🔺 Dynamic Subdiv section |
+| `ui_collapsible_layers_tools.py` | 📚 Layer management (setup, clean, consolidate) |
 | `ui_collapsible_booleans_tools.py` | Voxel boolean operations |
 
 ### Reusable Widgets (`utils/ui/widgets/`)
@@ -240,10 +239,26 @@ Individual widget modules for better maintainability. Import from `utils.ui.widg
 | `section_header.py` | Styled section header label |
 | `tab_widget.py` | Tabbed container for organizing content |
 | `tooltip.py` | Rich HTML tooltip with delayed display |
+| `tab_container.py` | TabContainer class + `create_tab_with_revert()` factory for consistent tab structure |
+| `grip_box_item.py` | GripBox widget - individual item wrapper with 14px drag column on left |
+| `grip_box_container.py` | GripBoxContainer - parent managing drag-drop reordering with live preview |
 
 **Usage:**
 ```python
-from utils.ui.widgets import CollapsibleSection, ButtonGrid, add_tooltip, ToolTip
+from utils.ui.widgets import (
+    CollapsibleSection, ButtonGrid, add_tooltip, ToolTip,
+    create_tab_with_revert, GripBoxContainer, GripBox
+)
+
+# Tab with revert button
+tab = create_tab_with_revert(log_success, log_error, title="Tools")
+layout = tab.content_layout  # Add content here
+return tab.widget
+
+# Reorderable sections
+container = GripBoxContainer()
+container.add_widget(section1, state_key="section1")
+container.add_widget(section2, state_key="section2")
 ```
 
 ---

@@ -1,4 +1,4 @@
-"""
+﻿"""
 LKS UI - Mode Conversion Tools Section.
 
 Collapsible section for converting between surface and voxel modes.
@@ -39,7 +39,7 @@ def create_mode_section(
         CollapsibleSection widget
     """
     section = CollapsibleSection(
-        title="🔄 Mode Convert", color="#ce93d8", collapsed=True)
+        title="⚙️ Mode Convert", collapsed=True, state_key="section_mode")
 
     def on_convert(scope_name: str, to_voxels: bool) -> None:
         try:

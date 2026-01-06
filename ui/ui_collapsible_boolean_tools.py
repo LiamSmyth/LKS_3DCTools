@@ -44,7 +44,7 @@ def create_boolean_section(
         CollapsibleSection widget with boolean tools
     """
     section = CollapsibleSection(
-        title="🔲 Booleans", color="#ce93d8", collapsed=True)
+        title="Booleans", collapsed=True, state_key="section_booleans")
     layout = section.content_layout
 
     # --- VoxBool Operations ---

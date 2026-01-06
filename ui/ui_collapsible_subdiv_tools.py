@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 try:
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
@@ -46,7 +46,7 @@ def create_subdiv_section(
         CollapsibleSection widget with subdiv tools
     """
     section = CollapsibleSection(
-        title="🔺 Dynamic Subdiv", color="#a5d6a7", collapsed=True)
+        title="🔺 Dynamic Subdiv", collapsed=True, state_key="section_subdiv")
     layout = section.content_layout
 
     # --- Details Level ---

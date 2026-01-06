@@ -1,7 +1,7 @@
 {
-  "autopo_polycount": 500,
-  "autopo_capture_details": 0.0,
-  "autopo_auto_density": 0.0,
+  "autopo_polycount": 1844,
+  "autopo_capture_details": 0.2,
+  "autopo_auto_density": 0.3,
   "autopo_hardsurface": false,
   "autopo_voxelize": true,
   "autopo_voxelize_polycount": 100,

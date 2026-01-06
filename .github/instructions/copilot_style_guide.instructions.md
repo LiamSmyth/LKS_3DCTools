@@ -638,6 +638,232 @@ def save_settings() -> None:
     coat.io.toJson(settings._data, SETTINGS_FILE)
 ```
 
+## 7.5 Qt/PySide6 UI Patterns (cModule Only)
+
+This cModule uses PySide6 for non-blocking Qt UI panels. These patterns represent verified implementations discovered through development and testing.
+
+### Factory Pattern for Consistent Tabs
+
+Every tab should use `create_tab_with_revert()` factory for consistent structure (revert button, scroll area, content layout):
+
+```python
+from utils.ui.widgets import create_tab_with_revert
+
+# In ui_tab_*.py or panel initialization
+def create_my_tab():
+    """Create tab with auto-included revert button."""
+    tab = create_tab_with_revert(
+        log_success=log_success,
+        log_error=log_error,
+        title="My Tab",
+        scrollable=True  # Optional, default True
+    )
+    # Add content to tab.content_layout
+    btn = QPushButton("Do Thing")
+    tab.content_layout.addWidget(btn)
+    return tab.widget  # Return QWidget to add to QTabWidget
+```
+
+**Factory includes:**
+- Scroll area with QScrollBar styling
+- Content layout with 0 margins (compact)
+- "⟲ Revert UI State to Defaults" button (#3a3a3a bg, #90caf9 text hover)
+- Automatic call to `utils.lks_settings.reset_ui_state()` on revert
+- Consistent styling from `ui/styles.py`
+
+**Benefits:**
+- Prevents margin/padding inconsistencies between tabs
+- Provides consistent reset functionality across all tabs
+- Centralizes tab structure changes (modify factory once, affects all tabs)
+
+**Usage in LKS.py:**
+```python
+# In create_panel() or __init__
+tab_tools = create_tools_tab()
+tab_extension = create_extension_tab()
+tab_outliner = create_outliner_tab()
+
+tabs = QTabWidget()
+tabs.addTab(tab_tools, "🔨 Tools")
+tabs.addTab(tab_extension, "⚙️ Extension")
+tabs.addTab(tab_outliner, "🌳 Outliner")
+```
+
+### Reorderable Widget Container with Live Drag Preview
+
+For organizing related controls into reorderable sections, use `GripBoxContainer`:
+
+```python
+from utils.ui.widgets import GripBoxContainer, CollapsibleSection
+
+# Create container for reorderable items
+container = GripBoxContainer()
+
+# Add items (any QWidget can be wrapped)
+section1 = CollapsibleSection(title="🔻 Decimate", color="#ff9800")
+container.add_widget(section1, state_key="decimate")
+
+section2 = CollapsibleSection(title="📦 Proxy", color="#2196f3")
+container.add_widget(section2, state_key="proxy")
+
+section3 = CollapsibleSection(title="🔄 Resample", color="#4caf50")
+container.add_widget(section3, state_key="resample")
+
+# Add to layout
+layout.addWidget(container)
+
+# Later: get current order or set specific order
+current_order = container.get_order()  # ['decimate', 'proxy', 'resample']
+container.set_order(['resample', 'decimate', 'proxy'])  # Reorder
+```
+
+**GripBoxContainer features:**
+- 14px fixed-width grip column on left side of each item (always visible, #252525 bg)
+- Grip icon: "⋮⋮" in #555555 color for visual affordance
+- **Live drag preview:** Items move in real-time as you drag, showing where drop will occur
+- Drag via Qt mime data (`grip_box_{id}`) with 10px Manhattan threshold
+- Simplistic drag (no pixmap rendering) to avoid crashes in embedded 3DCoat
+- `dragMoveEvent` performs real-time reordering during drag (not just on drop)
+- `dropEvent` finalizes the new order
+
+**Item wrapper (GripBox):**
+- Automatic: `add_widget()` wraps any QWidget in a GripBox
+- Shows grip on hover (#2f2f2f highlight)
+- Full-height grip column aligned to left
+- Preserves wrapped widget styling
+
+### Emoji-Driven UI Design
+
+Use emojis in:
+1. **Section headers** for visual categorization
+2. **Button text** for quick recognition and compact layouts
+3. **Scope indicators** for operation targeting
+
+**Emoji conventions established in this codebase:**
+
+| Category | Emoji | Meaning | Example |
+|----------|-------|---------|---------|
+| **Operations** | 🔻 | Decimate/reduce | "🔻 Decimate" section |
+| | 🔄 | Resample/convert/resync | "🔄 Resample" section, "🔄" invert button |
+| | ⚙️ | Mode/settings | "⚙️ Mode Convert" section |
+| | 📏 | Scale/transform | "📏 Scale" section |
+| | ✂️ | Split/cut | "✂️" split button |
+| | 🧹 | Clean/cleanup | "🧹" cleanup button |
+| **Collections** | 📦 | Cache/proxy/collection | "📦 Proxy" section |
+| | 📚 | Layers/library | "📚 Layers" section |
+| | 🌳 | Tree/hierarchy | Scope icon for subtree |
+| **Visibility** | 👁️ | Eye/visibility | "👁️👻" visibility & ghost section |
+| | 👻 | Ghost/transparency | Part of "👁️👻" |
+| **Intelligence** | 🤖 | Automation/AI | "🤖 Autopo" section |
+| | ✨ | Smart/enhanced | "✨ Smart Actions" section |
+| | 🧠 | Intelligent matching | "🧠" match/analyze buttons |
+| **Structure** | 🔺 | Build/increase | "🔺 Dynamic Subdiv" section (subdivide = add geometry) |
+| **Scope** | ☝️ | Single/current/selection | Scope: "☝️ Selected" |
+| | 🌳 | Tree/hierarchy/subtree | Scope: "🌳 Subtree" |
+| | 🌎 | Global/all/world | Scope: "🌎 All" |
+| **Control** | ▶️ | Play/run/start | "▶️" autopo run button |
+| | ⟲ | Undo/reset/revert | "⟲ Revert UI State to Defaults" button |
+
+**Emoji Naming Guidelines:**
+- Choose emojis that are universally understood (avoid obscure meanings)
+- Prefer single emoji per section (not emoji combinations in titles)
+- Scope icons (☝️, 🌳, 🌎) always appear together in legend
+- Button text can be emoji-only if space is limited (e.g., "🧠" for "Smart Density Match")
+- Emoji should appear at START of text: "🤖 Autopo" not "Autopo 🤖"
+
+### Color Constants Pattern
+
+Define all colors as module-level constants in `ui/styles.py` rather than hardcoding hex values:
+
+```python
+# ui/styles.py
+
+# COLOR_<PURPOSE>_<TONE> = "#hexvalue"
+COLOR_BG_PRIMARY: str = "#2b2b2b"           # Main background
+COLOR_BG_SECONDARY: str = "#252525"         # Darker bg (grip column)
+COLOR_BG_HOVER: str = "#2f2f2f"             # Hover highlight
+
+COLOR_BORDER: str = "#1a1a1a"               # Border/divider
+COLOR_TEXT: str = "#ddd"                    # Main text
+COLOR_TEXT_MUTED: str = "#888"              # Disabled/secondary text
+
+COLOR_ACCENT: str = "#90caf9"               # Primary accent (blue)
+COLOR_ACCENT_HOVER: str = "#64b5f6"         # Accent hover darker
+COLOR_SUCCESS: str = "#81c784"              # Success/green
+COLOR_ACCENT_ALT: str = "#ffb74d"           # Orange accent
+
+def _create_dark_stylesheet() -> str:
+    """Generate dark theme stylesheet using color constants."""
+    return f"""
+    QWidget {{
+        background-color: {COLOR_BG_PRIMARY};
+        color: {COLOR_TEXT};
+    }}
+    QLineEdit {{
+        background-color: {COLOR_BG_SECONDARY};
+        border: 1px solid {COLOR_BORDER};
+    }}
+    QPushButton {{
+        background-color: {COLOR_BG_SECONDARY};
+    }}
+    QPushButton:hover {{
+        background-color: {COLOR_ACCENT_HOVER};
+        color: {COLOR_BG_PRIMARY};
+    }}
+    """
+
+DARK_STYLESHEET: str = _create_dark_stylesheet()
+```
+
+**Benefits:**
+- Centralized color changes (edit once in styles.py, applies everywhere)
+- Semantic naming ("COLOR_ACCENT" vs "#90caf9")
+- Easier maintenance and theme switching
+- Prevents color value duplication and inconsistency
+- F-string generation allows dynamic stylesheet creation
+
+### One Widget Per File Organization
+
+Place each custom PySide6 widget class in its own module file:
+
+```
+ui/
+└── widgets/
+    ├── __init__.py                    # Re-exports all widgets
+    ├── collapsible_section.py         # CollapsibleSection class
+    ├── button_grid.py                 # ButtonGrid class
+    ├── activity_log.py                # ActivityLog class
+    ├── labeled_slider.py              # LabeledSlider class
+    ├── tab_container.py               # TabContainer + create_tab_with_revert()
+    ├── grip_box_item.py               # GripBox wrapper widget
+    └── grip_box_container.py          # GripBoxContainer parent
+```
+
+**Benefits:**
+- Cleaner imports: `from utils.ui.widgets import GripBox`
+- Easier to locate widget code (filename = class name)
+- Reduces file size, improves readability
+- Simplifies testing individual widgets
+- Easier collaboration (fewer merge conflicts with one file per class)
+
+**Import pattern in __init__.py:**
+```python
+from .collapsible_section import CollapsibleSection
+from .button_grid import ButtonGrid
+from .tab_container import TabContainer, create_tab_with_revert
+from .grip_box_item import GripBox
+from .grip_box_container import GripBoxContainer
+
+__all__ = [
+    "CollapsibleSection",
+    "ButtonGrid",
+    "TabContainer",
+    "create_tab_with_revert",
+    "GripBox",
+    "GripBoxContainer",
+]
+```
+
 ## 8. Error Handling
 
 - Fail fast on invalid inputs

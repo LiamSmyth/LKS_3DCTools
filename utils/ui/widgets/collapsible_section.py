@@ -65,36 +65,60 @@ if HAS_QT:
             collapsed: bool = False,
             checkable: bool = False,
             checked: bool = True,
-            color: str = "#ffb74d",
+            color: str = "#90caf9",  # Unified icy blue
+            state_key: str | None = None,  # Key for persisting state
         ) -> None:
             super().__init__(parent)
+            self._state_key: str | None = state_key
+            
+            # Load initial collapsed state from settings if state_key provided
+            if state_key:
+                try:
+                    from utils.lks_settings import get_ui_state
+                    ui_state = get_ui_state()
+                    # Use saved state, fallback to parameter
+                    collapsed = not getattr(ui_state, f"{state_key}_expanded", not collapsed)
+                except Exception as e:
+                    print(f"[CollapsibleSection] Failed to load state for {state_key}: {e}")
+            
             self._collapsed: bool = collapsed
             self._checkable: bool = checkable
             self._checked: bool = checked
-            self._color: str = color
+            self._color: str = "#90caf9"  # Always use unified icy blue
             self._checkbox: QCheckBox | None = None
 
-            layout = QVBoxLayout(self)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
+            # Main container with rounded border
+            container_frame = QFrame()
+            container_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #2b2b2b;
+                    border: 1px solid #3a3a3a;
+                    border-radius: 6px;
+                    margin: 2px;
+                }
+            """)
+            container_layout = QVBoxLayout(container_frame)
+            container_layout.setContentsMargins(0, 0, 0, 0)
+            container_layout.setSpacing(0)
 
             # Header frame
             header_frame = QFrame()
             header_layout = QHBoxLayout(header_frame)
-            header_layout.setContentsMargins(0, 0, 0, 0)
-            header_layout.setSpacing(4)
+            header_layout.setContentsMargins(6, 4, 6, 4)
+            header_layout.setSpacing(6)
 
-            # Toggle button with arrow indicator
-            self._toggle_btn = QPushButton("▼" if not collapsed else "▶")
-            self._toggle_btn.setFixedSize(20, 20)
+            # Toggle button with plain arrow (▸ collapsed, ▾ expanded)
+            self._toggle_btn = QPushButton("▾" if not collapsed else "▸")
+            self._toggle_btn.setFixedSize(16, 16)
             self._toggle_btn.setStyleSheet("""
                 QPushButton {
                     background: transparent;
                     border: none;
-                    color: #888;
-                    font-size: 10px;
+                    color: #90caf9;
+                    font-size: 12px;
+                    padding: 0px;
                 }
-                QPushButton:hover { color: #fff; }
+                QPushButton:hover { color: #b3d9ff; }
             """)
             self._toggle_btn.clicked.connect(self._on_toggle)
             header_layout.addWidget(self._toggle_btn)
@@ -108,33 +132,43 @@ if HAS_QT:
 
             # Title label (clickable)
             self._title_label = QLabel(title)
-            self._title_label.setStyleSheet(f"""
-                QLabel {{
+            self._title_label.setStyleSheet("""
+                QLabel {
                     font-weight: bold;
                     font-size: 11px;
-                    color: {color};
-                }}
-                QLabel:hover {{ color: #fff; }}
+                    color: #90caf9;
+                    background: transparent;
+                }
+                QLabel:hover { color: #b3d9ff; }
             """)
             self._title_label.setCursor(Qt.PointingHandCursor)
             self._title_label.mousePressEvent = lambda e: self._on_toggle()
             header_layout.addWidget(self._title_label)
             header_layout.addStretch()
 
-            layout.addWidget(header_frame)
+            container_layout.addWidget(header_frame)
 
-            # Content frame (holds user widgets) with left border for visual hierarchy
+            # Content frame with left accent line
             self._content_frame = QFrame()
-            self._content_frame.setStyleSheet(f"""
-                QFrame {{
-                    border-left: 2px solid {color};
-                    margin-left: 8px;
-                }}
+            self._content_frame.setStyleSheet("""
+                QFrame {
+                    border-left: 2px solid #90caf9;
+                    background: transparent;
+                }
             """)
             self._content_layout = QVBoxLayout(self._content_frame)
-            self._content_layout.setContentsMargins(12, 4, 0, 4)
+            self._content_layout.setContentsMargins(12, 6, 6, 6)
             self._content_layout.setSpacing(4)
-            layout.addWidget(self._content_frame)
+            container_layout.addWidget(self._content_frame)
+
+            # Add container to main layout
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(container_frame)
+            
+            # Store container reference for visibility toggle
+            self._container_frame = container_frame
 
             # Apply initial state
             self._content_frame.setVisible(not collapsed)
@@ -167,17 +201,30 @@ if HAS_QT:
             """Expand the section."""
             if self._collapsed:
                 self._collapsed = False
-                self._toggle_btn.setText("▼")
+                self._toggle_btn.setText("▾")
                 self._content_frame.setVisible(True)
                 self.toggled.emit(False)
+                self._save_state()
 
         def collapse(self) -> None:
             """Collapse the section."""
             if not self._collapsed:
                 self._collapsed = True
-                self._toggle_btn.setText("▶")
+                self._toggle_btn.setText("▸")
                 self._content_frame.setVisible(False)
                 self.toggled.emit(True)
+                self._save_state()
+        
+        def _save_state(self) -> None:
+            """Save collapsed state to settings if state_key is set."""
+            if self._state_key:
+                try:
+                    from utils.lks_settings import get_ui_state, save_ui_state
+                    ui_state = get_ui_state()
+                    setattr(ui_state, f"{self._state_key}_expanded", not self._collapsed)
+                    save_ui_state()
+                except Exception as e:
+                    print(f"[CollapsibleSection] Failed to save state for {self._state_key}: {e}")
 
         def set_enabled(self, enabled: bool) -> None:
             """Set checkbox state (if checkable)."""

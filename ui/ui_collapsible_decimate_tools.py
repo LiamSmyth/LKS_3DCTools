@@ -27,7 +27,7 @@ try:
     from PySide6.QtCore import Qt
 
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
 
     HAS_QT: bool = True
 except ImportError:
@@ -54,7 +54,7 @@ def create_decimate_section(
     Returns:
         CollapsibleSection widget with decimate tools
     """
-    section = CollapsibleSection(title="Decimate", color="#ffb74d")
+    section = CollapsibleSection(title="🔻 Decimate", state_key="section_decimate")
     layout: QVBoxLayout = section.content_layout
 
     # --- State ---
@@ -144,11 +144,11 @@ def create_decimate_section(
     apply_row.addWidget(apply_label)
 
     scope_grid = ButtonGrid(columns=3)
-    scope_grid.add_button("Sel", lambda: decimate_scope(
+    scope_grid.add_button("☝️", lambda: decimate_scope(
         "CURRENT"), "Decimate selected")
     scope_grid.add_button(
-        "Tree", lambda: decimate_scope("TREE"), "Decimate subtree")
-    scope_grid.add_button("All", lambda: decimate_scope("ALL"), "Decimate all")
+        "🌳", lambda: decimate_scope("TREE"), "Decimate subtree")
+    scope_grid.add_button("🌎", lambda: decimate_scope("ALL"), "Decimate all")
     apply_row.addWidget(scope_grid)
 
     apply_container = QWidget()
@@ -167,7 +167,7 @@ def create_decimate_section(
             log_error(f"Smart density failed: {e}")
 
     density_grid = ButtonGrid(columns=1)
-    density_grid.add_button("Smart Density Match (Tree)", smart_density,
+    density_grid.add_button("🧠 Match", smart_density,
                             "Match density using tolerance")
     layout.addWidget(density_grid)
 

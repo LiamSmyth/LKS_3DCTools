@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 try:
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
@@ -45,7 +45,7 @@ def create_other_section(
         CollapsibleSection widget with misc tools
     """
     section = CollapsibleSection(
-        title="📦 Other", color="#fff176", collapsed=True)
+        title="✨ Smart Actions", collapsed=True, state_key="section_smart")
     layout = section.content_layout
 
     def id_colors() -> None:
@@ -98,9 +98,9 @@ def create_other_section(
             log_error(f"Merge failed: {e}")
 
     mesh_grid = ButtonGrid(columns=2)
-    mesh_grid.add_button("ID Colors", id_colors, "Fill with ID colors")
-    mesh_grid.add_button("Split Masked", split_masked, "Split frozen/masked")
-    mesh_grid.add_button("Remesh+Symm", remesh_resymm, "Remesh and symmetrize")
+    mesh_grid.add_button("🎨", id_colors, "Fill with ID colors")
+    mesh_grid.add_button("✂️", split_masked, "Split frozen/masked")
+    mesh_grid.add_button("🔧", remesh_resymm, "Remesh and symmetrize")
     mesh_grid.add_button("Merge Parts", merge_preserve,
                          "Merge preserving parts")
     layout.addWidget(mesh_grid)

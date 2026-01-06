@@ -20,7 +20,7 @@ try:
     )
     from PySide6.QtCore import Qt
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
@@ -43,7 +43,7 @@ def create_scale_section(
         CollapsibleSection widget
     """
     section = CollapsibleSection(
-        title="📏 Scale", color="#a5d6a7", collapsed=True)
+        title="📏 Scale", collapsed=True, state_key="section_scale")
     layout = section.content_layout
 
     # State for custom scale factor
@@ -155,11 +155,11 @@ def create_scale_section(
     apply_row.addWidget(apply_label)
 
     apply_grid = ButtonGrid(columns=3)
-    apply_grid.add_button("Sel", lambda: do_scale(
+    apply_grid.add_button("☝️", lambda: do_scale(
         "CURRENT"), "Apply scale to selected")
-    apply_grid.add_button("Tree", lambda: do_scale(
+    apply_grid.add_button("🌳", lambda: do_scale(
         "TREE"), "Apply scale to subtree")
-    apply_grid.add_button("All", lambda: do_scale("ALL"), "Apply scale to all")
+    apply_grid.add_button("🌎", lambda: do_scale("ALL"), "Apply scale to all")
     apply_row.addWidget(apply_grid)
 
     apply_container = QWidget()

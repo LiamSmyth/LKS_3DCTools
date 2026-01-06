@@ -49,7 +49,7 @@ def create_resample_section(
         CollapsibleSection widget with resample tools
     """
     section = CollapsibleSection(
-        title="🔲 Resample", color="#ce93d8", collapsed=True)
+        title="🔄 Resample", collapsed=True, state_key="section_resample")
     layout = section.content_layout
 
     def resample_scope(scope_name: str, scale: float) -> None:
@@ -127,7 +127,7 @@ def create_resample_section(
             log_error(f"Smart resample failed: {e}")
 
     smart_grid = ButtonGrid(columns=1)
-    smart_grid.add_button("Match Density (Tree)",
+    smart_grid.add_button("🧠 Match",
                           smart_resample_tree, "Match density to root element")
     layout.addWidget(smart_grid)
 

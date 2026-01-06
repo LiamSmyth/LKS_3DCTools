@@ -39,7 +39,7 @@ def create_extension_tab(
     """
     from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
 
     container = QWidget()
     layout = QVBoxLayout(container)
@@ -242,6 +242,39 @@ def create_extension_tab(
     tools_section.content_layout.addWidget(tools_grid)
 
     layout.addWidget(tools_section)
+
+    # --- Revert to Defaults Button ---
+    from PySide6.QtWidgets import QPushButton
+    revert_btn = QPushButton("⟲ Revert UI State to Defaults")
+    revert_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #3a3a3a;
+            color: #ddd;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 11px;
+        }
+        QPushButton:hover {
+            background-color: #4a4a4a;
+            border-color: #90caf9;
+        }
+        QPushButton:pressed {
+            background-color: #2a2a2a;
+        }
+    """)
+    revert_btn.setToolTip("Reset all collapsible section states to their defaults")
+    
+    def on_revert() -> None:
+        try:
+            from utils.lks_settings import reset_ui_state
+            reset_ui_state()
+            log_success("UI state reverted to defaults. Restart panel to apply.")
+        except Exception as e:
+            log_error(f"Failed to revert UI state: {e}")
+    
+    revert_btn.clicked.connect(on_revert)
+    layout.addWidget(revert_btn)
 
     layout.addStretch()
 

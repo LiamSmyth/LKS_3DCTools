@@ -10,13 +10,19 @@ This package provides reusable widget primitives for building LKS UI:
 - TabWidget: Tabbed container for organizing content
 - ToolTip: Rich text tooltip with delayed display
 - add_tooltip: Utility function for adding tooltips
+- GripBoxContainer: Reorderable vertical container with grip columns
 
 Usage:
-    from utils.ui.widgets import CollapsibleSection, ButtonGrid, ActivityLog
+    from utils.ui.widgets import CollapsibleSection, ButtonGrid, ActivityLog, GripBoxContainer
 
     log = ActivityLog(parent)
     log.log_info("Operation complete")
     log.log_error("Something failed")
+    
+    # Reorderable sections
+    container = GripBoxContainer()
+    container.add_widget(section1, state_key="section1")
+    container.add_widget(section2, state_key="section2")
 
 All widgets are re-exported here for backwards compatibility.
 """
@@ -29,6 +35,9 @@ from .labeled_slider import LabeledSlider
 from .section_header import SectionHeader
 from .tab_widget import TabWidget
 from .tooltip import ToolTip, add_tooltip
+from .tab_container import TabContainer, create_tab_with_revert
+from .grip_box_container import GripBoxContainer
+from .grip_box_item import GripBox
 
 # Check if Qt is available (re-export for convenience)
 try:
@@ -46,6 +55,10 @@ __all__ = [
     "TabWidget",
     "ToolTip",
     "add_tooltip",
+    "TabContainer",
+    "create_tab_with_revert",
+    "GripBoxContainer",
+    "GripBox",
     "LOG_COLORS",
     "LOG_PREFIXES",
     "HAS_QT",

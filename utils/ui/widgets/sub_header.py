@@ -4,7 +4,7 @@ LKS UI Widget - Sub Header.
 Small section header label for subdividing collapsible sections.
 
 Usage:
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
     layout.addWidget(create_sub_header("Section Name"))
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ def create_sub_header(text: str) -> "QLabel":
         QLabel styled as a sub-header
     """
     lbl = QLabel(text)
-    lbl.setStyleSheet("color: #888; font-size: 9px; font-weight: bold;")
+    lbl.setStyleSheet("color: #b0c4de; font-size: 9px; font-weight: bold;")
     return lbl
 
 

@@ -340,3 +340,118 @@ def reset_settings() -> None:
     settings = get_settings()
     settings._data = dict(GENERAL_DEFAULTS)
     save_settings()
+
+
+# =============================================================================
+# UI STATE SETTINGS (separate singleton for UI panel states)
+# =============================================================================
+
+UI_STATE_FILE: str = "lks_ui_state.json"
+
+
+def _get_ui_state_path() -> str:
+    """Get the absolute path to UI state file."""
+    return str(_DATA_DIR / UI_STATE_FILE)
+
+
+# UI state defaults (collapsible section states, etc.)
+UI_STATE_DEFAULTS: dict = {
+    # Collapsible section expanded states (True = expanded)
+    "section_decimate_expanded": True,
+    "section_proxy_expanded": False,
+    "section_resample_expanded": False,
+    "section_mode_expanded": False,
+    "section_scale_expanded": False,
+    "section_visibility_ghost_expanded": True,
+    "section_subdiv_expanded": False,
+    "section_smart_expanded": False,
+    "section_autopo_expanded": False,
+    "section_layers_expanded": False,
+    "section_booleans_expanded": False,
+}
+
+
+class UIStateSettings:
+    """
+    Singleton for UI state persistence.
+    
+    Stored in lks_ui_state.json to track panel section states across sessions.
+    Uses native Python json for reliable read/write.
+    
+    Usage:
+        ui_state = get_ui_state()
+        print(ui_state.section_decimate_expanded)
+        ui_state.section_decimate_expanded = False
+        save_ui_state()
+    """
+    _instance = None
+    
+    def __init__(self):
+        self._data: dict = dict(UI_STATE_DEFAULTS)
+        self._load()
+    
+    def _load(self) -> None:
+        """Load UI state from JSON file if it exists."""
+        file_path: str = _get_ui_state_path()
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    loaded: dict = json.load(f)
+                    self._data.update(loaded)
+                    print(f"[UIState] Loaded from {file_path}: {self._data}")
+            except Exception as e:
+                print(f"[UIState] Failed to load: {e}")
+    
+    def _save(self) -> None:
+        """Save UI state to JSON file."""
+        file_path: str = _get_ui_state_path()
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(self._data, f, indent=2)
+            print(f"[UIState] Saved to {file_path}: {self._data}")
+        except Exception as e:
+            print(f"[UIState] Failed to save: {e}")
+    
+    def __getattr__(self, name: str):
+        """Get state value by attribute access."""
+        if name.startswith('_'):
+            return super().__getattribute__(name)
+        return self._data.get(name, UI_STATE_DEFAULTS.get(name))
+    
+    def __setattr__(self, name: str, value):
+        """Set state value by attribute access."""
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+    
+    def to_dict(self) -> dict:
+        """Return UI state as dictionary."""
+        return dict(self._data)
+
+
+def get_ui_state() -> UIStateSettings:
+    """Get or create the UI state singleton instance."""
+    if UIStateSettings._instance is None:
+        UIStateSettings._instance = UIStateSettings()
+    return UIStateSettings._instance
+
+
+def save_ui_state() -> None:
+    """Persist UI state to disk using native Python JSON."""
+    ui_state = get_ui_state()
+    ui_state._save()
+
+
+def reload_ui_state() -> None:
+    """Force reload UI state from disk (clears singleton)."""
+    UIStateSettings._instance = None
+
+
+def reset_ui_state() -> None:
+    """Reset UI state to defaults and save."""
+    ui_state = get_ui_state()
+    ui_state._data = dict(UI_STATE_DEFAULTS)
+    save_ui_state()

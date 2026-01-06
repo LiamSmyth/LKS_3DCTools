@@ -2,12 +2,11 @@
 LKS UI - Autopo Tools Collapsible Section.
 
 A collapsible section containing autopo workflow configuration:
-- Target polycount
+- Target polycount slider
 - Capture details slider
 - Auto density slider
-- Option checkboxes (hardsurface, tangent smooth, voxelize, bypass modal)
-- Voxelize polycount
-- Decimate options
+- Option checkboxes (hardsurface, tangent smooth, bypass modal)
+- Voxelize and decimate inline checkboxes with spinboxes
 - Run buttons
 
 Usage:
@@ -24,11 +23,11 @@ if TYPE_CHECKING:
 
 try:
     from PySide6.QtWidgets import (
-        QWidget, QHBoxLayout, QLabel, QSlider, QSpinBox, QCheckBox,
+        QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSlider, QSpinBox, QCheckBox, QFrame,
     )
     from PySide6.QtCore import Qt
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from ui.ui_widget_sub_header import create_sub_header
+    from utils.ui.widgets.sub_header import create_sub_header
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
@@ -57,7 +56,7 @@ def create_autopo_section(
     from utils.lks_settings import get_autopo_settings
 
     section = CollapsibleSection(
-        title="🎯 Autopo", color="#ffcc80", collapsed=True)
+        title="🤖 Autopo", collapsed=True, state_key="section_autopo")
     layout = section.content_layout
 
     settings = get_autopo_settings()
@@ -86,34 +85,71 @@ def create_autopo_section(
         except Exception as e:
             log_error(f"Failed to save autopo settings: {e}")
 
-    # --- Target Polycount ---
+    # --- Property Group Frame Style ---
+    def create_property_group() -> QFrame:
+        """Create a styled property group container."""
+        group = QFrame()
+        group.setStyleSheet("""
+            QFrame {
+                background-color: #2b2b2b;
+                border: 1px solid #3a3a3a;
+                border-radius: 4px;
+            }
+        """)
+        return group
+
+    # --- Target Polycount Slider ---
     layout.addWidget(create_sub_header("Target Polycount"))
+
+    poly_frame = create_property_group()
+    poly_layout = QVBoxLayout(poly_frame)
+    poly_layout.setContentsMargins(6, 6, 6, 6)
 
     poly_row = QHBoxLayout()
     poly_row.setContentsMargins(0, 0, 0, 0)
-    poly_spin = QSpinBox()
-    poly_spin.setRange(1, 1000000)
-    poly_spin.setSingleStep(1000)
-    poly_spin.setValue(settings.autopo_polycount)
-    poly_spin.setToolTip("Target polycount for autopo")
-    widgets["polycount"] = poly_spin
-    poly_row.addWidget(poly_spin)
+    
+    poly_label = QLabel("Polycount:")
+    poly_label.setMinimumWidth(80)
+    poly_label.setToolTip("Target polycount for autopo retopology")
+    poly_row.addWidget(poly_label)
+    
+    poly_slider = QSlider(Qt.Horizontal)
+    poly_slider.setRange(1, 100000)
+    poly_slider.setSingleStep(1000)
+    poly_slider.setValue(settings.autopo_polycount)
+    poly_slider.setToolTip("Target polycount for autopo (1 to 100,000)")
+    poly_row.addWidget(poly_slider)
+    
+    poly_value = QLabel(f"{settings.autopo_polycount:,}")
+    poly_value.setMinimumWidth(70)
+    poly_row.addWidget(poly_value)
+    
+    widgets["polycount"] = poly_slider
+    
+    def on_poly_changed(value: int) -> None:
+        poly_value.setText(f"{value:,}")
+        save_autopo_settings()
+    
+    poly_slider.valueChanged.connect(on_poly_changed)
 
-    poly_container = QWidget()
-    poly_container.setLayout(poly_row)
-    poly_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(poly_container)
+    poly_layout.addLayout(poly_row)
+    layout.addWidget(poly_frame)
 
     # --- Capture Details slider (0-100%) ---
+    details_frame = create_property_group()
+    details_layout = QVBoxLayout(details_frame)
+    details_layout.setContentsMargins(6, 6, 6, 6)
+    
     details_row = QHBoxLayout()
     details_row.setContentsMargins(0, 0, 0, 0)
     details_label = QLabel("Capture Details:")
     details_label.setMinimumWidth(100)
+    details_label.setToolTip("Controls how much surface detail is captured by the retopology mesh. Higher values preserve more detail but may increase polycount.")
     details_slider = QSlider(Qt.Horizontal)
     details_slider.setRange(0, 100)
     details_slider.setSingleStep(5)
     details_slider.setValue(int(settings.autopo_capture_details * 100))
-    details_slider.setToolTip("Detail capture amount (0-100%)")
+    details_slider.setToolTip("Detail capture amount (0-100%). Higher values capture more surface detail.")
     details_value = QLabel(f"{int(settings.autopo_capture_details * 100)}%")
     details_value.setMinimumWidth(35)
     widgets["capture_details"] = details_slider
@@ -128,21 +164,24 @@ def create_autopo_section(
     details_row.addWidget(details_slider)
     details_row.addWidget(details_value)
 
-    details_container = QWidget()
-    details_container.setLayout(details_row)
-    details_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(details_container)
+    details_layout.addLayout(details_row)
+    layout.addWidget(details_frame)
 
     # --- Auto Density slider (0-200%) ---
+    density_frame = create_property_group()
+    density_layout = QVBoxLayout(density_frame)
+    density_layout.setContentsMargins(6, 6, 6, 6)
+    
     density_row = QHBoxLayout()
     density_row.setContentsMargins(0, 0, 0, 0)
     density_label = QLabel("Auto Density:")
     density_label.setMinimumWidth(100)
+    density_label.setToolTip("Controls how much painted density maps influence the retopology. 100% follows the painted density exactly, higher values increase density, lower values decrease it.")
     density_slider = QSlider(Qt.Horizontal)
     density_slider.setRange(0, 200)
     density_slider.setSingleStep(10)
     density_slider.setValue(int(settings.autopo_auto_density * 100))
-    density_slider.setToolTip("Painted density influence (0-200%)")
+    density_slider.setToolTip("Painted density influence (0-200%). 100% = exact match, >100% = denser, <100% = sparser.")
     density_value = QLabel(f"{int(settings.autopo_auto_density * 100)}%")
     density_value.setMinimumWidth(35)
     widgets["auto_density"] = density_slider
@@ -157,118 +196,109 @@ def create_autopo_section(
     density_row.addWidget(density_slider)
     density_row.addWidget(density_value)
 
-    density_container = QWidget()
-    density_container.setLayout(density_row)
-    density_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(density_container)
+    density_layout.addLayout(density_row)
+    layout.addWidget(density_frame)
 
-    # --- Checkboxes row 1: hardsurface, tangent smooth ---
+    # --- Options: Hardsurface | Tangent Smooth | Bypass Modal (single row) ---
     layout.addWidget(create_sub_header("Options"))
 
-    check_row1 = QHBoxLayout()
-    check_row1.setContentsMargins(0, 0, 0, 0)
+    options_frame = create_property_group()
+    options_layout = QVBoxLayout(options_frame)
+    options_layout.setContentsMargins(6, 6, 6, 6)
+
+    check_row = QHBoxLayout()
+    check_row.setContentsMargins(0, 0, 0, 0)
+    
     hardsurface_cb = QCheckBox("Hardsurface")
     hardsurface_cb.setChecked(settings.autopo_hardsurface)
-    hardsurface_cb.setToolTip("Optimize for hard surface models")
+    hardsurface_cb.setToolTip("Optimize for hard surface models with sharp edges")
     widgets["hardsurface"] = hardsurface_cb
 
     tangent_cb = QCheckBox("Tangent Smooth")
     tangent_cb.setChecked(settings.autopo_tangent_smooth)
-    tangent_cb.setToolTip("Apply tangent smoothing")
+    tangent_cb.setToolTip("Apply tangent space smoothing to reduce shading artifacts")
     widgets["tangent_smooth"] = tangent_cb
-
-    hardsurface_cb.stateChanged.connect(save_autopo_settings)
-    tangent_cb.stateChanged.connect(save_autopo_settings)
-    check_row1.addWidget(hardsurface_cb)
-    check_row1.addWidget(tangent_cb)
-
-    check_container1 = QWidget()
-    check_container1.setLayout(check_row1)
-    check_container1.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(check_container1)
-
-    # --- Checkboxes row 2: voxelize, bypass modal ---
-    check_row2 = QHBoxLayout()
-    check_row2.setContentsMargins(0, 0, 0, 0)
-    voxelize_cb = QCheckBox("Voxelize")
-    voxelize_cb.setChecked(settings.autopo_voxelize)
-    voxelize_cb.setToolTip("Voxelize after autopo")
-    widgets["voxelize"] = voxelize_cb
 
     bypass_cb = QCheckBox("Bypass Modal")
     bypass_cb.setChecked(settings.autopo_bypass_density_modal)
-    bypass_cb.setToolTip("Skip density modal dialog")
+    bypass_cb.setToolTip("Skip density modal dialog and use saved settings")
     widgets["bypass_modal"] = bypass_cb
 
-    voxelize_cb.stateChanged.connect(save_autopo_settings)
+    hardsurface_cb.stateChanged.connect(save_autopo_settings)
+    tangent_cb.stateChanged.connect(save_autopo_settings)
     bypass_cb.stateChanged.connect(save_autopo_settings)
-    check_row2.addWidget(voxelize_cb)
-    check_row2.addWidget(bypass_cb)
+    
+    check_row.addWidget(hardsurface_cb)
+    check_row.addWidget(tangent_cb)
+    check_row.addWidget(bypass_cb)
+    check_row.addStretch()
 
-    check_container2 = QWidget()
-    check_container2.setLayout(check_row2)
-    check_container2.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(check_container2)
+    options_layout.addLayout(check_row)
+    layout.addWidget(options_frame)
 
-    # --- Voxelize polycount (x1000) ---
+    # --- Voxelize to K polys: [Checkbox] Label [SpinBox] (inline) ---
+    vox_frame = create_property_group()
+    vox_layout = QVBoxLayout(vox_frame)
+    vox_layout.setContentsMargins(6, 6, 6, 6)
+
     vox_row = QHBoxLayout()
     vox_row.setContentsMargins(0, 0, 0, 0)
-    vox_label = QLabel("Vox Polys (K):")
-    vox_label.setMinimumWidth(90)
+    
+    voxelize_cb = QCheckBox()
+    voxelize_cb.setChecked(settings.autopo_voxelize)
+    voxelize_cb.setToolTip("Voxelize the retopo result to create a sculpt object")
+    widgets["voxelize"] = voxelize_cb
+    voxelize_cb.stateChanged.connect(save_autopo_settings)
+    vox_row.addWidget(voxelize_cb)
+    
+    vox_label = QLabel("Voxelize to K polys:")
+    vox_label.setMinimumWidth(120)
+    vox_row.addWidget(vox_label)
+    
     vox_spin = QSpinBox()
     vox_spin.setRange(100, 10000)
     vox_spin.setSingleStep(100)
     vox_spin.setValue(settings.autopo_voxelize_polycount)
-    vox_spin.setToolTip("Voxelize target polycount (x1000)")
+    vox_spin.setToolTip("Voxelize target polycount (×1000)")
     widgets["vox_polycount"] = vox_spin
-
     vox_spin.valueChanged.connect(save_autopo_settings)
-    vox_row.addWidget(vox_label)
     vox_row.addWidget(vox_spin)
+    vox_row.addStretch()
 
-    vox_container = QWidget()
-    vox_container.setLayout(vox_row)
-    vox_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(vox_container)
+    vox_layout.addLayout(vox_row)
+    layout.addWidget(vox_frame)
 
-    # --- Decimate options ---
+    # --- Decimate if above (K polys): [Checkbox] Label [SpinBox] (inline) ---
+    dec_frame = create_property_group()
+    dec_layout = QVBoxLayout(dec_frame)
+    dec_layout.setContentsMargins(6, 6, 6, 6)
+
     dec_row = QHBoxLayout()
     dec_row.setContentsMargins(0, 0, 0, 0)
-    dec_cb = QCheckBox("Decimate If Above")
+    
+    dec_cb = QCheckBox()
     dec_cb.setChecked(settings.autopo_decimate_if_above)
-    dec_cb.setToolTip("Decimate if above limit")
+    dec_cb.setToolTip("Decimate the retopo if polycount exceeds the limit")
     widgets["decimate_if_above"] = dec_cb
-
     dec_cb.stateChanged.connect(save_autopo_settings)
     dec_row.addWidget(dec_cb)
-
-    dec_container = QWidget()
-    dec_container.setLayout(dec_row)
-    dec_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(dec_container)
-
-    dec_limit_row = QHBoxLayout()
-    dec_limit_row.setContentsMargins(0, 0, 0, 0)
-    dec_limit_label = QLabel("Dec Limit (K):")
-    dec_limit_label.setMinimumWidth(90)
+    
+    dec_label = QLabel("Decimate if above (K polys):")
+    dec_label.setMinimumWidth(150)
+    dec_row.addWidget(dec_label)
+    
     dec_limit_spin = QSpinBox()
     dec_limit_spin.setRange(1, 1000)
     dec_limit_spin.setSingleStep(5)
     dec_limit_spin.setValue(settings.autopo_decimation_limit)
-    dec_limit_spin.setToolTip("Decimation limit (x1000 polys)")
+    dec_limit_spin.setToolTip("Decimation limit (×1000 polys)")
     widgets["decimation_limit"] = dec_limit_spin
-
     dec_limit_spin.valueChanged.connect(save_autopo_settings)
-    dec_limit_row.addWidget(dec_limit_label)
-    dec_limit_row.addWidget(dec_limit_spin)
+    dec_row.addWidget(dec_limit_spin)
+    dec_row.addStretch()
 
-    dec_limit_container = QWidget()
-    dec_limit_container.setLayout(dec_limit_row)
-    dec_limit_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(dec_limit_container)
-
-    # Connect polycount spin to save
-    poly_spin.valueChanged.connect(save_autopo_settings)
+    dec_layout.addLayout(dec_row)
+    layout.addWidget(dec_frame)
 
     # --- Run buttons ---
     layout.addWidget(create_sub_header("Run Autopo"))
@@ -308,11 +338,11 @@ def create_autopo_section(
             log_error(f"Autopo to multires failed: {e}")
 
     run_grid = ButtonGrid(columns=3)
-    run_grid.add_button("Run", autopo_run, "Run autopo with settings")
-    run_grid.add_button("→ Sculpt", autopo_to_sculpt,
-                        "Autopo then import to sculpt")
-    run_grid.add_button("→ Multires", autopo_to_multires,
-                        "Autopo then import as multires")
+    run_grid.add_button("▶️", autopo_run, "Run autopo with configured settings")
+    run_grid.add_button("Autopo → Sculpt", autopo_to_sculpt,
+                        "Run autopo then import to sculpt room")
+    run_grid.add_button("Autopo → Multires", autopo_to_multires,
+                        "Run autopo then import as multires object")
     layout.addWidget(run_grid)
 
     # --- Show Retopo in Sculpt checkbox ---
