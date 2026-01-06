@@ -111,7 +111,7 @@ def create_layers_section(
     # Add buttons and capture references for tooltips
     btn_setup = grid.add_button(
         "Setup", setup_layers, "Create standard layers")
-    btn_clean = grid.add_button("🧹", clean_layers, "Remove empty layers")
+    btn_clean = grid.add_button("🧹 Cleanup", clean_layers, "Remove empty layers")
     btn_consolidate = grid.add_button(
         "Consolidate", consolidate_layers, "Merge all layers")
 

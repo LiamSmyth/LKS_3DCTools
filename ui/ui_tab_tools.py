@@ -77,6 +77,10 @@ def create_tools_tab(
     all_label = QLabel("🌎 All")
     all_label.setStyleSheet("color: #ddd; background: transparent;")
     legend_layout.addWidget(all_label)
+
+    invert_label = QLabel("🔄 Invert")
+    invert_label.setStyleSheet("color: #ddd; background: transparent;")
+    legend_layout.addWidget(invert_label)
     
     legend_layout.addStretch()
     layout.addWidget(legend_frame)

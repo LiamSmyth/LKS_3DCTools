@@ -109,12 +109,12 @@ def create_visibility_section(
     hide_row.addWidget(hide_label)
 
     hide_grid = ButtonGrid(columns=3)
-    hide_grid.add_button("Sel", lambda: on_visibility(
+    hide_grid.add_button("☝️", lambda: on_visibility(
         "CURRENT", False), "Hide selected")
-    hide_grid.add_button("Tree", lambda: on_visibility(
+    hide_grid.add_button("🌳", lambda: on_visibility(
         "TREE", False), "Hide subtree")
     hide_grid.add_button(
-        "All", lambda: on_visibility("ALL", False), "Hide all")
+        "🌎", lambda: on_visibility("ALL", False), "Hide all")
     hide_row.addWidget(hide_grid)
 
     hide_container = QWidget()
@@ -130,11 +130,11 @@ def create_visibility_section(
     show_row.addWidget(show_label)
 
     show_grid = ButtonGrid(columns=3)
-    show_grid.add_button("Sel", lambda: on_visibility(
+    show_grid.add_button("☝️", lambda: on_visibility(
         "CURRENT", True), "Show selected")
-    show_grid.add_button("Tree", lambda: on_visibility(
+    show_grid.add_button("🌳", lambda: on_visibility(
         "TREE", True), "Show subtree")
-    show_grid.add_button("All", lambda: on_visibility("ALL", True), "Show all")
+    show_grid.add_button("🌎", lambda: on_visibility("ALL", True), "Show all")
     show_row.addWidget(show_grid)
 
     show_container = QWidget()
@@ -144,7 +144,7 @@ def create_visibility_section(
 
     # --- Special buttons: [Invert][Isolate][Toggle] ---
     special_grid = ButtonGrid(columns=3)
-    special_grid.add_button("Invert", on_invert,
+    special_grid.add_button("🔄 Invert", on_invert,
                             "Invert all visibility states")
     special_grid.add_button("Isolate", on_isolate_visible,
                             "Hide all except selection + parents")

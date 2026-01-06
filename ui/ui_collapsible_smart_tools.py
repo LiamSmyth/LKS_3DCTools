@@ -98,11 +98,14 @@ def create_other_section(
             log_error(f"Merge failed: {e}")
 
     mesh_grid = ButtonGrid(columns=2)
-    mesh_grid.add_button("🎨", id_colors, "Fill with ID colors")
-    mesh_grid.add_button("✂️", split_masked, "Split frozen/masked")
-    mesh_grid.add_button("🔧", remesh_resymm, "Remesh and symmetrize")
+    mesh_grid.add_button("ID Map (🌳)", id_colors,
+                         "Fill subtree with ID colors for baking")
+    mesh_grid.add_button("✂️ Split Masked", split_masked,
+                         "Split frozen/masked area into new object")
+    mesh_grid.add_button("Safe Symmetrize", remesh_resymm,
+                         "Remesh and symmetrize selection safely")
     mesh_grid.add_button("Merge Parts", merge_preserve,
-                         "Merge preserving parts")
+                         "Merge subtree preserving parts")
     layout.addWidget(mesh_grid)
 
     return section

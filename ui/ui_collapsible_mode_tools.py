@@ -62,11 +62,11 @@ def create_mode_section(
     surf_row.addWidget(surf_label)
 
     surf_grid = ButtonGrid(columns=3)
-    surf_grid.add_button("Sel", lambda: on_convert(
+    surf_grid.add_button("☝️", lambda: on_convert(
         "CURRENT", False), "Convert selected to surface")
-    surf_grid.add_button("Tree", lambda: on_convert(
+    surf_grid.add_button("🌳", lambda: on_convert(
         "TREE", False), "Convert subtree to surface")
-    surf_grid.add_button("All", lambda: on_convert(
+    surf_grid.add_button("🌎", lambda: on_convert(
         "ALL", False), "Convert all to surface")
     surf_row.addWidget(surf_grid)
 
@@ -83,11 +83,11 @@ def create_mode_section(
     vox_row.addWidget(vox_label)
 
     vox_grid = ButtonGrid(columns=3)
-    vox_grid.add_button("Sel", lambda: on_convert(
+    vox_grid.add_button("☝️", lambda: on_convert(
         "CURRENT", True), "Convert selected to voxels")
-    vox_grid.add_button("Tree", lambda: on_convert(
+    vox_grid.add_button("🌳", lambda: on_convert(
         "TREE", True), "Convert subtree to voxels")
-    vox_grid.add_button("All", lambda: on_convert(
+    vox_grid.add_button("🌎", lambda: on_convert(
         "ALL", True), "Convert all to voxels")
     vox_row.addWidget(vox_grid)
 

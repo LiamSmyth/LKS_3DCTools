@@ -71,11 +71,11 @@ def create_resample_section(
     half_row.addWidget(half_label)
 
     half_grid = ButtonGrid(columns=3)
-    half_grid.add_button("Sel", lambda: resample_scope(
-        "CURRENT", 0.5), "Resample to half")
-    half_grid.add_button("Tree", lambda: resample_scope(
+    half_grid.add_button("☝️", lambda: resample_scope(
+        "CURRENT", 0.5), "Resample selection to half")
+    half_grid.add_button("🌳", lambda: resample_scope(
         "TREE", 0.5), "Resample subtree")
-    half_grid.add_button("All", lambda: resample_scope(
+    half_grid.add_button("🌎", lambda: resample_scope(
         "ALL", 0.5), "Resample all")
     half_row.addWidget(half_grid)
 
@@ -92,11 +92,11 @@ def create_resample_section(
     double_row.addWidget(double_label)
 
     double_grid = ButtonGrid(columns=3)
-    double_grid.add_button("Sel", lambda: resample_scope(
-        "CURRENT", 2.0), "Resample to 2x")
-    double_grid.add_button("Tree", lambda: resample_scope(
+    double_grid.add_button("☝️", lambda: resample_scope(
+        "CURRENT", 2.0), "Resample selection to 2x")
+    double_grid.add_button("🌳", lambda: resample_scope(
         "TREE", 2.0), "Resample subtree to 2x")
-    double_grid.add_button("All", lambda: resample_scope(
+    double_grid.add_button("🌎", lambda: resample_scope(
         "ALL", 2.0), "Resample all to 2x")
     double_row.addWidget(double_grid)
 
@@ -105,31 +105,44 @@ def create_resample_section(
     double_container.setContentsMargins(0, 0, 0, 0)
     layout.addWidget(double_container)
 
-    # --- Smart Resample ---
-    def smart_resample_tree() -> None:
+    # --- Match Density (Smart) ---
+    def match_density_tree() -> None:
+        """Smart-match density for subtree against selected reference."""
         try:
-            from utils.scene_api import SceneAPI
-            from utils.Volume_density_utils import resample_to_match_density
-            current = SceneAPI.get_current_element()
-            if not current:
-                log_error("No selection")
-                return
-            subtree = SceneAPI.collect_subtree(current)
-            ref_vol = current.Volume()
-            count: int = 0
-            for el in subtree:
-                if el != current and el.isSculptObject():
-                    resample_to_match_density(el, ref_vol)
-                    count += 1
-            log_success(f"Resampled {count} to match density")
+            from ops.SculptObject_UniformDensity import smart_match_tree
+            count = smart_match_tree()
+            log_success(f"Matched density on {count} subtree objects")
             refresh_tree()
         except Exception as e:
-            log_error(f"Smart resample failed: {e}")
+            log_error(f"Match density (subtree) failed: {e}")
 
-    smart_grid = ButtonGrid(columns=1)
-    smart_grid.add_button("🧠 Match",
-                          smart_resample_tree, "Match density to root element")
-    layout.addWidget(smart_grid)
+    def match_density_all() -> None:
+        """Smart-match density for all sculpt objects against selected reference."""
+        try:
+            from ops.SculptObject_UniformDensity import smart_match_all
+            count = smart_match_all()
+            log_success(f"Matched density on {count} objects (all)")
+            refresh_tree()
+        except Exception as e:
+            log_error(f"Match density (all) failed: {e}")
+
+    match_row = QHBoxLayout()
+    match_row.setContentsMargins(0, 0, 0, 0)
+    match_label = QLabel("Match Density:")
+    match_label.setMinimumWidth(100)
+    match_row.addWidget(match_label)
+
+    match_grid = ButtonGrid(columns=2)
+    match_grid.add_button("🌳", match_density_tree,
+                          "Smart match density on subtree")
+    match_grid.add_button("🌎", match_density_all,
+                          "Smart match density on all objects")
+    match_row.addWidget(match_grid)
+
+    match_container = QWidget()
+    match_container.setLayout(match_row)
+    match_container.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(match_container)
 
     return section
 

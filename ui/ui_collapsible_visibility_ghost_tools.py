@@ -149,7 +149,7 @@ def create_visibility_ghost_section(
 
     # Special buttons: [Invert][Toggle Isolate]
     special_grid = ButtonGrid(columns=2)
-    special_grid.add_button("Invert", on_invert_visibility,
+    special_grid.add_button("🔄 Invert", on_invert_visibility,
                             "Invert all visibility states")
     special_grid.add_button("Toggle Isolate", on_toggle_isolate_visible,
                             "Toggle isolation (show all / isolate)")
@@ -258,7 +258,7 @@ def create_visibility_ghost_section(
             log_error(f"Toggle isolate ghost failed: {e}")
 
     ghost_special_grid = ButtonGrid(columns=2)
-    ghost_special_grid.add_button("🔄", invert_ghost, "Invert ghost states")
+    ghost_special_grid.add_button("🔄 Invert", invert_ghost, "Invert ghost states")
     ghost_special_grid.add_button("Toggle Isolate", toggle_isolate_ghost,
                                   "Toggle ghost isolation (unghost all / isolate)")
     right_layout.addWidget(ghost_special_grid)

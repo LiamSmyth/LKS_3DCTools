@@ -151,11 +151,11 @@ def create_proxy_section(
     toggle_row.addWidget(toggle_label)
 
     toggle_grid = ButtonGrid(columns=3)
-    toggle_grid.add_button("Sel", lambda: toggle_proxy(
+    toggle_grid.add_button("☝️", lambda: toggle_proxy(
         "CURRENT"), "Toggle proxy on selection")
-    toggle_grid.add_button("Tree", lambda: toggle_proxy(
+    toggle_grid.add_button("🌳", lambda: toggle_proxy(
         "TREE"), "Toggle proxy on subtree")
-    toggle_grid.add_button("All", lambda: toggle_proxy(
+    toggle_grid.add_button("🌎", lambda: toggle_proxy(
         "ALL"), "Toggle proxy on all")
     toggle_row.addWidget(toggle_grid)
 

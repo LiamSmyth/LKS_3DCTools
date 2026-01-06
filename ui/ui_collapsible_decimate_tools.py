@@ -156,20 +156,44 @@ def create_decimate_section(
     apply_container.setContentsMargins(0, 0, 0, 0)
     layout.addWidget(apply_container)
 
-    # --- Smart Density ---
-    def smart_density() -> None:
+    # --- Match Density (Smart) ---
+    def match_density_tree() -> None:
+        """Smart-match density for subtree against selected reference."""
         try:
-            from ops.SculptObject_UniformDensity import main as uniform_density, DensityMode
-            count = uniform_density(mode=DensityMode.SMART)
-            log_success(f"Smart matched {count}")
+            from ops.SculptObject_UniformDensity import smart_match_tree
+            count = smart_match_tree()
+            log_success(f"Matched density on {count} subtree objects")
             refresh_tree()
         except Exception as e:
-            log_error(f"Smart density failed: {e}")
+            log_error(f"Match density (subtree) failed: {e}")
 
-    density_grid = ButtonGrid(columns=1)
-    density_grid.add_button("🧠 Match", smart_density,
-                            "Match density using tolerance")
-    layout.addWidget(density_grid)
+    def match_density_all() -> None:
+        """Smart-match density for all sculpt objects against selected reference."""
+        try:
+            from ops.SculptObject_UniformDensity import smart_match_all
+            count = smart_match_all()
+            log_success(f"Matched density on {count} objects (all)")
+            refresh_tree()
+        except Exception as e:
+            log_error(f"Match density (all) failed: {e}")
+
+    density_row = QHBoxLayout()
+    density_row.setContentsMargins(0, 0, 0, 0)
+    density_label = QLabel("Match Density:")
+    density_label.setMinimumWidth(100)
+    density_row.addWidget(density_label)
+
+    density_grid = ButtonGrid(columns=2)
+    density_grid.add_button("🌳", match_density_tree,
+                            "Smart match density on subtree")
+    density_grid.add_button("🌎", match_density_all,
+                            "Smart match density on all objects")
+    density_row.addWidget(density_grid)
+
+    density_container = QWidget()
+    density_container.setLayout(density_row)
+    density_container.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(density_container)
 
     return section
 
