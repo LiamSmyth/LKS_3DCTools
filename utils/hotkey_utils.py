@@ -26,6 +26,7 @@ Usage:
 """
 from __future__ import annotations
 
+import html
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -51,9 +52,6 @@ VALID_ROOMS: frozenset[str] = frozenset({
 
 # Unassigned key code
 KEY_UNASSIGNED: str = "key_00"
-
-# Maximum backups to keep per file
-MAX_BACKUPS: int = 10
 
 # Backup folder name
 BACKUP_FOLDER: str = "hotkey_backups"
@@ -132,6 +130,7 @@ class HotkeyEntry:
         Get full signature for duplicate detection.
 
         All fields must match for entries to be considered exact duplicates.
+        Note: UserDefined is excluded - it's just a version counter.
         """
         return (
             self.id,
@@ -141,15 +140,20 @@ class HotkeyEntry:
             self.alt,
             self.shift,
             self.allow_stack,
-            self.user_defined,
         )
 
     def to_xml(self) -> str:
-        """Serialize entry to XML string."""
+        """Serialize entry to XML string with proper HTML entity escaping."""
+        # Escape XML special characters to prevent malformed output
+        # This is critical for keys like '<', '>', '&', etc.
+        escaped_id = html.escape(self.id, quote=False)
+        escaped_room = html.escape(self.room, quote=False)
+        escaped_code = html.escape(self.code, quote=False)
+
         return f"""		<OneHotKey>
-			<ID>{self.id}</ID>
-			<Room>{self.room}</Room>
-			<Code>{self.code}</Code>
+			<ID>{escaped_id}</ID>
+			<Room>{escaped_room}</Room>
+			<Code>{escaped_code}</Code>
 			<Ctrl>{str(self.ctrl).lower()}</Ctrl>
 			<Alt>{str(self.alt).lower()}</Alt>
 			<Shift>{str(self.shift).lower()}</Shift>
@@ -315,16 +319,18 @@ def parse_hotkeys_file(path: Path | str) -> HotkeysFile:
             continue
 
         entry = HotkeyEntry(
-            id=id_match.group(1),
+            # Decode HTML entities like &gt;
+            id=html.unescape(id_match.group(1)),
             line_index=idx,
         )
 
         # Extract optional fields
         room_match = re.search(r'<Room>(.*?)</Room>', match)
-        entry.room = room_match.group(1) if room_match else ""
+        entry.room = html.unescape(room_match.group(1)) if room_match else ""
 
         code_match = re.search(r'<Code>(.*?)</Code>', match)
-        entry.code = code_match.group(1) if code_match else KEY_UNASSIGNED
+        entry.code = html.unescape(code_match.group(
+            1)) if code_match else KEY_UNASSIGNED
 
         ctrl_match = re.search(r'<Ctrl>(.*?)</Ctrl>', match)
         entry.ctrl = _parse_bool(ctrl_match.group(1)) if ctrl_match else False
@@ -540,17 +546,15 @@ def get_backup_dir(hotkeys_path: Path) -> Path:
 
 def create_backup(
     hotkeys_path: Path,
-    max_backups: int = MAX_BACKUPS,
 ) -> Path:
     """
     Create a versioned backup of the hotkeys file.
 
     Backups are stored in hotkey_backups/ subfolder with timestamp names.
-    Old backups beyond max_backups are deleted.
+    All backups are kept indefinitely.
 
     Args:
         hotkeys_path: Path to the hotkeys file
-        max_backups: Maximum number of backups to keep
 
     Returns:
         Path to the created backup file
@@ -565,16 +569,6 @@ def create_backup(
     backup_path: Path = backup_dir / backup_name
 
     shutil.copy2(hotkeys_path, backup_path)
-
-    # Prune old backups
-    backups: list[Path] = sorted(
-        backup_dir.glob("Options_Hotkeys_*.xml"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-
-    for old_backup in backups[max_backups:]:
-        old_backup.unlink()
 
     return backup_path
 
@@ -633,7 +627,7 @@ def save_hotkeys_file(
     create_backup_first: bool = True,
 ) -> Path | None:
     """
-    Save a HotkeysFile to disk.
+    Save a HotkeysFile to disk with XML validation.
 
     Args:
         hotkeys_file: The hotkeys file to save
@@ -642,6 +636,9 @@ def save_hotkeys_file(
 
     Returns:
         Backup path if created, None otherwise
+
+    Raises:
+        ValueError: If the generated XML is not well-formed
     """
     save_path: Path = path or hotkeys_file.path
     backup_path: Path | None = None
@@ -650,9 +647,35 @@ def save_hotkeys_file(
         backup_path = create_backup(save_path)
 
     content: str = reconstruct_xml(hotkeys_file)
+
+    # Validate XML before writing to prevent 3DCoat from regenerating the file
+    try:
+        import xml.etree.ElementTree as ET
+        ET.fromstring(content)
+    except ET.ParseError as e:
+        raise ValueError(f"Generated XML is not well-formed: {e}") from e
+
     save_path.write_text(content, encoding="utf-8")
 
     return backup_path
+
+
+def validate_xml_string(xml_content: str) -> tuple[bool, str | None]:
+    """
+    Validate XML string for well-formedness.
+
+    Args:
+        xml_content: XML string to validate
+
+    Returns:
+        (is_valid, error_message) tuple
+    """
+    try:
+        import xml.etree.ElementTree as ET
+        ET.fromstring(xml_content)
+        return (True, None)
+    except ET.ParseError as e:
+        return (False, str(e))
 
 
 # =============================================================================

@@ -217,27 +217,95 @@ def create_extension_tab(
         title="🔧 Tools", color="#ce93d8", collapsed=False)
 
     # Keep reference to editor window to prevent garbage collection
-    _editor_window_ref: list = []
-
     def on_launch_hotkey_editor() -> None:
+        """Launch hotkey editor standalone and close 3DCoat."""
         try:
-            from utils.hotkey_editor import launch_hotkey_editor
-            log_info("Launching Hotkey Editor...")
-            window = launch_hotkey_editor()
-            if window:
-                _editor_window_ref.clear()
-                _editor_window_ref.append(window)
-                log_success("Hotkey Editor opened")
+            import coat
+            from pathlib import Path
+            import sys
+            from PySide6.QtWidgets import QMessageBox
+
+            # Confirmation dialog
+            reply = QMessageBox.question(
+                None,
+                "Launch Hotkey Editor",
+                "⚠️ Launching the Hotkey Editor will close 3DCoat.\n\n"
+                "This is necessary because 3DCoat saves its in-memory hotkey state "
+                "on exit, which would overwrite any edits made while it's running.\n\n"
+                "The editor will open as a standalone application after 3DCoat closes.\n\n"
+                "Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                log_info("Hotkey Editor launch cancelled")
+                return
+
+            # Find Python executable in system PATH
+            # 3DCoat uses system-installed Python, not an embedded interpreter
+            import sys
+            import shutil
+
+            python_exe: Path | None = None
+            pythonw_in_path: str | None = shutil.which("pythonw")
+            python_in_path: str | None = shutil.which("python")
+
+            # Prefer pythonw.exe (no console window)
+            if pythonw_in_path:
+                python_exe = Path(pythonw_in_path)
+                log_info(f"Found Python: {python_exe}")
+            elif python_in_path:
+                python_exe = Path(python_in_path)
+                log_info(f"Found Python: {python_exe}")
             else:
-                log_error("Failed to launch Hotkey Editor (PySide6 required)")
+                log_error("Python executable not found in system PATH!")
+                log_error("Please ensure Python is installed and added to PATH")
+                return
+
+            editor_path: Path = Path(
+                __file__).parent.parent / "utils" / "hotkey_editor.py"
+
+            log_info("Launching Hotkey Editor as standalone process...")
+            log_info(f"Python: {python_exe}")
+            log_info(f"Editor: {editor_path}")
+
+            # Launch editor as DETACHED process using subprocess
+            # This ensures it survives when 3DCoat exits
+            import subprocess
+
+            # Windows-specific flags for detached process
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+
+            subprocess.Popen(
+                [str(python_exe), str(editor_path)],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                close_fds=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            # Wait for process to spawn
+            log_info("Waiting for editor process to spawn...")
+            coat.io.step(5)
+
+            log_success("Closing 3DCoat...")
+
+            # Close 3DCoat (quit is in utils namespace)
+            coat.utils.quit()
+
         except Exception as e:
             log_error(f"Failed to launch Hotkey Editor: {e}")
+            import traceback
+            log_error(traceback.format_exc())
 
     tools_grid = ButtonGrid(columns=1)
     tools_grid.add_button(
-        "🔑 Hotkey Editor",
+        "🔑 Hotkey Editor (Closes 3DCoat)",
         on_launch_hotkey_editor,
-        "Edit and clean up 3DCoat hotkey bindings"
+        "Launch standalone editor and close 3DCoat to prevent file overwrite"
     )
     tools_section.content_layout.addWidget(tools_grid)
 
@@ -263,16 +331,18 @@ def create_extension_tab(
             background-color: #2a2a2a;
         }
     """)
-    revert_btn.setToolTip("Reset all collapsible section states to their defaults")
-    
+    revert_btn.setToolTip(
+        "Reset all collapsible section states to their defaults")
+
     def on_revert() -> None:
         try:
             from utils.lks_settings import reset_ui_state
             reset_ui_state()
-            log_success("UI state reverted to defaults. Restart panel to apply.")
+            log_success(
+                "UI state reverted to defaults. Restart panel to apply.")
         except Exception as e:
             log_error(f"Failed to revert UI state: {e}")
-    
+
     revert_btn.clicked.connect(on_revert)
     layout.addWidget(revert_btn)
 
