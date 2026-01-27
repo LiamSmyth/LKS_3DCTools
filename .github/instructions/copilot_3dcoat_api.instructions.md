@@ -37,6 +37,30 @@ grep_search: "setEditBoxValue" includePattern="coat.pyi"
 
 ---
 
+## 🔄 Script Re-Execution (Module Cache Problem)
+
+When 3DCoat runs scripts registered via `insertInMenu()`, it **imports** them as Python modules.
+Python caches modules in `sys.modules`, so subsequent menu clicks don't re-execute the file.
+
+**Solution:** Queue the module for deferred cache clearing:
+
+```python
+# At end of action script (or use @action decorator which does this automatically)
+import sys
+if not hasattr(sys, '_lks_modules_to_clear'):
+    sys._lks_modules_to_clear = set()
+sys._lks_modules_to_clear.add(__name__)
+```
+
+The LKS extension's `postprocess()` hook clears queued modules on the next frame,
+after Python's import machinery has finished.
+
+**Why immediate deletion fails:** You cannot `del sys.modules[__name__]` at the end
+of a script - Python's import machinery is still on the call stack and will throw
+`KeyError` when it tries to finalize the import.
+
+---
+
 ## 🔄 Iteration Callbacks
 
 When using `iterateVisibleSubtree(callback)`:

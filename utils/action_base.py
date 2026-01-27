@@ -54,14 +54,50 @@ def action(func: F) -> F:
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        # Hot reload all LKS modules
+        # CRITICAL: Force reload of hot_reload module itself first!
+        # Otherwise we use the cached version which won't reload properly.
+        import sys
+        import importlib
+        if "utils.hot_reload" in sys.modules:
+            importlib.reload(sys.modules["utils.hot_reload"])
+
+        # Now hot reload all LKS modules
         from utils.hot_reload import reload_all
         reload_all()
 
         # Execute the action
-        return func(*args, **kwargs)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            # Queue the calling module for cache clearing
+            # The LKS extension's postprocess() will clear it next frame
+            _queue_module_for_clearing()
 
     return wrapper  # type: ignore
+
+
+def _queue_module_for_clearing() -> None:
+    """
+    Queue action script modules for deferred cache clearing.
+
+    3DCoat imports scripts as Python modules. Python caches these in sys.modules,
+    so subsequent menu clicks don't re-execute the file.
+
+    We can't delete immediately because Python's import machinery is still on
+    the call stack. Instead, we queue module names and the LKS extension's 
+    postprocess() hook clears them on the next frame.
+    """
+    import sys
+
+    # Initialize the queue if needed
+    if not hasattr(sys, '_lks_modules_to_clear'):
+        sys._lks_modules_to_clear = set()
+
+    # Find and queue action script modules for clearing
+    # They're imported as "cExtensions.LKS.actions.<ScriptName>"
+    for name in list(sys.modules.keys()):
+        if "cExtensions.LKS.actions." in name:
+            sys._lks_modules_to_clear.add(name)
 
 
 # =============================================================================
@@ -107,7 +143,11 @@ class Action:
             self._validate_room()
 
         # Execute the action
-        self.execute()
+        try:
+            self.execute()
+        finally:
+            # Queue for cache clearing (same as @action decorator)
+            _queue_module_for_clearing()
 
     def _validate_room(self) -> None:
         """Validate we're in the expected room."""

@@ -9,13 +9,20 @@ The ui() method returns layout items dynamically.
 
 Room: All
 """
-import coat
 from utils.lks_settings import (
     get_settings, save_settings,
     get_brush_settings, save_brush_settings,
     get_autopo_settings, save_autopo_settings,
 )
 from utils.coat_ui_utils import show_message
+import coat
+import sys
+
+# Clear cached modules to ensure fresh imports on each run
+_to_clear = [name for name in list(sys.modules.keys())
+             if name.startswith(("utils.", "ops.", "ui."))]
+for _name in _to_clear:
+    del sys.modules[_name]
 
 
 class LKSToolsConfig:
@@ -1128,3 +1135,8 @@ def show_lks_tools_panel() -> None:
 
 # Run when script is executed directly
 show_lks_tools_panel()
+
+# Queue this script for cache clearing (deferred to next frame)
+if not hasattr(sys, '_lks_modules_to_clear'):
+    sys._lks_modules_to_clear = set()
+sys._lks_modules_to_clear.add(__name__)

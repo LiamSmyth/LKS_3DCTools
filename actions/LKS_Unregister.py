@@ -8,6 +8,13 @@ Room: All
 """
 from utils.registration_utils import unregister_addon
 from utils.coat_ui_utils import show_message
+import sys
+
+# Clear cached utils/ops/ui modules to ensure fresh imports
+_to_clear = [name for name in list(sys.modules.keys())
+             if name.startswith(("utils.", "ops.", "ui."))]
+for _name in _to_clear:
+    del sys.modules[_name]
 
 
 def main() -> None:
@@ -20,3 +27,8 @@ def main() -> None:
 
 
 main()
+
+# Queue this script for cache clearing (deferred to next frame)
+if not hasattr(sys, '_lks_modules_to_clear'):
+    sys._lks_modules_to_clear = set()
+sys._lks_modules_to_clear.add(__name__)

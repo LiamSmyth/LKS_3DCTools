@@ -73,7 +73,15 @@ class LKSExtension(cPy.cCore.cExtension):
 
     def postprocess(self) -> None:
         """Called every frame after tools processing."""
-        pass
+        # Clear any action script modules that were queued for removal
+        # This allows action scripts to be re-executed on subsequent menu clicks
+        import sys
+        if hasattr(sys, '_lks_modules_to_clear') and sys._lks_modules_to_clear:
+            for module_name in list(sys._lks_modules_to_clear):
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+                    print(f"[LKS] Cleared module cache: {module_name}")
+            sys._lks_modules_to_clear.clear()
 
     def onNew(self) -> None:
         """Called when a new scene is created."""
