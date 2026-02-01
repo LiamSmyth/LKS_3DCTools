@@ -1,7 +1,7 @@
 {
-  "section_decimate_expanded": true,
+  "section_decimate_expanded": false,
   "section_proxy_expanded": false,
-  "section_resample_expanded": false,
+  "section_resample_expanded": true,
   "section_mode_expanded": false,
   "section_scale_expanded": false,
   "section_visibility_ghost_expanded": false,

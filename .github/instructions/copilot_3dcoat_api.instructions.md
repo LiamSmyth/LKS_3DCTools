@@ -418,7 +418,30 @@ main()
 
 ---
 
-## �📝 Adding to This Document (MANDATORY)
+## 📄 3DCoat's Quirky XML Format (Hotkeys)
+
+3DCoat's `Options_Hotkeys.xml` uses **non-standard XML** that violates XML spec:
+
+| 3DCoat Format | Standard XML | Notes |
+|---------------|--------------|-------|
+| `&gt` | `&gt;` | Missing semicolon - 3DCoat REQUIRES this |
+| `&lt` | `&lt;` | Missing semicolon - 3DCoat REQUIRES this |
+
+**CRITICAL:** Standard XML parsers (Python's `xml.etree.ElementTree`) will REJECT 3DCoat's format.
+
+```python
+# BAD - will fail on 3DCoat's malformed entities
+ET.fromstring(content)  # Raises ParseError
+
+# GOOD - use regex-based parsing, skip validation on save
+save_path.write_text(content, encoding="utf-8")  # No validation
+```
+
+**See:** `utils/hotkey_utils.py` for the "3DCoat XML" parser implementation.
+
+---
+
+## 📝 Adding to This Document (MANDATORY)
 
 **LLM agents MUST update this file** when discovering API quirks during development.
 

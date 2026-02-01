@@ -263,8 +263,9 @@ def create_extension_tab(
                 log_error("Please ensure Python is installed and added to PATH")
                 return
 
+            # Use run_standalone.py which handles imports correctly for detached mode
             editor_path: Path = Path(
-                __file__).parent.parent / "utils" / "hotkey_editor.py"
+                __file__).parent.parent / "utils" / "hotkey_editor" / "run_standalone.py"
 
             log_info("Launching Hotkey Editor as standalone process...")
             log_info(f"Python: {python_exe}")

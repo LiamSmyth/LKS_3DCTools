@@ -34,6 +34,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+# Import the authoritative keycode mapping for display conversion
+from .keycode_map import (
+    KEY_UNASSIGNED,
+    get_display_key as _keycode_get_display_key,
+    COAT_TO_DISPLAY,
+)
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================
@@ -49,9 +56,6 @@ VALID_ROOMS: frozenset[str] = frozenset({
     "UV",
     "Render",
 })
-
-# Unassigned key code
-KEY_UNASSIGNED: str = "key_00"
 
 # Backup folder name
 BACKUP_FOLDER: str = "hotkey_backups"
@@ -143,17 +147,24 @@ class HotkeyEntry:
         )
 
     def to_xml(self) -> str:
-        """Serialize entry to XML string with proper HTML entity escaping."""
-        # Escape XML special characters to prevent malformed output
-        # This is critical for keys like '<', '>', '&', etc.
+        """
+        Serialize entry to 3DCoat's quirky XML format.
+
+        NOTE: 3DCoat uses non-standard XML:
+        - Code field contains entities like `&gt` WITHOUT trailing semicolon
+        - We preserve this format exactly as 3DCoat expects it
+        - Standard XML parsers will reject this, but 3DCoat requires it
+        """
+        # Escape XML special characters in ID and Room fields
         escaped_id = html.escape(self.id, quote=False)
         escaped_room = html.escape(self.room, quote=False)
-        escaped_code = html.escape(self.code, quote=False)
+        # Code field: Pass through as-is - 3DCoat uses its own entity format
+        # (e.g., &gt without semicolon for ">" key)
 
         return f"""		<OneHotKey>
 			<ID>{escaped_id}</ID>
 			<Room>{escaped_room}</Room>
-			<Code>{escaped_code}</Code>
+			<Code>{self.code}</Code>
 			<Ctrl>{str(self.ctrl).lower()}</Ctrl>
 			<Alt>{str(self.alt).lower()}</Alt>
 			<Shift>{str(self.shift).lower()}</Shift>
@@ -163,7 +174,7 @@ class HotkeyEntry:
 
     @property
     def display_key(self) -> str:
-        """Human-readable key binding string."""
+        """Human-readable key binding string using proper display names."""
         if not self.is_assigned:
             return "(unassigned)"
         parts: list[str] = []
@@ -173,7 +184,10 @@ class HotkeyEntry:
             parts.append("Alt")
         if self.shift:
             parts.append("Shift")
-        parts.append(self.code)
+        # Use the keycode_map to get proper display name
+        # This handles special cases like ">" displaying as "." when Shift=false
+        key_display = _keycode_get_display_key(self.code, self.shift)
+        parts.append(key_display)
         return "+".join(parts)
 
     @property
@@ -328,9 +342,9 @@ def parse_hotkeys_file(path: Path | str) -> HotkeysFile:
         room_match = re.search(r'<Room>(.*?)</Room>', match)
         entry.room = html.unescape(room_match.group(1)) if room_match else ""
 
+        # Code field: Don't unescape - HTML entities like &gt; are actual key codes in 3DCoat
         code_match = re.search(r'<Code>(.*?)</Code>', match)
-        entry.code = html.unescape(code_match.group(
-            1)) if code_match else KEY_UNASSIGNED
+        entry.code = code_match.group(1) if code_match else KEY_UNASSIGNED
 
         ctrl_match = re.search(r'<Ctrl>(.*?)</Ctrl>', match)
         entry.ctrl = _parse_bool(ctrl_match.group(1)) if ctrl_match else False
@@ -627,7 +641,11 @@ def save_hotkeys_file(
     create_backup_first: bool = True,
 ) -> Path | None:
     """
-    Save a HotkeysFile to disk with XML validation.
+    Save a HotkeysFile to disk in 3DCoat's quirky XML format.
+
+    NOTE: 3DCoat uses non-standard XML with malformed entities like `&gt` and `&lt`
+    (missing trailing semicolon). Standard XML parsers reject this, but 3DCoat
+    REQUIRES this format. We skip XML validation and write directly.
 
     Args:
         hotkeys_file: The hotkeys file to save
@@ -636,9 +654,6 @@ def save_hotkeys_file(
 
     Returns:
         Backup path if created, None otherwise
-
-    Raises:
-        ValueError: If the generated XML is not well-formed
     """
     save_path: Path = path or hotkeys_file.path
     backup_path: Path | None = None
@@ -648,12 +663,9 @@ def save_hotkeys_file(
 
     content: str = reconstruct_xml(hotkeys_file)
 
-    # Validate XML before writing to prevent 3DCoat from regenerating the file
-    try:
-        import xml.etree.ElementTree as ET
-        ET.fromstring(content)
-    except ET.ParseError as e:
-        raise ValueError(f"Generated XML is not well-formed: {e}") from e
+    # NOTE: We intentionally skip XML validation here.
+    # 3DCoat uses malformed entities like &gt and &lt (no semicolon)
+    # which are invalid per XML spec but required by 3DCoat.
 
     save_path.write_text(content, encoding="utf-8")
 
@@ -662,7 +674,11 @@ def save_hotkeys_file(
 
 def validate_xml_string(xml_content: str) -> tuple[bool, str | None]:
     """
-    Validate XML string for well-formedness.
+    Validate XML string for standard XML well-formedness.
+
+    WARNING: This uses standard XML parsing which will REJECT 3DCoat's
+    quirky format (e.g., `&gt` without semicolon). Do NOT use this to
+    validate 3DCoat hotkey files - they are intentionally non-standard.
 
     Args:
         xml_content: XML string to validate

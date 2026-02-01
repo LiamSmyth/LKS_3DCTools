@@ -192,7 +192,23 @@ Low-level primitives. Prefix indicates coat dependency: `coat_*` or `Volume_*`/`
 | `registration_utils.py` | Addon lifecycle (register/unregister) |
 | `scene_iteration_utils.py` | Legacy - prefer `scene_api.py` |
 | `hotkey_utils.py` | Hotkey XML parsing, validation, dedup, backup (standalone) |
-| `hotkey_editor.py` | Qt-based hotkey editor window (standalone or from panel) |
+| `hotkey_editor.py` | Thin facade re-exporting from `utils/hotkey_editor/` package |
+| `keycode_map.py` | **Qt → 3DCoat keycode mapping** with observed/inferred status |
+
+### Hotkey Editor Package (`utils/hotkey_editor/`)
+
+Modular Qt-based hotkey editor. One widget per file.
+
+| File | Description |
+|------|-------------|
+| `__init__.py` | Package exports + launcher functions (`launch_hotkey_editor`, `run_standalone`) |
+| `main_window.py` | HotkeyEditorWindow - main editor window with table, filters, actions |
+| `key_capture_dialog.py` | KeyCaptureDialog - captures keyboard input for binding assignment |
+| `conflict_resolution_dialog.py` | ConflictResolutionDialog - resolves hotkey conflicts interactively |
+| `conflict_utils.py` | Conflict detection logic (`find_conflicts_with_global`, `count_conflicts`) |
+| `styles.py` | Constants, colors, icons, dynamic stylesheet builder |
+| `qt_imports.py` | Centralized PySide6 imports with HAS_QT flag |
+| `hotkey_imports.py` | Flexible hotkey_utils import (works in/out of 3DCoat) |
 
 ---
 
