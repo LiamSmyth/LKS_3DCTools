@@ -1,0 +1,101 @@
+{
+    "version": "1.0",
+    "items": [
+        {
+            "label": "Decimate",
+            "icon": "🔻",
+            "angle": 0,
+            "children": [
+                {
+                    "label": "50% Retopo",
+                    "action": "$DecimateToRetopo",
+                    "description": "Decimate current object to 50% via retopo room"
+                },
+                {
+                    "label": "Remesh Half",
+                    "action": "$LKS_SculptObject_Decimate_Half_Selected",
+                    "description": "Remesh current object to half density"
+                },
+                {
+                    "label": "Proxy 16x",
+                    "action": "$LKS_SculptObject_ProxyToggle_Decimate16X_Selected",
+                    "description": "Toggle 16x decimation proxy cache"
+                }
+            ]
+        },
+        {
+            "label": "Ghost Toggle",
+            "icon": "👻",
+            "angle": 90,
+            "action": "$ToggleGhost"
+        },
+        {
+            "label": "Visibility",
+            "icon": "👁️",
+            "angle": 180,
+            "children": [
+                {
+                    "label": "Hide",
+                    "action": "$HideObject"
+                },
+                {
+                    "label": "Show All",
+                    "action": "$ShowAllObjects"
+                },
+                {
+                    "label": "Isolate",
+                    "action": "$LKS_SculptObject_ToggleIsolateVisible_Selected"
+                }
+            ]
+        },
+        {
+            "label": "Transform",
+            "icon": "📐",
+            "angle": 270,
+            "children": [
+                {
+                    "label": "Move",
+                    "action": "$StartObjTransform3D"
+                },
+                {
+                    "label": "Scale",
+                    "action": "$TRANSFORM_SCALE_FREE"
+                },
+                {
+                    "label": "Rotate",
+                    "action": "$TRANSFORM_ROTATE_FREE"
+                }
+            ]
+        },
+        {
+            "label": "Mode Convert",
+            "icon": "⚙️",
+            "angle": 315,
+            "children": [
+                {
+                    "label": "To Surface",
+                    "action": "$LKS_SculptObject_ToSurface_All"
+                },
+                {
+                    "label": "To Voxels",
+                    "action": "$LKS_SculptObject_ToVoxel_All"
+                }
+            ]
+        },
+        {
+            "label": "Scale Tools",
+            "icon": "📏",
+            "angle": 45,
+            "children": [
+                {
+                    "label": "Up 100x",
+                    "action": "$LKS_SculptObject_Scale_Up100x_Selected"
+                },
+                {
+                    "label": "Down 100x",
+                    "action": "$LKS_SculptObject_Scale_Down100x_Selected"
+                }
+            ]
+        }
+    ]
+}

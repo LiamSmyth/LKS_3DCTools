@@ -141,6 +141,14 @@ class LKSMainPanel(QWidget):
         )
         self._tabs.add_tab("Extension", ext_tab)
 
+        # Radial Menu Tab
+        from ui.ui_tab_radial_menu import create_radial_menu_tab
+        radial_tab = create_radial_menu_tab(
+            log_success=self._log.log_success,
+            log_error=self._log.log_error,
+        )
+        self._tabs.add_tab("🎯 Radial", radial_tab)
+
     # =========================================================================
     # CALLBACKS
     # =========================================================================

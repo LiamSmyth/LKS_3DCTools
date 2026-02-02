@@ -496,3 +496,97 @@ UNMAPPABLE_KEYS: set[str] = {
     "End",         # Not recognized
     "NumpadEnter",  # Not distinguished from main Enter
 }
+
+
+# =============================================================================
+# CONVERSION TO QT KEYCODES
+# =============================================================================
+
+def coat_to_qt_key(coat_code: str) -> int | None:
+    """
+    Convert 3DCoat keycode to Qt.Key constant.
+
+    Args:
+        coat_code: 3DCoat keycode string (e.g., "A", "F1", "Space")
+
+    Returns:
+        Qt key constant (int) or None if not mappable
+    """
+    try:
+        from PySide6.QtCore import Qt
+    except ImportError:
+        return None
+
+    # Map common 3DCoat codes to Qt keys
+    mapping = {
+        # Letters
+        "A": Qt.Key_A, "B": Qt.Key_B, "C": Qt.Key_C, "D": Qt.Key_D,
+        "E": Qt.Key_E, "F": Qt.Key_F, "G": Qt.Key_G, "H": Qt.Key_H,
+        "I": Qt.Key_I, "J": Qt.Key_J, "K": Qt.Key_K, "L": Qt.Key_L,
+        "M": Qt.Key_M, "N": Qt.Key_N, "O": Qt.Key_O, "P": Qt.Key_P,
+        "Q": Qt.Key_Q, "R": Qt.Key_R, "S": Qt.Key_S, "T": Qt.Key_T,
+        "U": Qt.Key_U, "V": Qt.Key_V, "W": Qt.Key_W, "X": Qt.Key_X,
+        "Y": Qt.Key_Y, "Z": Qt.Key_Z,
+
+        # Numbers
+        "0": Qt.Key_0, "1": Qt.Key_1, "2": Qt.Key_2, "3": Qt.Key_3,
+        "4": Qt.Key_4, "5": Qt.Key_5, "6": Qt.Key_6, "7": Qt.Key_7,
+        "8": Qt.Key_8, "9": Qt.Key_9,
+
+        # Function keys
+        "F1": Qt.Key_F1, "F2": Qt.Key_F2, "F3": Qt.Key_F3, "F4": Qt.Key_F4,
+        "F5": Qt.Key_F5, "F6": Qt.Key_F6, "F7": Qt.Key_F7, "F8": Qt.Key_F8,
+        "F9": Qt.Key_F9, "F10": Qt.Key_F10, "F11": Qt.Key_F11, "F12": Qt.Key_F12,
+
+        # Special keys
+        "Space": Qt.Key_Space,
+        "Tab": Qt.Key_Tab,
+        "Return": Qt.Key_Return,
+        "Escape": Qt.Key_Escape,
+        "Delete": Qt.Key_Delete,
+        "Home": Qt.Key_Home,
+        "PageUp": Qt.Key_PageUp,
+        "PageDown": Qt.Key_PageDown,
+        "Insert": Qt.Key_Insert,
+        "Up": Qt.Key_Up,
+        "Down": Qt.Key_Down,
+        "Left": Qt.Key_Left,
+        "Right": Qt.Key_Right,
+
+        # Symbol keys
+        "`": Qt.Key_QuoteLeft,
+        "~": Qt.Key_AsciiTilde,
+        "-": Qt.Key_Minus,
+        "=": Qt.Key_Equal,
+        "+": Qt.Key_Plus,
+        "[": Qt.Key_BracketLeft,
+        "]": Qt.Key_BracketRight,
+        "key_DC": Qt.Key_Backslash,
+        ";": Qt.Key_Semicolon,
+        "'": Qt.Key_Apostrophe,
+        "/": Qt.Key_Slash,
+        "?": Qt.Key_Question,
+
+        # Entities (3DCoat stores these specially)
+        "&gt": Qt.Key_Period,  # Period OR Greater Than (check Shift flag)
+        "&lt": Qt.Key_Comma,   # Comma OR Less Than (check Shift flag)
+
+        # Numpad
+        "key_60": Qt.Key_0,  # Numpad 0
+        "key_61": Qt.Key_1,  # Numpad 1
+        "key_62": Qt.Key_2,  # Numpad 2
+        "key_63": Qt.Key_3,  # Numpad 3
+        "key_64": Qt.Key_4,  # Numpad 4
+        "key_65": Qt.Key_5,  # Numpad 5
+        "key_66": Qt.Key_6,  # Numpad 6
+        "key_67": Qt.Key_7,  # Numpad 7
+        "key_68": Qt.Key_8,  # Numpad 8
+        "key_69": Qt.Key_9,  # Numpad 9
+        "key_6E": Qt.Key_Period,  # Numpad period
+        "key_6A": Qt.Key_Asterisk,  # Numpad multiply
+        "key_6B": Qt.Key_Plus,  # Numpad add
+        "key_6D": Qt.Key_Minus,  # Numpad subtract
+        "key_6F": Qt.Key_Slash,  # Numpad divide
+    }
+
+    return mapping.get(coat_code, None)

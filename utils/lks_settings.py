@@ -72,8 +72,23 @@ GENERAL_DEFAULTS: dict = {
     "decimate_reduction": 50,
 }
 
+# Radial menu settings defaults
+RADIAL_MENU_DEFAULTS: dict = {
+    # Pixels - no selection within this radius
+    "radial_menu_dead_zone_radius": 75,
+    # Pixels - distance from anchor to item centers
+    "radial_menu_menu_radius": 150,
+    # Pixels - hover detection radius for branches/exit
+    "radial_menu_branch_hover_radius": 20,
+    # Milliseconds - dwell time before submenu entry/exit
+    "radial_menu_branch_dwell_ms": 250,
+    # Default trigger key (user assignable)
+    "radial_menu_trigger_key": "Q",
+}
+
 # Combined defaults for backward compatibility
-DEFAULTS: dict = {**BRUSH_DEFAULTS, **AUTOPO_DEFAULTS, **GENERAL_DEFAULTS}
+DEFAULTS: dict = {**BRUSH_DEFAULTS, **AUTOPO_DEFAULTS,
+                  **GENERAL_DEFAULTS, **RADIAL_MENU_DEFAULTS}
 
 
 # =============================================================================
@@ -250,10 +265,11 @@ def reload_autopo_settings() -> None:
 
 class LKSSettings:
     """
-    Singleton for general LKS settings (decimate, etc.).
+    Singleton for general LKS settings (decimate, radial menu, etc.).
 
     Stored in lks_settings.json. Uses native Python json.
     NOTE: Autopo settings are now in AutopoSettings class.
+    NOTE: Brush settings are in BrushSettings class.
 
     Usage:
         settings = get_settings()
@@ -374,10 +390,10 @@ UI_STATE_DEFAULTS: dict = {
 class UIStateSettings:
     """
     Singleton for UI state persistence.
-    
+
     Stored in lks_ui_state.json to track panel section states across sessions.
     Uses native Python json for reliable read/write.
-    
+
     Usage:
         ui_state = get_ui_state()
         print(ui_state.section_decimate_expanded)
@@ -385,11 +401,11 @@ class UIStateSettings:
         save_ui_state()
     """
     _instance = None
-    
+
     def __init__(self):
         self._data: dict = dict(UI_STATE_DEFAULTS)
         self._load()
-    
+
     def _load(self) -> None:
         """Load UI state from JSON file if it exists."""
         file_path: str = _get_ui_state_path()
@@ -401,7 +417,7 @@ class UIStateSettings:
                     print(f"[UIState] Loaded from {file_path}: {self._data}")
             except Exception as e:
                 print(f"[UIState] Failed to load: {e}")
-    
+
     def _save(self) -> None:
         """Save UI state to JSON file."""
         file_path: str = _get_ui_state_path()
@@ -413,20 +429,20 @@ class UIStateSettings:
             print(f"[UIState] Saved to {file_path}: {self._data}")
         except Exception as e:
             print(f"[UIState] Failed to save: {e}")
-    
+
     def __getattr__(self, name: str):
         """Get state value by attribute access."""
         if name.startswith('_'):
             return super().__getattribute__(name)
         return self._data.get(name, UI_STATE_DEFAULTS.get(name))
-    
+
     def __setattr__(self, name: str, value):
         """Set state value by attribute access."""
         if name.startswith('_'):
             super().__setattr__(name, value)
         else:
             self._data[name] = value
-    
+
     def to_dict(self) -> dict:
         """Return UI state as dictionary."""
         return dict(self._data)

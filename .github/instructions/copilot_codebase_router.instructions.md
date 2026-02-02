@@ -224,7 +224,9 @@ PySide6 widgets for the LKS panel.
 | `ui_tab_tools.py` | Tools tab with reorderable sections via GripBoxContainer |
 | `ui_tab_extension.py` | Extension tab (reload, register) |
 | `ui_tab_outliner.py` | Scene outliner (objects + layer stub) |
+| `ui_tab_radial_menu.py` | 🎯 Radial menu configuration editor tab |
 | `ui_widget_sub_header.py` | Sub-header widget |
+| `radial_menu_editor.py` | Full radial menu editor window (standalone or tab use) |
 
 ### Collapsible Sections
 | File | Description |
@@ -258,6 +260,8 @@ Individual widget modules for better maintainability. Import from `utils.ui.widg
 | `tab_container.py` | TabContainer class + `create_tab_with_revert()` factory for consistent tab structure |
 | `grip_box_item.py` | GripBox widget - individual item wrapper with 14px drag column on left |
 | `grip_box_container.py` | GripBoxContainer - parent managing drag-drop reordering with live preview |
+| `radial_menu.py` | 🎯 Core radial tree menu widget with pie navigation and cursor line |
+| `radial_menu_manager.py` | RadialMenuManager singleton for showing/hiding menus globally |
 
 **Usage:**
 ```python

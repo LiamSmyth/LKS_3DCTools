@@ -138,7 +138,7 @@ def calculate_slice_boundaries(leaf_angles: list[float]) -> list[tuple[float, fl
     Boundaries are the bisecting angles between adjacent leaves.
 
     Args:
-        leaf_angles: Sorted list of leaf node angles
+        leaf_angles: List of leaf node angles (need not be sorted)
 
     Returns:
         List of (lower_bound, upper_bound) tuples for each leaf
@@ -147,33 +147,47 @@ def calculate_slice_boundaries(leaf_angles: list[float]) -> list[tuple[float, fl
         return []
 
     n = len(leaf_angles)
-    boundaries: list[tuple[float, float]] = []
 
-    for i in range(n):
-        prev_angle = leaf_angles[i - 1] if i > 0 else leaf_angles[-1]
-        curr_angle = leaf_angles[i]
-        next_angle = leaf_angles[(i + 1) % n]
+    # Special case: single leaf covers full 360°
+    if n == 1:
+        # Return (0, 360) means all angles match this leaf
+        # We use (0, 0) with special handling in angle_in_slice
+        return [(0.0, 360.0)]
+
+    # Sort leaves by angle to find adjacent neighbors correctly
+    sorted_indices = sorted(range(n), key=lambda i: leaf_angles[i])
+    sorted_angles = [leaf_angles[i] for i in sorted_indices]
+
+    boundaries: list[tuple[float, float]] = [None] * n  # Pre-allocate
+
+    for sorted_i in range(n):
+        original_i = sorted_indices[sorted_i]
+        prev_sorted = (sorted_i - 1) % n
+        next_sorted = (sorted_i + 1) % n
+
+        prev_angle = sorted_angles[prev_sorted]
+        curr_angle = sorted_angles[sorted_i]
+        next_angle = sorted_angles[next_sorted]
 
         # Calculate bisecting angles
         # Lower bound: midpoint between previous and current
-        if prev_angle > curr_angle:
-            # Wrap around 360°
-            lower = (prev_angle + curr_angle + 360) / 2
-            if lower >= 360:
-                lower -= 360
-        else:
-            lower = (prev_angle + curr_angle) / 2
+        # Handle wrap-around correctly
+        diff_prev = curr_angle - prev_angle
+        if diff_prev < 0:
+            diff_prev += 360
+        lower = prev_angle + diff_prev / 2
+        if lower >= 360:
+            lower -= 360
 
         # Upper bound: midpoint between current and next
-        if curr_angle > next_angle:
-            # Wrap around 360°
-            upper = (curr_angle + next_angle + 360) / 2
-            if upper >= 360:
-                upper -= 360
-        else:
-            upper = (curr_angle + next_angle) / 2
+        diff_next = next_angle - curr_angle
+        if diff_next < 0:
+            diff_next += 360
+        upper = curr_angle + diff_next / 2
+        if upper >= 360:
+            upper -= 360
 
-        boundaries.append((lower, upper))
+        boundaries[original_i] = (lower, upper)
 
     return boundaries
 
@@ -192,12 +206,27 @@ def angle_in_slice(angle: float, lower: float, upper: float) -> bool:
     Returns:
         True if angle is in slice
     """
-    if lower <= upper:
+    # Normalize all angles to 0-360
+    angle = angle % 360
+    lower = lower % 360
+    upper = upper % 360
+
+    # Special case: full circle (single leaf)
+    if lower == 0 and upper == 0:
+        return True  # All angles match
+
+    result = False
+    if lower < upper:
         # Normal case: no wrap-around
-        return lower <= angle < upper
-    else:
+        result = lower <= angle < upper
+    elif lower > upper:
         # Wrap-around case: slice crosses 0°
-        return angle >= lower or angle < upper
+        result = angle >= lower or angle < upper
+    else:
+        # lower == upper: degenerate case, should not happen with proper calculation
+        result = False
+
+    return result
 
 
 def get_highlighted_leaf(
@@ -258,7 +287,9 @@ def distribute_node_angles(nodes: list[RadialMenuItem]) -> list[float]:
     """
     Assign angles to nodes: use explicit if specified, else distribute evenly.
 
-    First node at 0° (up), subsequent nodes proceed clockwise.
+    When angle is not specified (None), nodes are evenly distributed around
+    the full 360° circle. First auto node starts at 0° (up), subsequent nodes
+    proceed clockwise.
 
     Args:
         nodes: List of menu items
@@ -266,23 +297,35 @@ def distribute_node_angles(nodes: list[RadialMenuItem]) -> list[float]:
     Returns:
         List of angles (one per node)
     """
-    angles: list[float] = []
-    explicit_count = sum(1 for node in nodes if node.angle is not None)
-    auto_count = len(nodes) - explicit_count
+    n = len(nodes)
+    if n == 0:
+        return []
 
-    if auto_count > 0:
-        # Calculate even distribution for auto nodes
-        angle_step = 360.0 / len(nodes)
+    # Count how many nodes need auto-distribution
+    auto_indices: list[int] = []
+    explicit_angles: dict[int, float] = {}
 
-    auto_index = 0
     for i, node in enumerate(nodes):
         if node.angle is not None:
-            # Use explicit angle
-            angles.append(node.angle)
+            explicit_angles[i] = node.angle
         else:
-            # Auto-distribute
-            angles.append(auto_index * angle_step)
-            auto_index += 1
+            auto_indices.append(i)
+
+    # If all nodes have explicit angles, just return them
+    if not auto_indices:
+        return [nodes[i].angle for i in range(n)]
+
+    # Distribute auto nodes evenly across 360° based on TOTAL node count
+    # This ensures even spacing regardless of explicit angles
+    angle_step = 360.0 / n
+
+    angles: list[float] = []
+    for i in range(n):
+        if i in explicit_angles:
+            angles.append(explicit_angles[i])
+        else:
+            # Node index determines its position in the even distribution
+            angles.append(i * angle_step)
 
     return angles
 
@@ -365,6 +408,19 @@ if HAS_QT:
             # Track label of branch we exited from
             self._just_exited_from_label: str | None = None
 
+            # Key release debounce: ignore first key release (the trigger key)
+            self._keys_currently_pressed: set[int] = set()
+            self._initial_trigger_released: bool = False
+            self._trigger_keycode: int | None = None  # Qt keycode for the trigger key
+
+            # Cursor tracking for drawing live cursor line
+            self._last_cursor_widget_pos: QPointF | None = None
+
+            # Timer for polling cursor position (backup when mouseMoveEvent not firing)
+            self._cursor_poll_timer: QTimer = QTimer(self)
+            self._cursor_poll_timer.setInterval(16)  # ~60fps
+            self._cursor_poll_timer.timeout.connect(self._poll_cursor)
+
             # Geometry cache
             self._leaf_angles: list[float] = []
             self._slice_boundaries: list[tuple[float, float]] = []
@@ -383,6 +439,53 @@ if HAS_QT:
             self._highlighted_leaf_index = None
             self._recalculate_geometry()
             self.update()
+
+        def set_geometry_params(
+            self,
+            dead_zone_radius: int | None = None,
+            menu_radius: int | None = None,
+            branch_hover_radius: int | None = None,
+            branch_dwell_ms: int | None = None,
+        ) -> None:
+            """
+            Update geometry parameters from settings.
+
+            This allows runtime configuration without modifying module constants.
+            Note: Parameters update module-level constants which affect all instances.
+
+            Args:
+                dead_zone_radius: Dead zone radius in pixels
+                menu_radius: Menu radius in pixels
+                branch_hover_radius: Branch hover detection radius in pixels
+                branch_dwell_ms: Dwell time in milliseconds
+            """
+            global DEAD_ZONE_RADIUS, MENU_RADIUS, BRANCH_HOVER_RADIUS, BRANCH_DWELL_MS
+
+            if dead_zone_radius is not None:
+                DEAD_ZONE_RADIUS = dead_zone_radius
+            if menu_radius is not None:
+                MENU_RADIUS = menu_radius
+            if branch_hover_radius is not None:
+                BRANCH_HOVER_RADIUS = branch_hover_radius
+            if branch_dwell_ms is not None:
+                BRANCH_DWELL_MS = branch_dwell_ms
+
+            # Recalculate geometry with new parameters
+            if self._items:
+                self._recalculate_geometry()
+                self.update()
+
+        def set_trigger_keycode(self, keycode: int | None) -> None:
+            """
+            Set the Qt keycode of the trigger key used to invoke this menu.
+
+            This allows the widget to specifically wait for the trigger key's
+            release before closing, rather than closing on any key release.
+
+            Args:
+                keycode: Qt keycode (e.g., Qt.Key_X), or None for fallback behavior
+            """
+            self._trigger_keycode = keycode
 
         def _recalculate_geometry(self) -> None:
             """Recalculate node positions and slice boundaries."""
@@ -415,6 +518,10 @@ if HAS_QT:
             """Show menu centered at given screen position."""
             self._anchor = pos
 
+            # Reset key press state for new menu invocation
+            self._keys_currently_pressed.clear()
+            self._initial_trigger_released = False
+
             # Size widget to cover menu area (with some margin)
             size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
             self.setFixedSize(size, size)
@@ -422,15 +529,33 @@ if HAS_QT:
             # Position so anchor is at widget center
             self.move(pos.x() - size // 2, pos.y() - size // 2)
 
+            # CRITICAL: Show and activate widget BEFORE grabbing keyboard
+            self.show()
+            self.raise_()
+            self.activateWindow()  # Force window activation
+            self.setFocus(Qt.ActiveWindowFocusReason)  # Force focus
+
+            # Give Qt a moment to process the show/activation
+            QApplication.processEvents()
+
             # Grab keyboard to receive key events
             self.grabKeyboard()
 
-            self.show()
-            self.raise_()
+            # Start cursor polling timer for smooth cursor line updates
+            self._cursor_poll_timer.start()
+
+            # Initialize cursor position
+            from PySide6.QtGui import QCursor
+            cursor_widget = self.mapFromGlobal(QCursor.pos())
+            self._last_cursor_widget_pos = QPointF(cursor_widget)
+
             self.update()
 
         def hide_and_invoke(self) -> None:
             """Hide menu and invoke currently highlighted action if any."""
+            # Stop cursor polling
+            self._cursor_poll_timer.stop()
+
             # Release keyboard grab
             self.releaseKeyboard()
 
@@ -561,6 +686,13 @@ if HAS_QT:
             self._items = [exit_node] + list(branch_item.children)
             self._highlighted_leaf_index = None
             self._hovered_branch_item = None  # Clear parent menu hover state
+
+            # Reset cursor position to current global cursor in new widget coords
+            # This prevents the cursor line from being offset after widget moves
+            from PySide6.QtGui import QCursor
+            cursor_widget = self.mapFromGlobal(QCursor.pos())
+            self._last_cursor_widget_pos = QPointF(cursor_widget)
+
             self._recalculate_geometry()
             self.update()
 
@@ -607,6 +739,13 @@ if HAS_QT:
 
             self._highlighted_leaf_index = None
             self._hovered_branch_item = None  # Clear child menu hover state
+
+            # Reset cursor position to current global cursor in new widget coords
+            # This prevents the cursor line from being offset after widget moves
+            from PySide6.QtGui import QCursor
+            cursor_widget = self.mapFromGlobal(QCursor.pos())
+            self._last_cursor_widget_pos = QPointF(cursor_widget)
+
             self._recalculate_geometry()
             self.update()
 
@@ -644,6 +783,9 @@ if HAS_QT:
             # Draw dead zone
             self._draw_dead_zone(painter, center)
 
+            # Draw live cursor line from anchor to cursor
+            self._draw_cursor_line(painter, center)
+
             # Phase 2.3: Draw connection strings (cursor → anchor chain)
             self._draw_connection_strings(painter, center)
 
@@ -657,6 +799,24 @@ if HAS_QT:
             painter.setPen(Qt.NoPen)
             painter.setBrush(QBrush(QColor(COLOR_TEXT_MUTED)))
             painter.drawEllipse(center, dot_radius, dot_radius)
+
+        def _draw_cursor_line(self, painter: QPainter, center: QPointF) -> None:
+            """Draw a live line from anchor to current cursor position."""
+            if self._last_cursor_widget_pos is None:
+                return
+
+            # Draw line from center to cursor
+            pen = QPen(QColor(COLOR_ACCENT))
+            pen.setWidth(2)
+            pen.setStyle(Qt.SolidLine)
+            painter.setPen(pen)
+            painter.drawLine(center, self._last_cursor_widget_pos)
+
+            # Draw small circle at cursor position
+            cursor_dot_radius = 6
+            painter.setBrush(QBrush(QColor(COLOR_ACCENT)))
+            painter.drawEllipse(self._last_cursor_widget_pos,
+                                cursor_dot_radius, cursor_dot_radius)
 
         def _draw_connection_strings(self, painter: QPainter, center: QPointF) -> None:
             """Draw dotted lines showing anchor chain (for multi-level menus)."""
@@ -878,6 +1038,27 @@ if HAS_QT:
             path.closeSubpath()
             painter.drawPath(path)
 
+        def _poll_cursor(self) -> None:
+            """Poll cursor position every frame for smooth cursor line updates.
+
+            Called by timer since mouseMoveEvent may not fire when cursor
+            moves over transparent areas or during 3DCoat viewport interactions.
+            """
+            if not self.isVisible() or not self._anchor:
+                return
+
+            from PySide6.QtGui import QCursor
+
+            # Get global cursor position
+            cursor_screen = QCursor.pos()
+
+            # Convert to widget coordinates
+            cursor_widget = self.mapFromGlobal(cursor_screen)
+            self._last_cursor_widget_pos = QPointF(cursor_widget)
+
+            # Trigger repaint to update cursor line
+            self.update()
+
         def mouseMoveEvent(self, event):
             """Track cursor position and update highlighting."""
             if not self._anchor:
@@ -887,14 +1068,8 @@ if HAS_QT:
             # Convert to screen coordinates (use position() instead of deprecated pos())
             cursor_screen = self.mapToGlobal(event.position().toPoint())
 
-            # DEBUG
-            import math
-            dx = cursor_screen.x() - self._anchor.x()
-            dy = cursor_screen.y() - self._anchor.y()
-            dist = math.sqrt(dx*dx + dy*dy)
-            angle = cursor_to_angle(cursor_screen, self._anchor)
-            print(f"Mouse: dx={dx:4.0f} dy={dy:4.0f} dist={dist:4.0f} angle={angle:6.1f} "
-                  f"leaf_angles={self._leaf_angles} boundaries={self._slice_boundaries}")
+            # Track cursor position in widget coords for drawing the live cursor line
+            self._last_cursor_widget_pos = QPointF(event.position())
 
             # Phase 2: Check for branch or exit node hover
             hovered_branch: RadialMenuItem | None = None
@@ -945,8 +1120,6 @@ if HAS_QT:
                 # Don't highlight leaves when hovering over branch/exit or no leaves exist
                 self._highlighted_leaf_index = None
 
-            print(f"  -> highlighted_index={self._highlighted_leaf_index}")
-
             # Emit signal and repaint if changed
             if old_highlight != self._highlighted_leaf_index:
                 if self._highlighted_leaf_index is not None:
@@ -956,13 +1129,51 @@ if HAS_QT:
             super().mouseMoveEvent(event)
 
         def keyReleaseEvent(self, event):
-            """Handle key release to invoke action."""
-            # For now, any key release closes menu
+            """
+            Handle key release to invoke action.
+
+            If trigger_keycode is known, we specifically wait for that key's release.
+            Otherwise, we skip the first key release and close on the second.
+            """
+            # CRITICAL: Ignore auto-repeat key events!
+            # When holding a key, OS sends repeated press/release events
+            if event.isAutoRepeat():
+                return
+
+            key = event.key()
+
+            # Remove from pressed keys set
+            if key in self._keys_currently_pressed:
+                self._keys_currently_pressed.remove(key)
+
+            # If we know the trigger key, wait specifically for it
+            if self._trigger_keycode is not None:
+                if key == self._trigger_keycode:
+                    self.hide_and_invoke()
+                return
+
+            # Fallback: if trigger key unknown, skip first release (any key)
+            if not self._initial_trigger_released:
+                self._initial_trigger_released = True
+                return
+
+            # After the trigger key is released, close on any subsequent key release
             self.hide_and_invoke()
 
         def keyPressEvent(self, event):
             """Handle key press events."""
-            if event.key() == Qt.Key_Escape:
+            # CRITICAL: Ignore auto-repeat key events!
+            if event.isAutoRepeat():
+                return
+
+            key = event.key()
+
+            # Track pressed keys
+            self._keys_currently_pressed.add(key)
+
+            # Escape always closes immediately
+            if key == Qt.Key_Escape:
+                self._cursor_poll_timer.stop()
                 self.releaseKeyboard()
                 self.hide()
 

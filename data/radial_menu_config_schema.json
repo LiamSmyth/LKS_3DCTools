@@ -1,0 +1,77 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Radial Menu Configuration",
+    "description": "Configuration schema for LKS radial tree menu with nested submenus",
+    "type": "object",
+    "properties": {
+        "version": {
+            "type": "string",
+            "description": "Configuration format version",
+            "default": "1.0"
+        },
+        "items": {
+            "type": "array",
+            "description": "Root-level menu items",
+            "items": {
+                "$ref": "#/definitions/menuItem"
+            }
+        }
+    },
+    "required": [
+        "items"
+    ],
+    "definitions": {
+        "menuItem": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "description": "Display label for the menu item"
+                },
+                "action": {
+                    "type": "string",
+                    "description": "Python module path to action (e.g., 'ops.SculptObject_Decimate.main') or 'actions/ScriptName.py'"
+                },
+                "icon": {
+                    "type": "string",
+                    "description": "Emoji or icon path (optional)"
+                },
+                "angle": {
+                    "type": "number",
+                    "description": "Explicit angle in degrees (0° = up, clockwise). Omit for auto-distribution.",
+                    "minimum": 0,
+                    "maximum": 360
+                },
+                "children": {
+                    "type": "array",
+                    "description": "Child menu items (creates submenu if present)",
+                    "items": {
+                        "$ref": "#/definitions/menuItem"
+                    }
+                },
+                "action_args": {
+                    "type": "object",
+                    "description": "Optional keyword arguments to pass to action function",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "label"
+            ],
+            "oneOf": [
+                {
+                    "required": [
+                        "action"
+                    ],
+                    "description": "Leaf node with action"
+                },
+                {
+                    "required": [
+                        "children"
+                    ],
+                    "description": "Branch node with children"
+                }
+            ]
+        }
+    }
+}
