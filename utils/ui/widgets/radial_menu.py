@@ -41,12 +41,36 @@ except ImportError:
 # CONSTANTS
 # =============================================================================
 
+# Debug mode - show pizza slice highlighting (default: False)
+DEBUG_PIZZA_SLICE: bool = False
+
 # Pixels - no selection within this radius (~50% to nodes)
 DEAD_ZONE_RADIUS: int = 75
 MENU_RADIUS: int = 150              # Pixels - distance from anchor to item centers
-BRANCH_HOVER_RADIUS: int = 40       # Pixels - hover detection radius for branches
-# Milliseconds - dwell time to enter/exit submenu
+# Pixels - hover detection radius for branches/exit
+BRANCH_HOVER_RADIUS: int = 20
+# Milliseconds - dwell time before submenu entry/exit
 BRANCH_DWELL_MS: int = 250
+HIGHLIGHT_SCALE: float = 1.15       # Scale factor for highlighted nodes
+# Pixels - extra margin around menu radius for widget size
+MENU_WIDGET_MARGIN: int = 100
+
+# Exit node appearance
+EXIT_NODE_RADIUS: int = 20          # Pixels - size of exit node circle
+EXIT_ICON_FONT_SIZE: int = 7        # Font size for exit icon (✕)
+
+# Branch node appearance (matches exit node size for consistency)
+BRANCH_NODE_RADIUS: int = 20        # Pixels - same as EXIT_NODE_RADIUS
+BRANCH_DOT_RADIUS: int = 3          # Pixels - center dot size
+BRANCH_LABEL_OFFSET: int = 25       # Pixels - distance of label above circle
+BRANCH_LABEL_FONT_SIZE: int = 9     # Font size for branch label
+
+# Node appearance (leaf/invoker nodes only)
+NODE_PADDING_X: int = 12            # Horizontal padding in squircles
+NODE_PADDING_Y: int = 6             # Vertical padding in squircles
+NODE_CORNER_RADIUS: int = 8         # Corner radius for squircles
+NODE_FONT_SIZE: int = 9             # Normal node font size
+NODE_FONT_SIZE_HIGHLIGHT: int = 10  # Highlighted node font size
 
 # =============================================================================
 # DATA MODEL
@@ -61,6 +85,8 @@ class RadialMenuItem:
     icon: str | None = None
     children: list[RadialMenuItem] | None = None
     angle: float | None = None  # Optional explicit angle (0° = up, clockwise)
+    # True if this is an exit node (requires dwell to activate)
+    is_exit: bool = False
 
     @property
     def is_branch(self) -> bool:
@@ -69,8 +95,8 @@ class RadialMenuItem:
 
     @property
     def is_leaf(self) -> bool:
-        """Return True if this node has no children (leaf node)."""
-        return not self.is_branch
+        """Return True if this node has no children and not an exit node."""
+        return not self.is_branch and not self.is_exit
 
 
 # =============================================================================
@@ -205,10 +231,25 @@ def get_highlighted_leaf(
     # Get cursor angle
     cursor_angle = cursor_to_angle(cursor, anchor)
 
+    # Cursor direction vector (normalized)
+    cursor_dx = dx / distance
+    cursor_dy = dy / distance
+
     # Find which slice contains cursor
     for i, (lower, upper) in enumerate(slice_boundaries):
         if angle_in_slice(cursor_angle, lower, upper):
-            return i
+            # Additional check: reject if item is >90° away from cursor (dot product < 0)
+            # Item direction vector at its angle
+            item_angle = leaf_angles[i]
+            item_angle_rad = math.radians(item_angle)
+            # Convert to our coordinate system (0° = up, clockwise)
+            item_dx = math.sin(item_angle_rad)
+            item_dy = -math.cos(item_angle_rad)
+
+            # Dot product: reject if negative (>90° away)
+            dot = cursor_dx * item_dx + cursor_dy * item_dy
+            if dot >= 0:
+                return i
 
     return None
 
@@ -309,6 +350,21 @@ if HAS_QT:
             self._anchor: QPoint | None = None
             self._highlighted_leaf_index: int | None = None
 
+            # Phase 2: Tree navigation state
+            # Navigation breadcrumb
+            self._menu_stack: list[list[RadialMenuItem]] = []
+            # Anchor positions for each level
+            self._anchor_stack: list[QPoint] = []
+            self._hovered_branch_item: RadialMenuItem | None = None
+            self._dwell_timer: QTimer = QTimer(self)
+            self._dwell_timer.setSingleShot(True)
+            self._dwell_timer.timeout.connect(self._on_dwell_timeout)
+
+            # Hover debounce: track if cursor spawned on top of a node
+            self._cursor_has_left_spawn_item: bool = True  # Start True for root menu
+            # Track label of branch we exited from
+            self._just_exited_from_label: str | None = None
+
             # Geometry cache
             self._leaf_angles: list[float] = []
             self._slice_boundaries: list[tuple[float, float]] = []
@@ -360,7 +416,7 @@ if HAS_QT:
             self._anchor = pos
 
             # Size widget to cover menu area (with some margin)
-            size = (MENU_RADIUS + 100) * 2
+            size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
             self.setFixedSize(size, size)
 
             # Position so anchor is at widget center
@@ -392,6 +448,178 @@ if HAS_QT:
             self.hide()
 
         # ---------------------------------------------------------------------
+        # Phase 2: Tree Navigation Methods
+        # ---------------------------------------------------------------------
+
+        def _is_cursor_over_branch(self, cursor: QPoint, branch_item: RadialMenuItem) -> bool:
+            """Check if cursor is within hover radius of a branch or exit node."""
+            if not (branch_item.is_branch or branch_item.is_exit):
+                return False
+
+            # Get center of widget
+            center = QPointF(self.width() / 2, self.height() / 2)
+
+            # Exit nodes are at center, not at MENU_RADIUS
+            if branch_item.is_exit:
+                branch_pos = center
+            else:
+                # Get branch node position
+                try:
+                    item_index = self._items.index(branch_item)
+                    angle = self._node_angles[item_index]
+                    branch_pos = get_node_position(angle, MENU_RADIUS, center)
+                except (ValueError, IndexError):
+                    return False
+
+            # Convert cursor to widget coords
+            cursor_widget = self.mapFromGlobal(cursor)
+
+            # Calculate distance
+            dx = cursor_widget.x() - branch_pos.x()
+            dy = cursor_widget.y() - branch_pos.y()
+            dist_sq = dx * dx + dy * dy
+
+            return dist_sq <= (BRANCH_HOVER_RADIUS * BRANCH_HOVER_RADIUS)
+
+        def _start_dwell_timer(self, branch_item: RadialMenuItem) -> None:
+            """Start dwell timer to enter submenu after delay."""
+            self._hovered_branch_item = branch_item
+            self._dwell_timer.start(BRANCH_DWELL_MS)
+            self.update()  # Repaint to show highlight
+
+        def _cancel_dwell_timer(self) -> None:
+            """Cancel dwell timer when cursor leaves branch hover region."""
+            self._dwell_timer.stop()
+            # Note: Don't clear _hovered_branch_item here - let caller decide
+            # This allows exit nodes to remain highlighted during activation
+
+        def _on_dwell_timeout(self) -> None:
+            """Handle dwell timer timeout - enter submenu or invoke exit action."""
+            if not self._hovered_branch_item:
+                return
+
+            # Exit node - invoke its action (which calls _exit_submenu)
+            if self._hovered_branch_item.is_exit:
+                # Force repaint to show highlight before action
+                self.update()
+                QApplication.processEvents()
+                self._hovered_branch_item.action()
+                return
+
+            # Branch node - enter submenu
+            if self._hovered_branch_item.children:
+                # Force repaint to show highlight before transition
+                self.update()
+                QApplication.processEvents()
+                self._enter_submenu(self._hovered_branch_item)
+
+        def _enter_submenu(self, branch_item: RadialMenuItem) -> None:
+            """Push submenu onto stack and display it."""
+            if not branch_item.children:
+                return
+
+            # Calculate branch node's screen position to use as new anchor
+            center = QPointF(self.width() / 2, self.height() / 2)
+            try:
+                item_index = self._items.index(branch_item)
+                angle = self._node_angles[item_index]
+                branch_pos_widget = get_node_position(
+                    angle, MENU_RADIUS, center)
+                # Convert to screen coordinates
+                new_anchor = self.mapToGlobal(branch_pos_widget.toPoint())
+            except (ValueError, IndexError):
+                # Fallback: keep current anchor if branch not found
+                new_anchor = self._anchor
+
+            # Push current menu state onto stack
+            self._menu_stack.append(self._items)
+            if self._anchor:
+                self._anchor_stack.append(self._anchor)
+
+            # Update anchor to branch node's position
+            self._anchor = new_anchor
+
+            # Reposition widget to center on new anchor
+            size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
+            self.move(new_anchor.x() - size // 2, new_anchor.y() - size // 2)
+
+            # Cursor spawned on branch node, so it will be over exit node at center
+            # Don't trigger exit until cursor leaves and re-enters
+            self._cursor_has_left_spawn_item = False
+
+            # Clear just_exited tracking - we're in a new menu context now
+            self._just_exited_from_item = None
+
+            # Stop any ongoing dwell timer from parent menu
+            self._cancel_dwell_timer()
+
+            # Create exit node and add to submenu items
+            exit_node = self._create_exit_node()
+            # Exit node stays at center (no angle needed)
+
+            # Set new items from branch children + exit node
+            self._items = [exit_node] + list(branch_item.children)
+            self._highlighted_leaf_index = None
+            self._hovered_branch_item = None  # Clear parent menu hover state
+            self._recalculate_geometry()
+            self.update()
+
+        def _exit_submenu(self) -> None:
+            """Pop submenu from stack and restore parent menu."""
+            if not self._menu_stack:
+                return
+
+            # Find which branch in parent we need to debounce
+            # The exit node's parent is stored when menu was entered
+            exited_branch_label: str | None = None
+            if len(self._menu_stack) > 0:
+                parent_items = self._menu_stack[-1]
+                # Find branch that has our current menu as children
+                current_first_non_exit = next(
+                    (item for item in self._items if not item.is_exit), None)
+                if current_first_non_exit:
+                    for parent_item in parent_items:
+                        if parent_item.is_branch and parent_item.children:
+                            first_child = next(
+                                (c for c in parent_item.children), None)
+                            if first_child and first_child.label == current_first_non_exit.label:
+                                exited_branch_label = parent_item.label
+                                break
+
+            # Restore parent menu
+            self._items = self._menu_stack.pop()
+            if self._anchor_stack:
+                self._anchor = self._anchor_stack.pop()
+
+                # Reposition widget to center on restored anchor
+                size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
+                self.move(self._anchor.x() - size // 2,
+                          self._anchor.y() - size // 2)
+
+            # Track which branch to debounce in parent menu
+            self._just_exited_from_label = exited_branch_label
+
+            # Can interact with other items immediately
+            self._cursor_has_left_spawn_item = True
+
+            # Stop any ongoing dwell timer from child menu
+            self._cancel_dwell_timer()
+
+            self._highlighted_leaf_index = None
+            self._hovered_branch_item = None  # Clear child menu hover state
+            self._recalculate_geometry()
+            self.update()
+
+        def _create_exit_node(self) -> RadialMenuItem:
+            """Create exit node for returning to parent menu."""
+            return RadialMenuItem(
+                label="Exit",
+                action=self._exit_submenu,
+                icon="X",
+                is_exit=True,  # Requires dwell to activate
+            )
+
+        # ---------------------------------------------------------------------
         # Event Handlers (Placeholder - will implement in later phases)
         # ---------------------------------------------------------------------
 
@@ -416,6 +644,9 @@ if HAS_QT:
             # Draw dead zone
             self._draw_dead_zone(painter, center)
 
+            # Phase 2.3: Draw connection strings (cursor → anchor chain)
+            self._draw_connection_strings(painter, center)
+
             # Draw sector slices and labels
             self._draw_sectors(painter, center)
 
@@ -427,6 +658,29 @@ if HAS_QT:
             painter.setBrush(QBrush(QColor(COLOR_TEXT_MUTED)))
             painter.drawEllipse(center, dot_radius, dot_radius)
 
+        def _draw_connection_strings(self, painter: QPainter, center: QPointF) -> None:
+            """Draw dotted lines showing anchor chain (for multi-level menus)."""
+            if not self._anchor_stack:
+                # No parent menus, no strings to draw
+                return
+
+            # Get cursor position in widget coords (we'll draw from cursor to anchors)
+            # For now, just draw from current anchor to parent anchors
+            # Multi-segment: current anchor ╌╌ parent1 ╌╌ parent2 ╌╌ root
+
+            pen = QPen(QColor(COLOR_TEXT_MUTED))
+            pen.setWidth(1)
+            pen.setStyle(Qt.DotLine)  # Dotted line
+            painter.setPen(pen)
+
+            # Draw lines from current anchor back through the stack
+            prev_anchor = center  # Current menu anchor (widget center)
+            for parent_anchor in reversed(self._anchor_stack):
+                # Convert parent anchor (screen coords) to widget coords
+                parent_widget = self.mapFromGlobal(parent_anchor)
+                painter.drawLine(prev_anchor, QPointF(parent_widget))
+                prev_anchor = QPointF(parent_widget)
+
         def _draw_sectors(self, painter: QPainter, center: QPointF) -> None:
             """Draw sector slices with highlighting."""
             if not self._node_angles:
@@ -436,27 +690,89 @@ if HAS_QT:
             leaf_nodes = [item for item in self._items if item.is_leaf]
 
             for i, item in enumerate(self._items):
-                angle = self._node_angles[i]
-                pos = get_node_position(angle, MENU_RADIUS, center)
+                # Exit nodes are drawn at center (anchor), not at MENU_RADIUS
+                if item.is_exit:
+                    pos = center  # Exit node at center
+                else:
+                    angle = self._node_angles[i]
+                    pos = get_node_position(angle, MENU_RADIUS, center)
 
-                # Determine if this leaf is highlighted
+                # Determine if this node is highlighted
                 is_highlighted = False
+                # Leaf nodes: highlight via pizza slice selection
                 if item.is_leaf:
                     leaf_index = leaf_nodes.index(item)
                     is_highlighted = (
                         leaf_index == self._highlighted_leaf_index)
+                # Branch/exit nodes: highlight if being hovered (dwell in progress)
+                elif (item.is_branch or item.is_exit) and item == self._hovered_branch_item:
+                    is_highlighted = True
 
-                # Draw pizza slice background for highlighted leaf
-                if is_highlighted and self._slice_boundaries:
+                # Draw pizza slice background for highlighted leaf (DEBUG only)
+                if DEBUG_PIZZA_SLICE and is_highlighted and item.is_leaf and self._slice_boundaries:
                     leaf_index = leaf_nodes.index(item)
                     lower, upper = self._slice_boundaries[leaf_index]
                     self._draw_pizza_slice(painter, center, lower, upper)
 
+                # Branch nodes get special rendering as circles (matching exit nodes)
+                if item.is_branch:
+                    # Draw branch node as a circle (same size as exit node)
+                    branch_radius = BRANCH_NODE_RADIUS
+                    if is_highlighted:
+                        painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
+                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
+                    else:
+                        painter.setPen(QPen(QColor(COLOR_BORDER), 2))
+                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
+                    painter.drawEllipse(pos, branch_radius, branch_radius)
+
+                    # Draw center dot
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(QBrush(
+                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED)))
+                    painter.drawEllipse(
+                        pos, BRANCH_DOT_RADIUS, BRANCH_DOT_RADIUS)
+
+                    # Draw label above circle
+                    label_font = QFont("Arial", BRANCH_LABEL_FONT_SIZE,
+                                       QFont.Bold if is_highlighted else QFont.Normal)
+                    painter.setFont(label_font)
+                    painter.setPen(
+                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_PRIMARY))
+                    label_y = pos.y() - BRANCH_LABEL_OFFSET
+                    label_rect = QRectF(pos.x() - 50, label_y - 10, 100, 20)
+                    painter.drawText(label_rect, Qt.AlignCenter, item.label)
+                    continue  # Skip normal squircle rendering
+
+                # Exit nodes get special rendering as a circle at center
+                if item.is_exit:
+                    # Draw exit node as a circle (not squircle)
+                    exit_radius = EXIT_NODE_RADIUS
+                    if is_highlighted:
+                        painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
+                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
+                    else:
+                        painter.setPen(QPen(QColor(COLOR_BORDER), 2))
+                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
+                    painter.drawEllipse(pos, exit_radius, exit_radius)
+
+                    # Draw X icon in center
+                    font = QFont("Arial", EXIT_ICON_FONT_SIZE,
+                                 QFont.Bold if is_highlighted else QFont.Normal)
+                    painter.setFont(font)
+                    painter.setPen(
+                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED))
+                    text_rect = QRectF(pos.x() - exit_radius, pos.y() - exit_radius,
+                                       exit_radius * 2, exit_radius * 2)
+                    painter.drawText(text_rect, Qt.AlignCenter,
+                                     item.icon if item.icon else "✕")
+                    continue  # Skip normal squircle rendering
+
                 # Prepare text and font
                 if is_highlighted:
-                    font = QFont("Arial", 10, QFont.Bold)
+                    font = QFont("Arial", NODE_FONT_SIZE_HIGHLIGHT, QFont.Bold)
                 else:
-                    font = QFont("Arial", 9)
+                    font = QFont("Arial", NODE_FONT_SIZE)
                 painter.setFont(font)
 
                 # Icon if present
@@ -469,11 +785,14 @@ if HAS_QT:
                 text_height = metrics.height()
 
                 # Squircle dimensions with padding
-                padding_x = 12
-                padding_y = 6
-                squircle_width = text_width + padding_x * 2
-                squircle_height = text_height + padding_y * 2
-                corner_radius = 8
+                squircle_width = text_width + NODE_PADDING_X * 2
+                squircle_height = text_height + NODE_PADDING_Y * 2
+                corner_radius = NODE_CORNER_RADIUS
+
+                # Scale up if highlighted
+                if is_highlighted:
+                    squircle_width *= HIGHLIGHT_SCALE
+                    squircle_height *= HIGHLIGHT_SCALE
 
                 # Draw squircle (rounded rectangle)
                 squircle_rect = QRectF(
@@ -485,8 +804,7 @@ if HAS_QT:
 
                 if is_highlighted:
                     painter.setPen(QPen(QColor(COLOR_ACCENT), 2))
-                    painter.setBrush(
-                        QBrush(QColor(COLOR_ACCENT + "40")))  # 25% alpha
+                    painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
                 else:
                     painter.setPen(QPen(QColor(COLOR_BORDER), 1))
                     painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
@@ -501,16 +819,6 @@ if HAS_QT:
                     painter.setPen(QColor(COLOR_TEXT_PRIMARY))
 
                 painter.drawText(squircle_rect, Qt.AlignCenter, text)
-
-                # Draw arrow for branch nodes (Phase 2) - positioned at right edge of squircle
-                if item.is_branch:
-                    arrow_font = QFont("Arial", 10)
-                    painter.setFont(arrow_font)
-                    painter.setPen(QColor(COLOR_TEXT_MUTED))
-                    arrow_x = squircle_rect.right() + 4
-                    arrow_y = squircle_rect.center().y()
-                    arrow_rect = QRectF(arrow_x - 8, arrow_y - 8, 16, 16)
-                    painter.drawText(arrow_rect, Qt.AlignCenter, "▶")
 
         def _draw_pizza_slice(
             self,
@@ -572,7 +880,7 @@ if HAS_QT:
 
         def mouseMoveEvent(self, event):
             """Track cursor position and update highlighting."""
-            if not self._anchor or not self._leaf_angles:
+            if not self._anchor:
                 super().mouseMoveEvent(event)
                 return
 
@@ -588,14 +896,54 @@ if HAS_QT:
             print(f"Mouse: dx={dx:4.0f} dy={dy:4.0f} dist={dist:4.0f} angle={angle:6.1f} "
                   f"leaf_angles={self._leaf_angles} boundaries={self._slice_boundaries}")
 
-            # Get highlighted leaf
+            # Phase 2: Check for branch or exit node hover
+            hovered_branch: RadialMenuItem | None = None
+            for item in self._items:
+                # Branch nodes and exit nodes both require dwell
+                if (item.is_branch or item.is_exit) and self._is_cursor_over_branch(cursor_screen, item):
+                    hovered_branch = item
+                    break
+
+            # Hover debounce: track if cursor has left the spawn item
+            if not hovered_branch and not self._cursor_has_left_spawn_item:
+                # Cursor left the item we spawned on top of
+                self._cursor_has_left_spawn_item = True
+
+            # Clear just-exited tracking when cursor leaves that item
+            if self._just_exited_from_label and (not hovered_branch or hovered_branch.label != self._just_exited_from_label):
+                self._just_exited_from_label = None
+
+            # Handle dwell timer state
+            if hovered_branch:
+                # Check if this is the item we just exited from - needs debounce
+                if self._just_exited_from_label and hovered_branch.label == self._just_exited_from_label:
+                    # Don't trigger until cursor leaves and comes back
+                    pass
+                # Only start dwell if cursor has left spawn item at least once
+                elif self._cursor_has_left_spawn_item:
+                    # Start or continue dwell timer
+                    if self._hovered_branch_item != hovered_branch:
+                        self._start_dwell_timer(hovered_branch)
+                # else: cursor still on spawn item, ignore hover
+            else:
+                # Cancel dwell timer if cursor left branch region
+                if self._hovered_branch_item is not None:
+                    self._cancel_dwell_timer()
+                    self._hovered_branch_item = None  # Clear hover state
+                    self.update()  # Repaint to remove highlight
+
+            # Get highlighted leaf (only if not hovering over branch/exit and we have leaves)
             old_highlight = self._highlighted_leaf_index
-            self._highlighted_leaf_index = get_highlighted_leaf(
-                cursor_screen,
-                self._anchor,
-                self._leaf_angles,
-                self._slice_boundaries,
-            )
+            if not hovered_branch and self._leaf_angles:
+                self._highlighted_leaf_index = get_highlighted_leaf(
+                    cursor_screen,
+                    self._anchor,
+                    self._leaf_angles,
+                    self._slice_boundaries,
+                )
+            else:
+                # Don't highlight leaves when hovering over branch/exit or no leaves exist
+                self._highlighted_leaf_index = None
 
             print(f"  -> highlighted_index={self._highlighted_leaf_index}")
 
