@@ -115,8 +115,9 @@ def main(
             mode_info = " (voxel mode: split hidden volumes)"
         elif surface_count > 0:
             mode_info = " (surface mode: split masked/hidden + closed holes)"
-        
-        show_message(f"Smart split created {total_new} new object(s){mode_info}", 3000)
+
+        show_message(
+            f"Smart split created {total_new} new object(s){mode_info}", 3000)
     else:
         show_message("No hidden/masked area to split", 2000)
 
