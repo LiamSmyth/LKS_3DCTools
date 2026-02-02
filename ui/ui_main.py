@@ -34,7 +34,7 @@ class LKSMainPanel(QWidget):
         self.setWindowTitle("LKS Tools")
         self.setMinimumSize(320, 500)
         self.resize(350, 600)
-        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Window)
         self.setStyleSheet(DARK_STYLESHEET)
 
         # Position window in top-left area of screen
