@@ -89,7 +89,8 @@ if HAS_QT:
             header = QLabel(
                 "⚡ Hotkey Conflicts\n"
                 "Each group shows commands sharing the same key binding.\n"
-                "For each entry, select an action. Only ONE entry per group can be 'Keep'."
+                "Select actions: Keep, Unmap, Delete, Remap, or Garbage Key.\n"
+                "Apply processes only non-Keep entries, then recalculates conflicts."
             )
             header.setWordWrap(True)
             header.setStyleSheet("color: #ffb74d; font-weight: bold;")
@@ -406,6 +407,12 @@ if HAS_QT:
             unresolved_groups = 0
             total_groups = len(self._conflict_groups)
 
+            # Count entries with non-Keep resolutions
+            pending_changes = sum(
+                1 for action, _ in self._resolutions.values()
+                if action != RESOLUTION_KEEP
+            )
+
             for entries in self._conflict_groups.values():
                 keep_count = sum(
                     1 for e in entries
@@ -429,14 +436,20 @@ if HAS_QT:
                 self._btn_commit.setEnabled(True)
                 self._btn_apply.setEnabled(True)
             else:
-                self._status_label.setText(
-                    f"⚠️ {unresolved_groups}/{total_groups} group(s) need resolution. "
-                    f"Each group must have exactly ONE 'Keep'."
-                )
+                if pending_changes > 0:
+                    self._status_label.setText(
+                        f"⚠️ {unresolved_groups}/{total_groups} group(s) need resolution. "
+                        f"{pending_changes} pending change(s) can be applied."
+                    )
+                else:
+                    self._status_label.setText(
+                        f"⚠️ {unresolved_groups}/{total_groups} group(s) need resolution. "
+                        f"Select actions for entries (keep, unmap, delete, remap, garbage)."
+                    )
                 self._status_label.setStyleSheet(
                     "color: #ffb74d; font-size: 12px;")
                 self._btn_commit.setEnabled(False)
-                self._btn_apply.setEnabled(True)
+                self._btn_apply.setEnabled(pending_changes > 0)
 
         def _update_entry_statuses(self) -> None:
             """Update status indicators on all entry rows."""
@@ -484,29 +497,17 @@ if HAS_QT:
                         status_label.setToolTip("")
 
         def _apply_resolutions(self) -> None:
-            """Apply all selected resolutions without closing."""
-            # Validate first
-            invalid_groups = []
-            for binding_key, entries in self._conflict_groups.items():
-                keep_count = sum(
-                    1 for e in entries
-                    if self._resolutions.get(id(e), (RESOLUTION_KEEP, None))[0] == RESOLUTION_KEEP
-                )
-                if keep_count != 1:
-                    invalid_groups.append(binding_key)
-
-            if invalid_groups:
-                QMessageBox.warning(
-                    self, "Cannot Apply Resolutions",
-                    f"Cannot apply: {len(invalid_groups)} group(s) do not have exactly one 'Keep'.\n\n"
-                    f"Each conflict group must have exactly ONE entry set to 'Keep'."
-                )
-                return
-
+            """Apply partial resolutions: only apply changes to entries not set to 'Keep'."""
             changes = 0
             entries_to_delete: list[int] = []
+            skipped_keep = 0
 
             for entry_id, (action, remap) in self._resolutions.items():
+                # Skip entries set to "Keep"
+                if action == RESOLUTION_KEEP:
+                    skipped_keep += 1
+                    continue
+
                 entry = None
                 for e in self._hotkeys_file.entries:
                     if id(e) == entry_id:
@@ -543,11 +544,18 @@ if HAS_QT:
 
             self._refresh_conflicts()
 
-            QMessageBox.information(
-                self, "Resolutions Applied",
-                f"Applied {changes} resolution(s).\n"
-                f"Remaining conflicts: {len(self._conflict_groups)}"
-            )
+            if changes == 0:
+                msg = "No changes to apply.\n"
+                if skipped_keep > 0:
+                    msg += f"All {skipped_keep} selected entries are set to 'Keep'."
+                QMessageBox.information(self, "No Changes", msg)
+            else:
+                QMessageBox.information(
+                    self, "Resolutions Applied",
+                    f"Applied {changes} resolution(s).\n"
+                    f"Skipped {skipped_keep} 'Keep' entries.\n"
+                    f"Remaining conflicts: {len(self._conflict_groups)}"
+                )
 
         def _apply_and_close(self) -> None:
             """Apply resolutions and close the dialog."""
