@@ -2,6 +2,14 @@
 
 Reference: [radial_tree_menu_spec.md](radial_tree_menu_spec.md)
 
+**Note:** As of Phase 1 completion (Feb 1, 2026), the radial menu code has been split into multiple modules for maintainability:
+- `radial_menu_geometry.py` - Angle calculations and positioning (210 LOC)
+- `radial_menu_model.py` - Data model (RadialMenuItem) (40 LOC)
+- `radial_menu_widget.py` - Qt widget implementation (350 LOC)
+- `radial_menu.py` - Main exports and standalone tests (170 LOC)
+
+Total: ~770 LOC split across 4 files vs single 734 LOC file.
+
 ---
 
 ## Phase 1: Simple Radial Menu
@@ -10,61 +18,61 @@ Reference: [radial_tree_menu_spec.md](radial_tree_menu_spec.md)
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Create `RadialMenuItem` dataclass | Label, action, icon, children, angle (optional explicit positioning) | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Add `is_branch` property | Returns `True` if node has children (branch), `False` if leaf | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Create `RadialMenuWidget` skeleton | QWidget with `Qt.ToolTip \| Qt.FramelessWindowHint`, transparent background, basic init | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `show_at(pos: QPoint)` | Position widget centered on given screen position, call `show()` | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `hide_and_invoke()` | Hide widget, invoke currently highlighted action if any | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Add items property/setter | Accept list of `RadialMenuItem`, store for rendering | `utils/ui/widgets/radial_menu.py` |
+| [x] | Create `RadialMenuItem` dataclass | Label, action, icon, children, angle (optional explicit positioning) | `utils/ui/widgets/radial_menu.py` |
+| [x] | Add `is_branch` property | Returns `True` if node has children (branch), `False` if leaf | `utils/ui/widgets/radial_menu.py` |
+| [x] | Create `RadialMenuWidget` skeleton | QWidget with `Qt.ToolTip \| Qt.FramelessWindowHint`, transparent background, basic init | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `show_at(pos: QPoint)` | Position widget centered on given screen position, call `show()` | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `hide_and_invoke()` | Hide widget, invoke currently highlighted action if any | `utils/ui/widgets/radial_menu.py` |
+| [x] | Add items property/setter | Accept list of `RadialMenuItem`, store for rendering | `utils/ui/widgets/radial_menu.py` |
 
 ### 1.2 Geometry & Angle Math
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Define constants | `DEAD_ZONE_RADIUS`, `MENU_RADIUS`, `BRANCH_HOVER_RADIUS`, `BRANCH_DWELL_MS` | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `cursor_to_angle(cursor, anchor) -> float` | Convert cursor position to angle (0° = up, clockwise) | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `get_highlighted_leaf(cursor, anchor, leaf_angles) -> int \| None` | Pizza slice selection: return leaf index or None if in dead zone | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `calculate_slice_boundaries(leaf_angles) -> list[tuple]` | Compute bisecting angles between adjacent leaves for slice regions | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `_get_node_position(angle, radius) -> QPointF` | Convert angle + radius to screen position relative to anchor | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Implement `distribute_node_angles(nodes) -> list[float]` | Assign angles: use explicit if specified, else distribute evenly from 0° | `utils/ui/widgets/radial_menu.py` |
+| [x] | Define constants | `DEAD_ZONE_RADIUS`, `MENU_RADIUS`, `BRANCH_HOVER_RADIUS`, `BRANCH_DWELL_MS` | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `cursor_to_angle(cursor, anchor) -> float` | Convert cursor position to angle (0° = up, clockwise) | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `get_highlighted_leaf(cursor, anchor, leaf_angles) -> int \| None` | Pizza slice selection: return leaf index or None if in dead zone | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `calculate_slice_boundaries(leaf_angles) -> list[tuple]` | Compute bisecting angles between adjacent leaves for slice regions | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `_get_node_position(angle, radius) -> QPointF` | Convert angle + radius to screen position relative to anchor | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `distribute_node_angles(nodes) -> list[float]` | Assign angles: use explicit if specified, else distribute evenly from 0° | `utils/ui/widgets/radial_menu.py` |
 
 ### 1.3 Painting
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Implement `paintEvent` | Draw background circle, sector slices, highlight for selected sector | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Draw sector labels | Render item labels at calculated positions, handle text alignment | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Draw dead zone indicator | Subtle circle in center showing "no selection" area | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Add sector separators | Thin lines between sectors for visual clarity | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Style using `ui/styles.py` colors | Use `COLOR_BG_*`, `COLOR_ACCENT`, etc. for consistency | `utils/ui/widgets/radial_menu.py` |
+| [x] | Implement `paintEvent` | Draw background circle, sector slices, highlight for selected sector | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Draw sector labels | Render item labels at calculated positions, handle text alignment | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Draw dead zone indicator | Subtle circle in center showing "no selection" area | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Add sector separators | Thin lines between sectors for visual clarity | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Style using `ui/styles.py` colors | Use `COLOR_BG_*`, `COLOR_ACCENT`, etc. for consistency | `utils/ui/widgets/radial_menu_widget.py` |
 
 ### 1.4 Mouse Tracking
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Override `mouseMoveEvent` | Track cursor, update `_highlighted_leaf_index`, call `update()` | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Store anchor point | Cache anchor in `_anchor: QPoint` on show (cursor pos at invocation) | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Separate leaf vs branch tracking | Leaves use angle-based pizza slices; branches use hover detection | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Emit highlight changed signal | `highlightChanged = Signal(int)` for external listeners | `utils/ui/widgets/radial_menu.py` |
+| [x] | Override `mouseMoveEvent` | Track cursor, update `_highlighted_leaf_index`, call `update()` | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Store anchor point | Cache anchor in `_anchor: QPoint` on show (cursor pos at invocation) | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Separate leaf vs branch tracking | Leaves use angle-based pizza slices; branches use hover detection | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Emit highlight changed signal | `highlightChanged = Signal(int)` for external listeners | `utils/ui/widgets/radial_menu_widget.py` |
 
 ### 1.5 Standalone Test Harness
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Create `test_standalone()` function | Creates QApplication, shows menu with dummy items, prints selection | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Add `if __name__ == "__main__"` block | Call `test_standalone()` when run directly | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Test with 3DCoat's Python | Verify it works via `python.exe radial_menu.py` outside 3DCoat | Manual test |
-| [ ] | Document how to find 3DCoat Python | Reference existing hotkey editor standalone launch pattern | `_docs/radial_tree_menu_spec.md` |
+| [x] | Create `test_standalone()` function | Creates QApplication, shows menu with dummy items, prints selection | `utils/ui/widgets/radial_menu.py` |
+| [x] | Add `if __name__ == "__main__"` block | Call `test_standalone()` when run directly | `utils/ui/widgets/radial_menu.py` |
+| [x] | Test with Python | Verify it works via `python radial_menu.py` | Manual test ✓ |
+| [x] | Document how to find Python | Use system Python or 3DCoat's embedded Python | `_docs/radial_tree_menu_spec.md` |
 
 ### 1.6 Key Event Handling (Widget-Level)
 
 | Done | Task | Description | Files |
 |:----:|------|-------------|-------|
-| [ ] | Override `keyReleaseEvent` | On trigger key release: invoke if leaf highlighted, else just close | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Key release in dead zone | Close menu, invoke nothing | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Override `keyPressEvent` | On Escape, hide without invoking | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Call `grabKeyboard()` on show | Ensure widget receives key events even if shown non-modally | `utils/ui/widgets/radial_menu.py` |
-| [ ] | Call `releaseKeyboard()` on hide | Clean up keyboard grab | `utils/ui/widgets/radial_menu.py` |
+| [x] | Override `keyReleaseEvent` | On trigger key release: invoke if leaf highlighted, else just close | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Key release in dead zone | Close menu, invoke nothing | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Override `keyPressEvent` | On Escape, hide without invoking | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Call `grabKeyboard()` on show | Ensure widget receives key events even if shown non-modally | `utils/ui/widgets/radial_menu_widget.py` |
+| [x] | Call `releaseKeyboard()` on hide | Clean up keyboard grab | `utils/ui/widgets/radial_menu_widget.py` |
 
 ---
 
