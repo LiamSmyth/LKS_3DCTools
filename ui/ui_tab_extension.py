@@ -118,8 +118,8 @@ def create_extension_tab(
             log_error(f"Failed to get registered actions: {e}")
 
     action_grid = ButtonGrid(columns=2)
-    action_grid.add_button("Register All", on_register_all,
-                           "Register all action scripts")
+    action_grid.add_button("Add Menu Items", on_register_all,
+                           "Add all LKS actions as custom menu items to Scripts menu")
     action_grid.add_button(
         "Show Registered", on_show_registered, "Show registered actions")
     menu_section.content_layout.addWidget(action_grid)
@@ -156,7 +156,7 @@ def create_extension_tab(
 
     cleanup_grid = ButtonGrid(columns=2)
     cleanup_grid.add_button(
-        "Cleanup Menu", on_cleanup_menu, "Remove stale menu entries")
+        "Remove Menu Items", on_cleanup_menu, "Remove LKS custom menu items from Scripts menu")
     cleanup_grid.add_button(
         "Show Status", on_show_menu_status, "Show menu file status")
     menu_section.content_layout.addWidget(cleanup_grid)
