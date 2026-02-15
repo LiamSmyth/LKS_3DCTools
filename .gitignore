@@ -220,3 +220,21 @@ __marimo__/
 .streamlit/secrets.toml
 
 *launch.json
+
+# =============================================================================
+# LKS-specific: Build artifacts and temp files
+# =============================================================================
+
+# Debug logs
+data/*.log
+*.log
+
+# Build artifacts
+dist/
+build/
+*.zip
+LKS_*.zip
+
+# Note: Config files (lks_ui_state.json, etc.) are TRACKED
+# They're committed on 'local' branch but not merged to 'main' for remote push
+# See .docs/git_workflow.md for details
