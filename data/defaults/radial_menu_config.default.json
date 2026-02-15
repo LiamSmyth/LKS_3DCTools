@@ -1,0 +1,16 @@
+{
+    "_comment": "Default radial menu configuration - copy to data/state/radial_menu_config.json to use",
+    "root": {
+        "label": "LKS Tools",
+        "children": [
+            {
+                "label": "Decimate",
+                "action": "$DecimateToRetopo"
+            },
+            {
+                "label": "Ghost",
+                "action": "$ToggleGhost"
+            }
+        ]
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "_comment": "Default LKS brush settings - copy to data/state/lks_brush_settings.json to use",
+    "details_level": 1,
+    "auto_subdivide": true,
+    "remove_stretching": true,
+    "auto_subdivide_per_brush": {},
+    "details_level_per_brush": {},
+    "remove_stretching_per_brush": {}
+}

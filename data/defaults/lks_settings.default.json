@@ -1,0 +1,4 @@
+{
+    "_comment": "Default LKS general settings - copy to data/state/lks_settings.json to use",
+    "example_setting": "default_value"
+}

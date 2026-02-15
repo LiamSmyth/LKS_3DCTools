@@ -1,0 +1,7 @@
+{
+    "_comment": "Default LKS autopo settings - copy to data/state/lks_autopo_settings.json to use",
+    "autopo_density": 10000,
+    "use_symmetric": true,
+    "details_level": 1,
+    "remove_stretching": true
+}
