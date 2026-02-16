@@ -886,14 +886,26 @@ if HAS_QT:
                         painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
                     painter.drawEllipse(pos, branch_radius, branch_radius)
 
-                    # Draw center dot
-                    painter.setPen(Qt.NoPen)
-                    painter.setBrush(QBrush(
-                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED)))
-                    painter.drawEllipse(
-                        pos, BRANCH_DOT_RADIUS, BRANCH_DOT_RADIUS)
+                    # Draw icon in center if present, otherwise draw center dot
+                    if item.icon:
+                        # Draw icon in center (similar to exit node)
+                        icon_font = QFont("Arial", EXIT_ICON_FONT_SIZE,
+                                          QFont.Bold if is_highlighted else QFont.Normal)
+                        painter.setFont(icon_font)
+                        painter.setPen(
+                            QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED))
+                        text_rect = QRectF(pos.x() - branch_radius, pos.y() - branch_radius,
+                                           branch_radius * 2, branch_radius * 2)
+                        painter.drawText(text_rect, Qt.AlignCenter, item.icon)
+                    else:
+                        # Draw center dot if no icon
+                        painter.setPen(Qt.NoPen)
+                        painter.setBrush(QBrush(
+                            QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED)))
+                        painter.drawEllipse(
+                            pos, BRANCH_DOT_RADIUS, BRANCH_DOT_RADIUS)
 
-                    # Draw label above circle
+                    # Draw label above circle (without icon - icon is in circle now)
                     label_font = QFont("Arial", BRANCH_LABEL_FONT_SIZE,
                                        QFont.Bold if is_highlighted else QFont.Normal)
                     painter.setFont(label_font)

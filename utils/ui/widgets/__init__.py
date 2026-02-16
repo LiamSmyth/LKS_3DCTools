@@ -14,9 +14,13 @@ This package provides reusable widget primitives for building LKS UI:
 - RadialMenuWidget: Direction-based radial menu with tree navigation
 - RadialMenuItem: Data class for radial menu items
 - get_manager: Access RadialMenuManager singleton
+- SaveLoadLibrary: Save/load/library management widget for configs
 
 Usage:
-    from utils.ui.widgets import CollapsibleSection, ButtonGrid, ActivityLog, GripBoxContainer
+    from utils.ui.widgets import (
+        CollapsibleSection, ButtonGrid, ActivityLog, GripBoxContainer, 
+        SaveLoadLibrary
+    )
 
     log = ActivityLog(parent)
     log.log_info("Operation complete")
@@ -31,6 +35,14 @@ Usage:
     from utils.ui.widgets import get_manager, RadialMenuItem
     items = [RadialMenuItem(label="Action", action=lambda: print("clicked"))]
     get_manager().show_menu(items)
+    
+    # Save/Load/Library widget
+    save_load = SaveLoadLibrary(
+        library_dir=Path("data/library/my_configs"),
+        default_filename="config.json",
+        on_save=lambda path: save_config(path),
+        on_load=lambda path: load_config(path),
+    )
 
 All widgets are re-exported here for backwards compatibility.
 """
@@ -48,6 +60,7 @@ from .grip_box_container import GripBoxContainer
 from .grip_box_item import GripBox
 from .radial_menu import RadialMenuWidget, RadialMenuItem
 from .radial_menu_manager import get_manager
+from .save_load_library import SaveLoadLibrary
 
 # Check if Qt is available (re-export for convenience)
 try:
@@ -71,6 +84,7 @@ __all__ = [
     "GripBox",
     "RadialMenuWidget",
     "RadialMenuItem",
+    "SaveLoadLibrary",
     "get_manager",
     "LOG_COLORS",
     "LOG_PREFIXES",
