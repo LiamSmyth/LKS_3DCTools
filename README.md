@@ -75,22 +75,27 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 
 ### Download
 
-**[Download Latest Release](https://github.com/LiamSmyth/LKS_3DCTools/releases/latest)** (LKS_3DCoat_cModule_vX.X.X.zip)
+**[Download Latest Release](https://github.com/LiamSmyth/LKS_3DCTools/releases/latest)** 
+(`LKS_3DCoat_cModule_vX.X.X.zip` or `LKS_3DCoat_cModule_vX.X.X.3dcpack`)
 
 ### Base Installation Steps
+##### 1a) 3DCpack Method
+- Download `LKS_3DCoat_cModule_vX.X.X.3dcpack` from releases page
+- Drag the 3dcpack file into 3DC main window. Should auto install with typical 3dcpack method.
 
-1. **Download** the latest `LKS_3DCoat_cModule_vX.X.X.zip`
-
-2. **Extract** the `LKS/` folder to your 3DCoat cModules directory:
+##### 1b) ZIP method
+- **Download** the latest `LKS_3DCoat_cModule_vX.X.X.zip`
+- **Extract** the `LKS/` folder to your 3DCoat cModules directory:
    ```
    Documents/3DCoat/UserPrefs/StdScripts/cModules/LKS/
    ```
 
-3. Extension should show up in the extension menu. (Can get to it with `windows -> panels -> extensions` in 3DC)
-4. ![Extension Menu](./assets/2026-02-15_image-1.webp)
-5. Click start to launch. Click `always on top` if you want it to be pinned to screen.
-   ![Panel Window](./assets/2026-02-15_image-2.webp)
-6. Navigate to Tools tab for basic use
+2. Extension should show up in the extension menu. (Can get to it with `windows -> panels -> extensions` in 3DC)
+![Extension Menu](./assets/2026-02-15_image-1.webp)
+
+4. Click start to launch. Click `always on top` if you want it to be pinned to screen.
+![Panel Window](./assets/2026-02-15_image-2.webp)
+5. Navigate to Tools tab for basic use
    ![Tools Tab](./assets/2026-02-15_image-4.webp)
 
 ### Install Menu Items to enable Hotkeys

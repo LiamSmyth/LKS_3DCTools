@@ -6,6 +6,9 @@
 # This file itself
 .gitignore-package
 
+# Git history (not needed in distribution)
+.git/
+
 # The packager script
 package_release.py
 
