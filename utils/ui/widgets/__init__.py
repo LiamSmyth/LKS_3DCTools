@@ -15,11 +15,12 @@ This package provides reusable widget primitives for building LKS UI:
 - RadialMenuItem: Data class for radial menu items
 - get_manager: Access RadialMenuManager singleton
 - SaveLoadLibrary: Save/load/library management widget for configs
+- HelpMenu: Collapsible help section with scrollable content (❓ emoji)
 
 Usage:
     from utils.ui.widgets import (
         CollapsibleSection, ButtonGrid, ActivityLog, GripBoxContainer, 
-        SaveLoadLibrary
+        SaveLoadLibrary, HelpMenu
     )
 
     log = ActivityLog(parent)
@@ -43,6 +44,13 @@ Usage:
         on_save=lambda path: save_config(path),
         on_load=lambda path: load_config(path),
     )
+    
+    # Help menu
+    help_menu = HelpMenu(
+        title="About Feature",
+        content="<b>How to use:</b><br/>Step 1: ...",
+        max_height=200
+    )
 
 All widgets are re-exported here for backwards compatibility.
 """
@@ -61,6 +69,7 @@ from .grip_box_item import GripBox
 from .radial_menu import RadialMenuWidget, RadialMenuItem
 from .radial_menu_manager import get_manager
 from .save_load_library import SaveLoadLibrary
+from .help_menu import HelpMenu
 
 # Check if Qt is available (re-export for convenience)
 try:
@@ -85,6 +94,7 @@ __all__ = [
     "RadialMenuWidget",
     "RadialMenuItem",
     "SaveLoadLibrary",
+    "HelpMenu",
     "get_manager",
     "LOG_COLORS",
     "LOG_PREFIXES",

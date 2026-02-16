@@ -1,5 +1,6 @@
 {
     "version": "1.0",
+    "name": "LKS_Radial_V1",
     "items": [
         {
             "label": "Decimate",
@@ -7,8 +8,14 @@
             "children": [
                 {
                     "label": "50%",
+                    "icon": "🔻",
                     "action": "$LKS_SculptObject_Decimate_Half_Selected",
                     "description": "Decimate current object to 50% via retopo room"
+                },
+                {
+                    "label": "80%",
+                    "icon": "🔻",
+                    "action": "$LKS_SculptObject_Decimate_80Percent_Selected"
                 },
                 {
                     "label": "Proxy 16x",
@@ -16,6 +23,16 @@
                     "description": "Toggle 16x decimation proxy cache"
                 }
             ]
+        },
+        {
+            "label": "Unghost All",
+            "icon": "👻",
+            "action": "$LKS_SculptObject_Unghost_All"
+        },
+        {
+            "label": "Ghost Toggle",
+            "icon": "👻",
+            "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
         },
         {
             "label": "Visibility",
@@ -40,16 +57,6 @@
                     "label": "Show",
                     "icon": "👁️",
                     "action": "$LKS_SculptObject_Show_Selected"
-                },
-                {
-                    "label": "Ghost Toggle",
-                    "icon": "👻",
-                    "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
-                },
-                {
-                    "label": "Unghost All",
-                    "icon": "👻",
-                    "action": "$LKS_SculptObject_Unghost_All"
                 }
             ]
         },

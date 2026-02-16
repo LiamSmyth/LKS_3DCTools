@@ -55,6 +55,15 @@ HIGHLIGHT_SCALE: float = 1.15       # Scale factor for highlighted nodes
 # Pixels - extra margin around menu radius for widget size
 MENU_WIDGET_MARGIN: int = 100
 
+# Minimum time (ms) before key release can close the menu
+# Prevents instant close from stray events during show/grab transition
+MIN_SHOW_MS: float = 50.0
+
+# Auto-repeat timeout (ms): if no key event arrives within this window
+# after seeing auto-repeat, assume key was released.
+# OS auto-repeat is typically every 30-50ms; 100ms gives generous margin.
+AUTO_REPEAT_TIMEOUT_MS: float = 100.0
+
 # Exit node appearance
 EXIT_NODE_RADIUS: int = 20          # Pixels - size of exit node circle
 EXIT_ICON_FONT_SIZE: int = 7        # Font size for exit icon (✕)
@@ -71,6 +80,10 @@ NODE_PADDING_Y: int = 6             # Vertical padding in squircles
 NODE_CORNER_RADIUS: int = 8         # Corner radius for squircles
 NODE_FONT_SIZE: int = 9             # Normal node font size
 NODE_FONT_SIZE_HIGHLIGHT: int = 10  # Highlighted node font size
+
+# Text outline for better visibility
+TEXT_OUTLINE_WIDTH: float = 2.0     # Width of text outline in pixels
+TEXT_OUTLINE_COLOR: str = "#000000"  # Black outline for contrast
 
 # =============================================================================
 # DATA MODEL
@@ -352,6 +365,76 @@ def get_node_position(angle: float, radius: float, center: QPointF) -> QPointF:
     return QPointF(x, y)
 
 
+def draw_text_with_outline(
+    painter: 'QPainter',
+    rect: 'QRectF',
+    alignment: 'Qt.AlignmentFlag',
+    text: str,
+    text_color: str,
+    outline_color: str = TEXT_OUTLINE_COLOR,
+    outline_width: float = TEXT_OUTLINE_WIDTH,
+) -> None:
+    """
+    Draw text with an outline for better visibility on any background.
+
+    Args:
+        painter: QPainter instance
+        rect: Rectangle to draw text in
+        alignment: Text alignment flags
+        text: Text string to draw
+        text_color: Color for the text
+        outline_color: Color for the outline (default: black)
+        outline_width: Width of the outline in pixels
+    """
+    # Save current painter state
+    painter.save()
+
+    # Get font metrics for accurate positioning
+    font = painter.font()
+    metrics = painter.fontMetrics()
+
+    # Calculate text position based on alignment
+    # addText() uses baseline positioning, so we need to calculate carefully
+    text_width = metrics.horizontalAdvance(text)
+    text_height = metrics.height()
+    ascent = metrics.ascent()
+
+    # Calculate X position
+    if alignment & Qt.AlignHCenter:
+        x = rect.center().x() - text_width / 2
+    elif alignment & Qt.AlignRight:
+        x = rect.right() - text_width
+    else:  # AlignLeft
+        x = rect.left()
+
+    # Calculate Y position (baseline, not top)
+    if alignment & Qt.AlignVCenter:
+        # Center vertically: middle of rect, adjust for text metrics
+        y = rect.center().y() + ascent / 2 - metrics.descent()
+    elif alignment & Qt.AlignBottom:
+        y = rect.bottom() - metrics.descent()
+    else:  # AlignTop
+        y = rect.top() + ascent
+
+    # Create a path from the text at the calculated position
+    path = QPainterPath()
+    path.addText(x, y, font, text)
+
+    # Draw outline
+    painter.setPen(QPen(QColor(outline_color), outline_width, Qt.SolidLine,
+                        Qt.RoundCap, Qt.RoundJoin))
+    painter.setBrush(Qt.NoBrush)
+    painter.drawPath(path)
+
+    # Draw text fill
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QBrush(QColor(text_color)))
+    painter.drawPath(path)
+
+    # Restore painter state
+    painter.restore()
+
+
 # =============================================================================
 # RADIAL MENU WIDGET
 # =============================================================================
@@ -408,10 +491,14 @@ if HAS_QT:
             # Track label of branch we exited from
             self._just_exited_from_label: str | None = None
 
-            # Key release debounce: ignore first key release (the trigger key)
+            # Key release tracking
             self._keys_currently_pressed: set[int] = set()
-            self._initial_trigger_released: bool = False
             self._trigger_keycode: int | None = None  # Qt keycode for the trigger key
+            # Time-based guard: don't close for first N ms after show
+            self._show_time: float = 0.0
+            # Auto-repeat timeout: track last key event to detect release
+            self._last_key_event_time: float = 0.0
+            self._seen_auto_repeat: bool = False
 
             # Cursor tracking for drawing live cursor line
             self._last_cursor_widget_pos: QPointF | None = None
@@ -519,8 +606,13 @@ if HAS_QT:
             self._anchor = pos
 
             # Reset key press state for new menu invocation
+            import time as _time
             self._keys_currently_pressed.clear()
-            self._initial_trigger_released = False
+            self._show_time = _time.monotonic()
+            self._last_key_event_time = self._show_time
+            self._seen_auto_repeat = False
+            print(
+                f"[RadialMenu] show_at: trigger=0x{self._trigger_keycode:04X}" if self._trigger_keycode else "[RadialMenu] show_at: trigger=None")
 
             # Size widget to cover menu area (with some margin)
             size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
@@ -535,10 +627,8 @@ if HAS_QT:
             self.activateWindow()  # Force window activation
             self.setFocus(Qt.ActiveWindowFocusReason)  # Force focus
 
-            # Give Qt a moment to process the show/activation
-            QApplication.processEvents()
-
-            # Grab keyboard to receive key events
+            # Grab keyboard immediately to receive key events
+            # Do NOT call processEvents() here - it can cause timing issues
             self.grabKeyboard()
 
             # Start cursor polling timer for smooth cursor line updates
@@ -906,14 +996,16 @@ if HAS_QT:
                             pos, BRANCH_DOT_RADIUS, BRANCH_DOT_RADIUS)
 
                     # Draw label above circle (without icon - icon is in circle now)
-                    label_font = QFont("Arial", BRANCH_LABEL_FONT_SIZE,
-                                       QFont.Bold if is_highlighted else QFont.Normal)
+                    # Always bold for better visibility with outline
+                    label_font = QFont(
+                        "Arial", BRANCH_LABEL_FONT_SIZE, QFont.Bold)
                     painter.setFont(label_font)
-                    painter.setPen(
-                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_PRIMARY))
                     label_y = pos.y() - BRANCH_LABEL_OFFSET
                     label_rect = QRectF(pos.x() - 50, label_y - 10, 100, 20)
-                    painter.drawText(label_rect, Qt.AlignCenter, item.label)
+                    draw_text_with_outline(
+                        painter, label_rect, Qt.AlignCenter, item.label,
+                        COLOR_ACCENT if is_highlighted else COLOR_TEXT_PRIMARY
+                    )
                     continue  # Skip normal squircle rendering
 
                 # Exit nodes get special rendering as a circle at center
@@ -1055,6 +1147,8 @@ if HAS_QT:
 
             Called by timer since mouseMoveEvent may not fire when cursor
             moves over transparent areas or during 3DCoat viewport interactions.
+
+            Also checks if all keys have been released and closes menu when they are.
             """
             if not self.isVisible() or not self._anchor:
                 return
@@ -1067,6 +1161,21 @@ if HAS_QT:
             # Convert to widget coordinates
             cursor_widget = self.mapFromGlobal(cursor_screen)
             self._last_cursor_widget_pos = QPointF(cursor_widget)
+
+            # Auto-repeat timeout: detect key release by absence of key events
+            # Once we've seen auto-repeat events, if they stop arriving for
+            # AUTO_REPEAT_TIMEOUT_MS, the key was released.
+            if self._seen_auto_repeat:
+                import time as _time
+                since_last_key: float = (
+                    _time.monotonic() - self._last_key_event_time) * 1000
+                if since_last_key >= AUTO_REPEAT_TIMEOUT_MS:
+                    elapsed_ms: float = (
+                        _time.monotonic() - self._show_time) * 1000
+                    print(f"[RadialMenu] Auto-repeat timeout: {since_last_key:.0f}ms "
+                          f"since last key event, closing (elapsed={elapsed_ms:.0f}ms)")
+                    self.hide_and_invoke()
+                    return
 
             # Trigger repaint to update cursor line
             self.update()
@@ -1142,43 +1251,64 @@ if HAS_QT:
 
         def keyReleaseEvent(self, event):
             """
-            Handle key release to invoke action.
+            Handle key release events.
 
-            If trigger_keycode is known, we specifically wait for that key's release.
-            Otherwise, we skip the first key release and close on the second.
+            Close menu on key release if past minimum show time.
+            Note: In 3DCoat's embedded Qt, this may never fire for the
+            trigger key. Auto-repeat timeout in _poll_cursor is the
+            primary detection mechanism.
             """
-            # CRITICAL: Ignore auto-repeat key events!
-            # When holding a key, OS sends repeated press/release events
+            # Ignore auto-repeat key events
             if event.isAutoRepeat():
                 return
 
-            key = event.key()
+            import time as _time
+            key: int = event.key()
+            elapsed_ms: float = (_time.monotonic() - self._show_time) * 1000
+
+            # Debug: log every key release
+            trigger_str: str = f"0x{self._trigger_keycode:04X}" if self._trigger_keycode else "None"
+            print(f"[RadialMenu] KEY_RELEASE: key=0x{key:04X}, "
+                  f"trigger={trigger_str}, elapsed={elapsed_ms:.0f}ms, "
+                  f"pressed={self._keys_currently_pressed}")
+
+            # Update timing
+            self._last_key_event_time = _time.monotonic()
 
             # Remove from pressed keys set
             if key in self._keys_currently_pressed:
                 self._keys_currently_pressed.remove(key)
 
-            # If we know the trigger key, wait specifically for it
-            if self._trigger_keycode is not None:
-                if key == self._trigger_keycode:
-                    self.hide_and_invoke()
-                return
-
-            # Fallback: if trigger key unknown, skip first release (any key)
-            if not self._initial_trigger_released:
-                self._initial_trigger_released = True
-                return
-
-            # After the trigger key is released, close on any subsequent key release
-            self.hide_and_invoke()
+            # Close if past minimum show time (prevents instant close from stray events)
+            if elapsed_ms >= MIN_SHOW_MS:
+                print(
+                    f"[RadialMenu] Closing on key release after {elapsed_ms:.0f}ms")
+                self.hide_and_invoke()
+            else:
+                print(
+                    f"[RadialMenu] Ignoring release, too soon ({elapsed_ms:.0f}ms < {MIN_SHOW_MS}ms)")
 
         def keyPressEvent(self, event):
             """Handle key press events."""
-            # CRITICAL: Ignore auto-repeat key events!
-            if event.isAutoRepeat():
+            import time as _time
+            key: int = event.key()
+            is_auto: bool = event.isAutoRepeat()
+
+            # Update timing for ALL key events (including auto-repeat)
+            self._last_key_event_time = _time.monotonic()
+
+            # Track auto-repeat detection
+            if is_auto:
+                if not self._seen_auto_repeat:
+                    self._seen_auto_repeat = True
+                    print(f"[RadialMenu] First auto-repeat detected for key=0x{key:04X}, "
+                          f"enabling release-by-timeout detection")
+                # Don't track auto-repeat in pressed set, but DO update timing
                 return
 
-            key = event.key()
+            # Debug: log non-auto-repeat key presses
+            print(f"[RadialMenu] KEY_PRESS: key=0x{key:04X}, "
+                  f"pressed={self._keys_currently_pressed}")
 
             # Track pressed keys
             self._keys_currently_pressed.add(key)

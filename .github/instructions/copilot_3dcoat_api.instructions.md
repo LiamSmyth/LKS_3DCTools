@@ -91,6 +91,31 @@ coat.ui.setBoolValue(f"$BrushConstructor::RemoveStretching[{brush}]", True)  # P
 | `$Setting[Type]` | `$BrushConstructor::DetailsLevel[carve]` | Per-type setting |
 | `$DialogButton#N` | `$DialogButton#1` | Dialog button (1=OK usually) |
 
+**Discovering Magic Strings:**
+- To discover UI element IDs: RMB+MMB on the element in 3DCoat to copy ID to clipboard
+
+---
+
+## 🎛️ Conditional UI Fields
+
+Some UI fields are hidden until a parent checkbox is enabled. When setting values programmatically:
+
+```python
+# Enable parent checkbox first
+coat.ui.setBoolValue("$ParentCheckbox", True)
+
+# Wait for UI to update before setting dependent field
+coat.io.step(1)
+
+# Now set the dependent field
+coat.ui.setEditBoxValue("$DependentField", value)
+```
+
+**Example:** Autopo voxelize polycount (`$QuadragulationTask::VoxelizedObjectPolycount1`) is only visible when voxelize checkbox (`$QuadragulationTask::Voxelize`) is enabled.
+
+**Pattern:**
+- If `setEditBoxValue()` returns `False` for a field controlled by a checkbox, try waiting a frame and retrying
+
 ---
 
 ## �️ Dialogs Block Viewport Input

@@ -1,7 +1,10 @@
 """
 LKS UI - Hotkey Tab.
 
-Provides hotkey editor controls with launch functionality.
+Provides hotkey editor controls and menu registration:
+- Launch hotkey editor (closes 3DCoat)
+- Register/unregister LKS actions as custom menu items
+- Inspect menu status
 
 Usage:
     from ui.ui_tab_hotkey import create_hotkey_tab
@@ -142,32 +145,110 @@ def create_hotkey_tab(
     )
     editor_section.content_layout.addWidget(editor_grid)
 
+    # Help section for Hotkey Editor - inside the collapsible section
+    from utils.ui.widgets import HelpMenu
+    editor_help_menu = HelpMenu(
+        title="Hotkey Editor",
+        content=(
+            "<b>Why does 3DCoat close?</b><br/>"
+            "3DCoat saves its in-memory hotkey configuration when it exits. "
+            "If the editor modifies the hotkey file while 3DCoat is running, "
+            "the changes would be overwritten on exit.<br/><br/>"
+            "<b>Workflow:</b><br/>"
+            "1. Launch the Hotkey Editor (3DCoat closes)<br/>"
+            "2. Make your hotkey changes in the editor<br/>"
+            "3. Save changes in the editor<br/>"
+            "4. Close the editor<br/>"
+            "5. Restart 3DCoat (changes will be loaded)"
+        ),
+        max_height=180
+    )
+    editor_section.content_layout.addWidget(editor_help_menu)
+
     layout.addWidget(editor_section)
 
     # =========================================================================
-    # INFO/HELP SECTION
+    # MENU REGISTRATION SECTION
     # =========================================================================
-    info_section = CollapsibleSection(
-        title="ℹ️ About Hotkeys", color="#90a4ae", collapsed=True)
+    menu_section = CollapsibleSection(
+        title="📋 Menu Registration", color="#81c784", collapsed=False)
 
-    from PySide6.QtWidgets import QLabel
-    info_text = QLabel(
-        "<b>Why does 3DCoat close?</b><br/>"
-        "3DCoat saves its in-memory hotkey configuration when it exits. "
-        "If the editor modifies the hotkey file while 3DCoat is running, "
-        "the changes would be overwritten on exit.<br/><br/>"
-        "<b>Workflow:</b><br/>"
-        "1. Launch the Hotkey Editor (3DCoat closes)<br/>"
-        "2. Make your hotkey changes in the editor<br/>"
-        "3. Save changes in the editor<br/>"
-        "4. Close the editor<br/>"
-        "5. Restart 3DCoat (changes will be loaded)"
+    # About text using HelpMenu widget
+    about_menu = HelpMenu(
+        title="Menu Items",
+        content=(
+            "<b>Why are custom menu items needed?</b><br/>"
+            "3DCoat only allows hotkeys to be assigned to menu items. "
+            "To make LKS actions hotkey-assignable, we register them as custom menu items "
+            "in the Scripts menu. This enables you to assign shortcuts via 3DCoat's Preferences → Hotkeys."
+        ),
+        max_height=150
     )
-    info_text.setWordWrap(True)
-    info_text.setStyleSheet("color: #aaa; font-size: 10px; padding: 8px;")
-    info_section.content_layout.addWidget(info_text)
+    menu_section.content_layout.addWidget(about_menu)
 
-    layout.addWidget(info_section)
+    def on_register_all() -> None:
+        try:
+            from utils.registration_utils import register_actions
+            count = register_actions()
+            log_success(f"Registered {count} actions to Scripts menu")
+        except Exception as e:
+            log_error(f"Registration failed: {e}")
+
+    def on_cleanup_menu() -> None:
+        try:
+            from utils.menu_cleanup import cleanup_lks_menu
+            deleted, names = cleanup_lks_menu()
+            if deleted > 0:
+                log_warn(
+                    f"Deleted {deleted} stale menu files. Restart 3DCoat.")
+                for name in names[:3]:
+                    log_info(f"  • {name}")
+            else:
+                log_info("No stale menu files found.")
+        except Exception as e:
+            log_error(f"Menu cleanup failed: {e}")
+
+    action_grid = ButtonGrid(columns=2)
+    action_grid.add_button("Add Action Menus", on_register_all,
+                           "Register all LKS actions as custom menu items in Scripts menu")
+    action_grid.add_button(
+        "Remove Action Menus", on_cleanup_menu, "Remove all LKS custom menu items from Scripts menu")
+    menu_section.content_layout.addWidget(action_grid)
+
+    def on_inspect_menu() -> None:
+        """Show combined menu status: registered actions + cleanup status."""
+        try:
+            from utils.registration_utils import get_registered_actions
+            from utils.menu_cleanup import get_menu_cleanup_status
+
+            # Show registered actions
+            actions = get_registered_actions()
+            if actions:
+                log_info(f"Registered: {len(actions)} actions")
+                for action in actions[:5]:  # Show first 5
+                    log_info(f"  • {action}")
+                if len(actions) > 5:
+                    log_info(f"  ... and {len(actions) - 5} more")
+            else:
+                log_info("No actions registered yet")
+
+            # Show menu file status
+            status = get_menu_cleanup_status()
+            count = status.get("count", 0)
+            if count > 0:
+                log_info(f"Found {count} LKS menu files in ExtraMenuItems")
+            else:
+                log_info("No LKS menu files in ExtraMenuItems (clean state)")
+
+        except Exception as e:
+            log_error(f"Failed to inspect menu status: {e}")
+
+    inspect_grid = ButtonGrid(columns=1)
+    inspect_grid.add_button(
+        "Inspect Menu Status", on_inspect_menu, "View registered actions and menu file status")
+    menu_section.content_layout.addWidget(inspect_grid)
+
+    layout.addWidget(menu_section)
 
     # --- Revert to Defaults Button ---
     from PySide6.QtWidgets import QPushButton

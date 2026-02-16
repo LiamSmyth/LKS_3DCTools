@@ -6,8 +6,9 @@
   "section_scale_expanded": false,
   "section_visibility_ghost_expanded": false,
   "section_subdiv_expanded": false,
-  "section_smart_expanded": false,
-  "section_autopo_expanded": false,
-  "section_layers_expanded": false,
-  "section_booleans_expanded": false
+  "section_smart_expanded": true,
+  "section_autopo_expanded": true,
+  "section_layers_expanded": true,
+  "section_booleans_expanded": false,
+  "panel_always_on_top": true
 }

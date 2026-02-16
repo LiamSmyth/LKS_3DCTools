@@ -1,5 +1,6 @@
 {
     "version": "1.0",
+    "name": "radial_menu_config",
     "items": [
         {
             "label": "Decimate",
@@ -16,6 +17,16 @@
                     "description": "Toggle 16x decimation proxy cache"
                 }
             ]
+        },
+        {
+            "label": "Unghost All",
+            "icon": "👻",
+            "action": "$LKS_SculptObject_Unghost_All"
+        },
+        {
+            "label": "Ghost Toggle",
+            "icon": "👻",
+            "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
         },
         {
             "label": "Visibility",
@@ -40,16 +51,6 @@
                     "label": "Show",
                     "icon": "👁️",
                     "action": "$LKS_SculptObject_Show_Selected"
-                },
-                {
-                    "label": "Ghost Toggle",
-                    "icon": "👻",
-                    "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
-                },
-                {
-                    "label": "Unghost All",
-                    "icon": "👻",
-                    "action": "$LKS_SculptObject_Unghost_All"
                 }
             ]
         },

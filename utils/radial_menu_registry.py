@@ -26,8 +26,14 @@ Usage:
 from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
-import re
 import json
+
+from generators.action_generator import (
+    generate_radial_menu_script,
+    write_action_script as gen_write_script,
+    delete_action_script as gen_delete_script,
+    sanitize_identifier,
+)
 
 if TYPE_CHECKING:
     import coat
@@ -68,13 +74,8 @@ def sanitize_menu_name(menu_name: str) -> str:
     Returns:
         Sanitized name (PascalCase, alphanumeric only)
     """
-    # Remove file extension if present
-    if menu_name.endswith(".json"):
-        menu_name = menu_name[:-5]
-    
-    # Split on non-alphanumeric, capitalize each word, join
-    words = re.findall(r"[a-zA-Z0-9]+", menu_name)
-    return "".join(word.capitalize() for word in words)
+    # Delegate to action_generator utility
+    return sanitize_identifier(menu_name, style="PascalCase")
 
 
 def generate_menu_id(menu_name: str) -> str:
@@ -110,47 +111,8 @@ def generate_action_script_name(menu_name: str) -> str:
 
 
 # =============================================================================
-# ACTION SCRIPT GENERATION
+# ACTION SCRIPT GENERATION (delegates to generators.action_generator)
 # =============================================================================
-
-ACTION_SCRIPT_TEMPLATE: str = '''"""
-Show radial menu: {display_name}
-
-Room: All
-Action: Display radial menu with configured actions
-Auto-generated: DO NOT EDIT - regenerate via radial_menu_registry
-"""
-from utils.action_base import action
-
-
-@action
-def main() -> None:
-    """Show radial menu: {display_name}"""
-    from pathlib import Path
-    from utils.ui.widgets import get_manager
-    from utils.radial_menu_config import load_menu_config
-    
-    # Load menu config from library
-    config_path = Path(__file__).parent.parent / "data" / "library" / "radial_menus" / "{config_filename}"
-    
-    try:
-        items = load_menu_config(config_path)
-    except Exception as e:
-        print(f"[RadialMenu] Failed to load menu config: {{e}}")
-        return
-    
-    if not items:
-        print(f"[RadialMenu] No menu items in config: {config_filename}")
-        return
-    
-    # Show menu at cursor position
-    manager = get_manager()
-    manager.show_menu(items)
-
-
-main()
-'''
-
 
 def generate_action_script(menu_filename: str, display_name: str) -> str:
     """
@@ -163,9 +125,10 @@ def generate_action_script(menu_filename: str, display_name: str) -> str:
     Returns:
         Python script content
     """
-    return ACTION_SCRIPT_TEMPLATE.format(
-        display_name=display_name,
+    # Delegate to action_generator
+    return generate_radial_menu_script(
         config_filename=menu_filename,
+        display_name=display_name,
     )
 
 
@@ -180,16 +143,17 @@ def write_action_script(menu_filename: str, display_name: str) -> Path:
     Returns:
         Path to written action script
     """
-    # Ensure radial actions folder exists
-    RADIAL_ACTIONS_DIR.mkdir(parents=True, exist_ok=True)
-    
     # Generate script content
     script_content = generate_action_script(menu_filename, display_name)
     
-    # Write to file
+    # Write using action_generator
     script_name = generate_action_script_name(menu_filename)
-    script_path = RADIAL_ACTIONS_DIR / script_name
-    script_path.write_text(script_content, encoding="utf-8")
+    script_path = gen_write_script(
+        output_dir=RADIAL_ACTIONS_DIR,
+        script_name=script_name,
+        content=script_content,
+        overwrite=True
+    )
     
     print(f"[RadialRegistry] Generated action script: {script_path}")
     return script_path
@@ -206,15 +170,19 @@ def delete_action_script(menu_filename: str) -> bool:
         True if script was deleted, False if not found
     """
     script_name = generate_action_script_name(menu_filename)
-    script_path = RADIAL_ACTIONS_DIR / script_name
     
-    if script_path.exists():
-        script_path.unlink()
-        print(f"[RadialRegistry] Deleted action script: {script_path}")
-        return True
+    # Delete using action_generator
+    was_deleted = gen_delete_script(
+        output_dir=RADIAL_ACTIONS_DIR,
+        script_name=script_name
+    )
+    
+    if was_deleted:
+        print(f"[RadialRegistry] Deleted action script: {script_name}")
     else:
-        print(f"[RadialRegistry] Action script not found: {script_path}")
-        return False
+        print(f"[RadialRegistry] Action script not found: {script_name}")
+    
+    return was_deleted
 
 
 # =============================================================================
@@ -432,6 +400,9 @@ def cleanup_orphaned_scripts() -> int:
     """
     Delete action scripts that aren't in registry state.
     
+    Uses pattern-based detection as fallback - safe even if registry is corrupted.
+    Only deletes scripts matching "LKS_RadialMenu_*.py" pattern.
+    
     Returns:
         Number of scripts deleted
     """
@@ -439,16 +410,51 @@ def cleanup_orphaned_scripts() -> int:
         return 0
     
     state = load_registry_state()
-    registered_scripts = {
-        generate_action_script_name(menu_filename)
-        for menu_filename in state.keys()
-    }
-    
     deleted_count = 0
-    for script_path in RADIAL_ACTIONS_DIR.glob("*.py"):
-        if script_path.name not in registered_scripts:
+    
+    # Pattern-based cleanup: Only touch LKS_RadialMenu_*.py files
+    for script_path in RADIAL_ACTIONS_DIR.glob("LKS_RadialMenu_*.py"):
+        # If we have state, check against it; otherwise delete all pattern-matched files
+        if state:
+            # Registry-aware: Only delete if not in registry
+            registered_scripts = {
+                generate_action_script_name(menu_filename)
+                for menu_filename in state.keys()
+            }
+            if script_path.name not in registered_scripts:
+                script_path.unlink()
+                print(f"[RadialRegistry] Deleted orphaned script: {script_path.name}")
+                deleted_count += 1
+        else:
+            # No registry state: pattern-based cleanup (recovery mode)
             script_path.unlink()
-            print(f"[RadialRegistry] Deleted orphaned script: {script_path.name}")
+            print(f"[RadialRegistry] Deleted untracked script (no registry): {script_path.name}")
             deleted_count += 1
     
     return deleted_count
+
+
+def unregister_all_menus() -> int:
+    """
+    Unregister all radial menus.
+    
+    Deletes all action scripts and clears the registry.
+    Menu item XML files persist until 3DCoat restart.
+    
+    Returns:
+        Number of menus unregistered
+    """
+    state = load_registry_state()
+    count = len(state)
+    
+    if count == 0:
+        print("[RadialRegistry] No menus to unregister")
+        return 0
+    
+    # Unregister each menu
+    for menu_filename in list(state.keys()):
+        unregister_menu(menu_filename)
+    
+    print(f"[RadialRegistry] Unregistered all {count} menus")
+    print("[RadialRegistry] Note: Menu item XML persists until 3DCoat restart")
+    return count

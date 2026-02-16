@@ -1,3 +1,4 @@
 {
-  "decimate_reduction": 50
+  "decimate_reduction": 50,
+  "dev_mode": true
 }

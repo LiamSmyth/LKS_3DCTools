@@ -4,9 +4,9 @@
   "autopo_auto_density": 0.3,
   "autopo_hardsurface": false,
   "autopo_voxelize": true,
-  "autopo_voxelize_polycount": 200,
+  "autopo_voxelize_polycount": 100,
   "autopo_decimate_if_above": true,
-  "autopo_decimation_limit": 10,
+  "autopo_decimation_limit": 5,
   "autopo_tangent_smooth": true,
-  "autopo_bypass_density_modal": true
+  "autopo_bypass_density_modal": false
 }

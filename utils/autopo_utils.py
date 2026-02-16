@@ -156,9 +156,18 @@ def configure_autopo(params: AutopoParams) -> None:
     r5: bool = coat.ui.setBoolValue(SETTING_VOXELIZE, params.voxelize)
     print(f"[Autopo Config] setBoolValue Voxelize returned: {r5}")
 
+    # Set voxelize polycount (only visible when checkbox is enabled)
+    # Note: If this returns False, the field may not be active yet
     r6: bool = coat.ui.setEditBoxValue(
         SETTING_VOXELIZE_POLYCOUNT, int(params.voxelize_polycount))
     print(f"[Autopo Config] setEditBoxValue VoxelizePolycount returned: {r6}")
+    
+    if not r6 and params.voxelize:
+        # Retry after UI update if voxelize is enabled but setting failed
+        coat.io.step(1)
+        r6_retry: bool = coat.ui.setEditBoxValue(
+            SETTING_VOXELIZE_POLYCOUNT, int(params.voxelize_polycount))
+        print(f"[Autopo Config] VoxelizePolycount retry returned: {r6_retry}")
 
     r7: bool = coat.ui.setBoolValue(
         SETTING_DECIMATE_IF_ABOVE, params.decimate_if_above)

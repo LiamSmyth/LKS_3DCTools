@@ -3,7 +3,6 @@ LKS UI - Dev Tab.
 
 Provides development tools:
 - Module hot-reload
-- Menu registration/cleanup
 - Extension info
 
 Usage:
@@ -39,12 +38,54 @@ def create_dev_tab(
     """
     from PySide6.QtWidgets import QWidget, QVBoxLayout
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
-    from utils.ui.widgets.sub_header import create_sub_header
 
     container = QWidget()
     layout = QVBoxLayout(container)
     layout.setContentsMargins(4, 4, 4, 4)
     layout.setSpacing(4)
+
+    # =========================================================================
+    # DEV MODE TOGGLE
+    # =========================================================================
+    from PySide6.QtWidgets import QCheckBox
+
+    dev_mode_cb = QCheckBox("🔧 Dev Mode (reload modules before every action)")
+    dev_mode_cb.setToolTip(
+        "When enabled, action scripts reload all LKS modules before executing.\n"
+        "Useful for development but adds ~1s delay to radial menu invocation.\n"
+        "Disable for production use / fast radial menus."
+    )
+    dev_mode_cb.setStyleSheet("""
+        QCheckBox {
+            color: #ddd;
+            font-size: 11px;
+            padding: 4px 2px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+        }
+    """)
+
+    # Load current state
+    try:
+        from utils.lks_settings import get_settings
+        dev_mode_cb.setChecked(get_settings().dev_mode)
+    except Exception:
+        dev_mode_cb.setChecked(True)
+
+    def on_dev_mode_toggled(checked: bool) -> None:
+        try:
+            from utils.lks_settings import get_settings, save_settings
+            get_settings().dev_mode = checked
+            save_settings()
+            state_str: str = "ON" if checked else "OFF"
+            log_info(f"Dev mode {state_str}")
+        except Exception as e:
+            log_error(f"Failed to save dev_mode: {e}")
+
+    dev_mode_cb.toggled.connect(on_dev_mode_toggled)
+    layout.addWidget(dev_mode_cb)
 
     # =========================================================================
     # MODULE RELOAD SECTION
@@ -85,85 +126,6 @@ def create_dev_tab(
     reload_section.content_layout.addWidget(reload_grid)
 
     layout.addWidget(reload_section)
-
-    # =========================================================================
-    # MENU REGISTRATION SECTION
-    # =========================================================================
-    menu_section = CollapsibleSection(
-        title="📋 Menu Registration", color="#81c784", collapsed=False)
-
-    menu_section.content_layout.addWidget(create_sub_header("Actions"))
-
-    def on_register_all() -> None:
-        try:
-            from utils.registration_utils import register_actions
-            count = register_actions()
-            log_success(f"Registered {count} actions to Scripts menu")
-        except Exception as e:
-            log_error(f"Registration failed: {e}")
-
-    def on_show_menu_items() -> None:
-        """Show registered menu items in Scripts menu."""
-        try:
-            from utils.registration_utils import get_registered_actions
-            actions = get_registered_actions()
-            if actions:
-                log_info(f"Registered: {len(actions)} actions")
-                for action in actions[:5]:  # Show first 5
-                    log_info(f"  • {action}")
-                if len(actions) > 5:
-                    log_info(f"  ... and {len(actions) - 5} more")
-            else:
-                log_info("No actions registered yet")
-        except Exception as e:
-            log_error(f"Failed to get registered actions: {e}")
-
-    action_grid = ButtonGrid(columns=2)
-    action_grid.add_button("Add Menu Items", on_register_all,
-                           "Add all LKS actions as custom menu items to Scripts menu")
-    action_grid.add_button(
-        "Show Menu Items", on_show_menu_items, "List registered menu items")
-    menu_section.content_layout.addWidget(action_grid)
-
-    menu_section.content_layout.addWidget(create_sub_header("Cleanup"))
-
-    def on_cleanup_menu() -> None:
-        try:
-            from utils.menu_cleanup import cleanup_lks_menu
-            deleted, names = cleanup_lks_menu()
-            if deleted > 0:
-                log_warn(
-                    f"Deleted {deleted} stale menu files. Restart 3DCoat.")
-                for name in names[:3]:
-                    log_info(f"  • {name}")
-            else:
-                log_info("No stale menu files found.")
-        except Exception as e:
-            log_error(f"Menu cleanup failed: {e}")
-
-    def on_show_menu_status() -> None:
-        """Show menu file cleanup status."""
-        try:
-            from utils.menu_cleanup import get_menu_cleanup_status
-            status = get_menu_cleanup_status()
-            count = status.get("count", 0)
-            if count > 0:
-                log_info(f"Found {count} LKS menu files:")
-                for name in status.get("files", [])[:5]:
-                    log_info(f"  • {name}")
-            else:
-                log_info("No LKS menu files in ExtraMenuItems")
-        except Exception as e:
-            log_error(f"Failed to get menu status: {e}")
-
-    cleanup_grid = ButtonGrid(columns=2)
-    cleanup_grid.add_button(
-        "Remove Menu Items", on_cleanup_menu, "Remove LKS custom menu items from Scripts menu")
-    cleanup_grid.add_button(
-        "Show Menu Status", on_show_menu_status, "Show menu file status")
-    menu_section.content_layout.addWidget(cleanup_grid)
-
-    layout.addWidget(menu_section)
 
     # =========================================================================
     # EXTENSION INFO SECTION
