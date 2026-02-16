@@ -4,10 +4,15 @@ LKS Settings - Persistent settings cache for LKS tools.
 Provides singleton settings objects with attribute access that
 persist to JSON files across 3DCoat sessions.
 
-Separate files (stored in data/ subfolder):
-- lks_brush_settings.json: Brush settings (details_level, auto_subdivide, etc.)
-- lks_autopo_settings.json: Autopo workflow configuration
-- lks_settings.json: General/other settings
+Folder organization (in data/):
+- state/: User-specific settings and UI state (local only, not pushed to remote)
+  - lks_brush_settings.json: Brush settings (details_level, auto_subdivide, etc.)
+  - lks_autopo_settings.json: Autopo workflow configuration
+  - lks_settings.json: General/other settings
+  - lks_ui_state.json: UI panel states (collapsible sections, etc.)
+- defaults/: Default config templates (tracked in repo)
+- schemas/: JSON validation schemas (tracked in repo)
+- logs/: Debug logs (local only)
 """
 import coat
 import json
@@ -18,28 +23,29 @@ from pathlib import Path
 # FILE PATHS
 # =============================================================================
 
-# Data folder path (relative to this module)
+# Data folder paths (relative to this module)
 _DATA_DIR: Path = Path(__file__).parent.parent / "data"
+_STATE_DIR: Path = _DATA_DIR / "state"
 
-# File names (stored in data/ folder)
+# File names (stored in data/state/ folder)
 BRUSH_SETTINGS_FILE: str = "lks_brush_settings.json"
 AUTOPO_SETTINGS_FILE: str = "lks_autopo_settings.json"
 GENERAL_SETTINGS_FILE: str = "lks_settings.json"
 
 
 def _get_brush_settings_path() -> str:
-    """Get the absolute path to brush settings file."""
-    return str(_DATA_DIR / BRUSH_SETTINGS_FILE)
+    """Get the absolute path to brush settings file (in data/state/)."""
+    return str(_STATE_DIR / BRUSH_SETTINGS_FILE)
 
 
 def _get_autopo_settings_path() -> str:
-    """Get the absolute path to autopo settings file."""
-    return str(_DATA_DIR / AUTOPO_SETTINGS_FILE)
+    """Get the absolute path to autopo settings file (in data/state/)."""
+    return str(_STATE_DIR / AUTOPO_SETTINGS_FILE)
 
 
 def _get_general_settings_path() -> str:
-    """Get the absolute path to general settings file."""
-    return str(_DATA_DIR / GENERAL_SETTINGS_FILE)
+    """Get the absolute path to general settings file (in data/state/)."""
+    return str(_STATE_DIR / GENERAL_SETTINGS_FILE)
 
 # =============================================================================
 # DEFAULTS
@@ -366,8 +372,8 @@ UI_STATE_FILE: str = "lks_ui_state.json"
 
 
 def _get_ui_state_path() -> str:
-    """Get the absolute path to UI state file."""
-    return str(_DATA_DIR / UI_STATE_FILE)
+    """Get the absolute path to UI state file (in data/state/)."""
+    return str(_STATE_DIR / UI_STATE_FILE)
 
 
 # UI state defaults (collapsible section states, etc.)
