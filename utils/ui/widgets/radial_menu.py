@@ -68,7 +68,7 @@ AUTO_REPEAT_TIMEOUT_MS: float = 100.0
 # received ANY key event (no keyPress, no keyRelease, no auto-repeat),
 # assume the key was tapped and released before the OS repeat delay.
 # OS repeat delay is typically 250-500ms; 600ms gives generous margin.
-NO_REPEAT_RELEASE_MS: float = 500.0
+NO_REPEAT_RELEASE_MS: float = 600.0
 
 # Exit node appearance
 EXIT_NODE_RADIUS: int = 20          # Pixels - size of exit node circle

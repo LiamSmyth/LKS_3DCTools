@@ -71,12 +71,13 @@ AUTOPO_DEFAULTS: dict = {
     "autopo_decimation_limit": 10,  # x1000 polys (10 = 10k)
     "autopo_tangent_smooth": True,
     "autopo_bypass_density_modal": True,
+    "autopo_quality": "intermediate",  # "draft", "intermediate", "best"
 }
 
 # General settings defaults (decimate, etc. - NOT autopo)
 GENERAL_DEFAULTS: dict = {
     "decimate_reduction": 50,
-    "dev_mode": True,  # When True, action scripts reload all modules before invoke
+    "dev_mode": False,  # When True, action scripts reload all modules before invoke
 }
 
 # Radial menu settings defaults

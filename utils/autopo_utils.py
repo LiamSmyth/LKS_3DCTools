@@ -11,6 +11,7 @@ Pattern:
 import coat
 from dataclasses import dataclass
 from typing import Callable
+from enum import Enum
 
 from utils.coat_ui_utils import (
     switch_to_room,
@@ -38,6 +39,12 @@ CMD_CLEAR_RETOPO: str = "$ClearTM"
 # Dialog OK button
 CMD_DIALOG_OK_LOCAL: str = "$DialogButton#1"
 
+# Quality combobox and options
+COMBOBOX_QUAD_QUALITY: str = "COMBOBOX_QuadQuality"
+QUALITY_DRAFT: str = "$COMBOBOX_QuadQualityqDraft"
+QUALITY_INTERMEDIATE: str = "$COMBOBOX_QuadQualityqIntermediate"
+QUALITY_BEST: str = "$COMBOBOX_QuadQualityqBestQuality"
+
 # Autopo parameter settings (QuadragulationTask namespace)
 SETTING_REQUIRED_POLYCOUNT: str = "$QuadragulationTask::RequiredPolycount"
 SETTING_CAPTURE_DETAILS: str = "$QuadragulationTask::CaptureDetails"
@@ -49,8 +56,6 @@ SETTING_DECIMATE_IF_ABOVE: str = "$QuadragulationTask::DecimateIfAbove"
 SETTING_DECIMATION_LIMIT: str = "$QuadragulationTask::DecimationLimit1"
 SETTING_TANGENT_SMOOTH: str = "$QuadragulationTask::TangentSmoothRes"
 SETTING_BYPASS_DENSITY_MODAL: str = "$QuadragulationTask::BypassDensityAndStrokes"
-# Quality dropdown (draft, intermediate, best)
-COMBOBOX_QUAD_QUALITY: str = "COMBOBOX_QuadQuality"
 
 # =============================================================================
 # DEFAULTS
@@ -68,10 +73,22 @@ DEFAULT_DECIMATE_IF_ABOVE: bool = False
 DEFAULT_DECIMATION_LIMIT: int = 10
 DEFAULT_TANGENT_SMOOTH: bool = True
 DEFAULT_BYPASS_DENSITY_MODAL: bool = True
+DEFAULT_QUALITY: str = "intermediate"  # draft, intermediate, best
 
 # Timing defaults
 AUTOPO_WAIT_FRAMES: int = 8
 IMPORT_WAIT_FRAMES: int = 4
+
+
+# =============================================================================
+# QUALITY ENUM
+# =============================================================================
+
+class QuadQuality(Enum):
+    """Quadrangulation quality preset."""
+    DRAFT = "draft"
+    INTERMEDIATE = "intermediate"
+    BEST = "best"
 
 
 # =============================================================================
@@ -95,6 +112,7 @@ class AutopoParams:
     decimation_limit: int = DEFAULT_DECIMATION_LIMIT  # x1000 polys
     tangent_smooth: bool = DEFAULT_TANGENT_SMOOTH
     bypass_density_modal: bool = DEFAULT_BYPASS_DENSITY_MODAL
+    quality: str = DEFAULT_QUALITY  # "draft", "intermediate", "best"
 
 
 def configure_autopo(params: AutopoParams) -> None:
@@ -121,6 +139,7 @@ def configure_autopo(params: AutopoParams) -> None:
     print(f"[Autopo Config] Setting tangent_smooth: {params.tangent_smooth}")
     print(
         f"[Autopo Config] Setting bypass_density_modal: {params.bypass_density_modal}")
+    print(f"[Autopo Config] Setting quality: {params.quality}")
 
     # Try multiple approaches to set polycount
     # First try setEditBoxValue with int
@@ -149,41 +168,58 @@ def configure_autopo(params: AutopoParams) -> None:
         SETTING_AUTO_DENSITY, float(params.auto_density))
     print(f"[Autopo Config] setSliderValue AutoDensity returned: {r3}")
 
-    # Set boolean values
+    # Set boolean values (verified working methods only)
     r4: bool = coat.ui.setBoolValue(SETTING_HARDSURFACE, params.hardsurface)
     print(f"[Autopo Config] setBoolValue Hardsurface returned: {r4}")
 
+    # VOXELIZE - setBoolValue works (verified)
     r5: bool = coat.ui.setBoolValue(SETTING_VOXELIZE, params.voxelize)
     print(f"[Autopo Config] setBoolValue Voxelize returned: {r5}")
 
-    # Set voxelize polycount (only visible when checkbox is enabled)
-    # Note: If this returns False, the field may not be active yet
-    r6: bool = coat.ui.setEditBoxValue(
-        SETTING_VOXELIZE_POLYCOUNT, int(params.voxelize_polycount))
-    print(f"[Autopo Config] setEditBoxValue VoxelizePolycount returned: {r6}")
-    
-    if not r6 and params.voxelize:
-        # Retry after UI update if voxelize is enabled but setting failed
-        coat.io.step(1)
-        r6_retry: bool = coat.ui.setEditBoxValue(
+    # VOXELIZE POLYCOUNT - Works when checkbox is enabled first!
+    # CRITICAL: Field is hidden until voxelize checkbox is enabled - must wait for UI
+    if params.voxelize:
+        # Wait 2 frames for voxelize checkbox to enable and show the polycount field
+        coat.io.step(2)
+        # setEditBoxValue(int) works (verified 2025-02-15)
+        r6: bool = coat.ui.setEditBoxValue(
             SETTING_VOXELIZE_POLYCOUNT, int(params.voxelize_polycount))
-        print(f"[Autopo Config] VoxelizePolycount retry returned: {r6_retry}")
+        print(
+            f"[Autopo Config] setEditBoxValue VoxelizePolycount returned: {r6}")
 
+    # DECIMATE IF ABOVE - setBoolValue works (verified)
     r7: bool = coat.ui.setBoolValue(
         SETTING_DECIMATE_IF_ABOVE, params.decimate_if_above)
     print(f"[Autopo Config] setBoolValue DecimateIfAbove returned: {r7}")
 
+    # DECIMATION LIMIT - setEditBoxValue(int) works (verified)
     r8: bool = coat.ui.setEditBoxValue(
         SETTING_DECIMATION_LIMIT, int(params.decimation_limit))
     print(f"[Autopo Config] setEditBoxValue DecimationLimit returned: {r8}")
 
+    # TANGENT SMOOTH - setBoolValue works (verified)
     r9: bool = coat.ui.setBoolValue(
         SETTING_TANGENT_SMOOTH, params.tangent_smooth)
     print(f"[Autopo Config] setBoolValue TangentSmooth returned: {r9}")
 
+    # BYPASS DENSITY MODAL - setBoolValue works (verified)
     r10: bool = coat.ui.setBoolValue(
         SETTING_BYPASS_DENSITY_MODAL, params.bypass_density_modal)
     print(f"[Autopo Config] setBoolValue BypassDensityModal returned: {r10}")
+
+    # QUALITY - Use cmd() which works (verified 2025-02-15)
+    # Defensive: handle None or missing quality gracefully
+    quality = params.quality if params.quality else "intermediate"
+    quality_map = {
+        "draft": QUALITY_DRAFT,
+        "intermediate": QUALITY_INTERMEDIATE,
+        "best": QUALITY_BEST,
+    }
+    quality_cmd = quality_map.get(quality.lower(), QUALITY_INTERMEDIATE)
+
+    # cmd() works (verified) - setOption() does NOT work
+    r11: bool = coat.ui.cmd(quality_cmd)
+    print(f"[Autopo Config] cmd(quality={quality}) returned: {r11}")
 
     # NOTE: Do NOT call coat.ui.apply() here - it simulates Enter key
     # which triggers revoxelize on surface meshes in sculpt room
@@ -344,6 +380,9 @@ def _load_params_from_settings() -> AutopoParams:
         decimation_limit=settings.autopo_decimation_limit,
         tangent_smooth=settings.autopo_tangent_smooth,
         bypass_density_modal=settings.autopo_bypass_density_modal,
+        # Defensive: handle missing quality in old settings files
+        quality=getattr(settings, 'autopo_quality',
+                        'intermediate') or 'intermediate',
     )
 
 
