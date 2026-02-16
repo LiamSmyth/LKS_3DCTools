@@ -5,13 +5,16 @@ Package LKS cModule for distribution.
 Creates a clean zip file excluding development-only content:
 - .git/, .github/, .vscode/, .docs/, .example_code/, _tools/
 - __pycache__/, *.pyc, *.pyo
-- .env, .gitignore, *.code-workspace
-- data/*.log (debug logs)
+- .env, .gitignore, .gitignore-remote, *.code-workspace
+- *.ps1, *.bat (workflow scripts)
+- _test_*.py (test scripts)
+- data/state/, data/logs/ (personal configs and debug logs)
 
 Usage:
     python package_release.py
     python package_release.py --version 1.0.0
     python package_release.py --output C:/path/to/output
+    python package_release.py --dry-run  # Preview files
 """
 from __future__ import annotations
 
@@ -33,19 +36,34 @@ EXCLUDE_DIRS: set[str] = {
     "__pycache__",
 }
 
+# Specific subdirectory paths to exclude (relative to root)
+EXCLUDE_SUBDIRS: set[str] = {
+    "data/state",  # Personal user state
+    "data/logs",   # Debug logs
+}
+
 # File patterns to exclude
 EXCLUDE_FILE_PATTERNS: set[str] = {
     ".env",
     ".gitignore",
+    ".gitignore-remote",
     ".code-workspace",
     ".pyc",
     ".pyo",
     ".pyz",
+    ".ps1",  # PowerShell workflow scripts
+    ".bat",  # Batch workflow scripts
 }
 
 # Specific files to exclude by name
 EXCLUDE_FILES: set[str] = {
     "package_release.py",  # This script itself
+}
+
+# File name patterns to exclude (startswith checks)
+EXCLUDE_FILE_PREFIXES: set[str] = {
+    "_test_",  # Test scripts
+    ".git",    # Git files
 }
 
 # Patterns for files in data/ to exclude (e.g., debug logs)
@@ -64,6 +82,12 @@ def should_exclude_path(path: Path, root: Path) -> bool:
         if part in EXCLUDE_DIRS:
             return True
 
+    # Check for specific subdirectory paths (e.g., data/state)
+    rel_path_str = str(rel_path).replace("\\", "/")
+    for exclude_subdir in EXCLUDE_SUBDIRS:
+        if rel_path_str.startswith(exclude_subdir):
+            return True
+
     # Check file-specific exclusions
     if path.is_file():
         name = path.name
@@ -75,6 +99,11 @@ def should_exclude_path(path: Path, root: Path) -> bool:
         # Pattern match (suffix/extension)
         for pattern in EXCLUDE_FILE_PATTERNS:
             if name.endswith(pattern):
+                return True
+
+        # Prefix match (e.g., _test_*)
+        for prefix in EXCLUDE_FILE_PREFIXES:
+            if name.startswith(prefix):
                 return True
 
         # Special handling for data/ folder - exclude logs
