@@ -10,7 +10,7 @@ $excludeFile = ".gitignore-remote"
 
 # Check if exclude file exists
 if (-not (Test-Path $excludeFile)) {
-    Write-Host "✗ Error: $excludeFile not found" -ForegroundColor Red
+    Write-Host "[X] Error: $excludeFile not found" -ForegroundColor Red
     Write-Host "Create this file with patterns to exclude from remote" -ForegroundColor Yellow
     exit 1
 }
@@ -26,7 +26,7 @@ $excludePatterns = Get-Content $excludeFile | Where-Object {
 # Switch to main branch
 git checkout main
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "✗ Error: Could not switch to main branch" -ForegroundColor Red
+    Write-Host "[X] Error: Could not switch to main branch" -ForegroundColor Red
     exit 1
 }
 
@@ -36,7 +36,7 @@ git merge local --no-commit --no-ff
 $mergeResult = $LASTEXITCODE
 
 if ($mergeResult -ne 0) {
-    Write-Host "✗ Merge conflict! Resolve conflicts then run:" -ForegroundColor Red
+    Write-Host "[X] Merge conflict! Resolve conflicts then run:" -ForegroundColor Red
     Write-Host "  git commit -m `"$Message`"" -ForegroundColor Yellow
     Write-Host "  git push origin main" -ForegroundColor Yellow
     Write-Host "  git checkout local" -ForegroundColor Yellow
@@ -64,7 +64,7 @@ Write-Host "Excluded $excludeCount file(s) from remote push" -ForegroundColor Gr
 # Check if there are any changes to commit
 $changes = git diff --cached --name-only
 if ([string]::IsNullOrWhiteSpace($changes)) {
-    Write-Host "`n⚠ No code changes to push" -ForegroundColor Yellow
+    Write-Host "`n[!] No code changes to push" -ForegroundColor Yellow
     git merge --abort 2>$null
     git checkout local
     exit 0
@@ -79,12 +79,12 @@ git commit -m $Message
 git push origin main
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "`n✓ Pushed to remote" -ForegroundColor Green
-    Write-Host "  Branch: main → origin/main" -ForegroundColor Gray
+    Write-Host "`n[OK] Pushed to remote" -ForegroundColor Green
+    Write-Host "  Branch: main -> origin/main" -ForegroundColor Gray
     Write-Host "  Message: $Message" -ForegroundColor Gray
     Write-Host "  Excluded: See $excludeFile" -ForegroundColor Gray
 } else {
-    Write-Host "`n✗ Push failed" -ForegroundColor Red
+    Write-Host "`n[X] Push failed" -ForegroundColor Red
 }
 
 # Return to local branch
