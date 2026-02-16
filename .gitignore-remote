@@ -2,6 +2,9 @@
 # These files/folders ARE tracked in the local branch but NOT merged to main branch
 # Format: gitignore-style patterns
 
+# This file itself should not be on remote
+.gitignore-remote
+
 # User state folder (personal configuration and UI state)
 data/state/
 
@@ -16,20 +19,19 @@ _tools/
 .vscode/
 **/.vscode/
 
-# Git workflow helper scripts (for local use only)
-git_commit_local.ps1
-git_push_remote.ps1
-git_push_remote.bat
-git_setup_workflow.ps1
-git_setup_workflow.bat
-PUSH_TO_REMOTE.bat
-GIT_WORKFLOW.md
-verify_data_migration.py
+# Test scripts (for local development only)
+_test_*.py
+*_test.py
+
+# Batch files and scripts (for local workflow)
+*.bat
+*.ps1
+
+# Workspace files (personal IDE config)
+*.code-workspace
 
 # Build artifacts (if somehow tracked)
 dist/
 build/
 *.zip
 LKS_*.zip
-package_release.bat
-package_release.py
