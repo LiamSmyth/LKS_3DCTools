@@ -55,7 +55,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 - Many of the above have script menu items that can be bound to a shortcut. Try registering them (installation below) and binding some
 - Will probably make an action script generator (so you can generate your own invoker scripts to bind) in the future
 ## Hotkey editor and Conflict Resolve tool
-![Hotkey Editor](assets\Pastedimage20260216000721.webp)
+![Hotkey Editor](./assets/Pastedimage20260216000721.webp)
 - If you are like me and have been using 3DC for years, your shortcuts xml is probably a hot mess. I've used this tool on my own xml to clean up the xml and it works around all the 3dcoat weirdness by some pain staking manual keycode verification I did. As it turns out, 3dcoat actually requires invalid xml for its prefs. If you just download any old python xml validator, it will make it not loadable by 3dcoat, which will then proceed to dump your entire shortcuts and start over.
 ### IF YOU USE THE HOTKEY EDITOR, BACK IT UP WITH THE BACKUP TOOL BEFORE AND AFTER CHANGES
 - it is VERY LIKELY you will break your hotkeys file. Less likely with all the code that tries to safe-ify it, but it's impossible to be 100% certain. 
