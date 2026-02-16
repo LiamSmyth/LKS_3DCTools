@@ -13,6 +13,7 @@ from utils.lks_settings import (
     get_settings, save_settings,
     get_brush_settings, save_brush_settings,
     get_autopo_settings, save_autopo_settings,
+    _STATE_DIR,
 )
 from utils.coat_ui_utils import show_message
 import coat
@@ -1114,7 +1115,7 @@ def show_lks_tools_panel() -> None:
     config = LKSToolsConfig()
 
     # Load any persisted settings
-    settings_path: str = "UserPrefs/Addons/LKS/lks_panel_state.json"
+    settings_path: str = str(_STATE_DIR / "lks_panel_state.json")
     if coat.io.fileExists(settings_path):
         coat.io.fromJsonFile(config, settings_path)
 
