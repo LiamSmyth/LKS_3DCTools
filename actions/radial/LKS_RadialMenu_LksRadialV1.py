@@ -11,10 +11,14 @@ When dev_mode=False, skips reload_all() for instant radial menu response.
 import sys
 import time as _time
 
+_MODULE_BODY_START: float = _time.monotonic()
+
 
 def main() -> None:
     """Show radial menu: LKS_Radial_V1"""
     _t0: float = _time.monotonic()
+    _dispatch_ms: float = (_t0 - _MODULE_BODY_START) * 1000
+    print(f"[RadialMenu] Module body→main: {_dispatch_ms:.0f}ms")
 
     # Check dev mode for conditional reload
     from utils.lks_settings import get_settings

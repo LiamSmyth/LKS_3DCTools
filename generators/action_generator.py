@@ -86,10 +86,17 @@ NOTE: Uses dev_mode setting to conditionally reload modules.
 When dev_mode=False, skips reload_all() for instant radial menu response.
 """
 import sys
+import time as _time
+
+_MODULE_BODY_START: float = _time.monotonic()
 
 
 def main() -> None:
     """Show radial menu: {display_name}"""
+    _t0: float = _time.monotonic()
+    _dispatch_ms: float = (_t0 - _MODULE_BODY_START) * 1000
+    print(f"[RadialMenu] Module body→main: {{_dispatch_ms:.0f}}ms")
+
     # Conditionally reload modules in dev mode
     from utils.lks_settings import get_settings
     if get_settings().dev_mode:

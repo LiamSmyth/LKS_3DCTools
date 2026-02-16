@@ -64,6 +64,12 @@ MIN_SHOW_MS: float = 50.0
 # OS auto-repeat is typically every 30-50ms; 100ms gives generous margin.
 AUTO_REPEAT_TIMEOUT_MS: float = 100.0
 
+# No-repeat fallback (ms): if this long after show_at() we still haven't
+# received ANY key event (no keyPress, no keyRelease, no auto-repeat),
+# assume the key was tapped and released before the OS repeat delay.
+# OS repeat delay is typically 250-500ms; 600ms gives generous margin.
+NO_REPEAT_RELEASE_MS: float = 500.0
+
 # Exit node appearance
 EXIT_NODE_RADIUS: int = 20          # Pixels - size of exit node circle
 EXIT_ICON_FONT_SIZE: int = 7        # Font size for exit icon (✕)
@@ -73,6 +79,21 @@ BRANCH_NODE_RADIUS: int = 20        # Pixels - same as EXIT_NODE_RADIUS
 BRANCH_DOT_RADIUS: int = 3          # Pixels - center dot size
 BRANCH_LABEL_OFFSET: int = 25       # Pixels - distance of label above circle
 BRANCH_LABEL_FONT_SIZE: int = 9     # Font size for branch label
+
+# Animation settings
+ANIM_DURATION_MS: float = 150.0     # Total animation duration (ms)
+ANIM_STAGGER_MS: float = 20.0      # Delay between each item (ms)
+ANIM_SCALE_START: float = 0.6      # Starting scale factor
+ANIM_FADE_START: float = 0.0       # Starting opacity (0.0 = invisible)
+
+# Highlight animation
+HIGHLIGHT_ANIM_MS: float = 100.0    # Duration for highlight transitions
+# Extra scale for highlighted (on top of HIGHLIGHT_SCALE)
+HIGHLIGHT_SCALE_BONUS: float = 0.05
+
+# Branch transition animation
+BRANCH_FADE_OUT_MS: float = 80.0    # Fade out old items when entering branch
+BRANCH_FADE_IN_MS: float = 100.0    # Fade in new items when entering branch
 
 # Node appearance (leaf/invoker nodes only)
 NODE_PADDING_X: int = 12            # Horizontal padding in squircles
@@ -513,6 +534,21 @@ if HAS_QT:
             self._slice_boundaries: list[tuple[float, float]] = []
             self._node_angles: list[float] = []
 
+            # Animation state
+            self._anim_start_time: float = 0.0  # Timestamp when animation started
+            self._anim_active: bool = False      # Is animation currently running
+
+            # Highlight animation state
+            self._highlight_anim_start: float = 0.0
+            self._prev_highlighted_index: int | None = None
+            self._highlight_anim_active: bool = False
+
+            # Branch transition animation state
+            self._branch_transition_start: float = 0.0
+            self._branch_transition_active: bool = False
+            # True if exiting, False if entering
+            self._branch_transition_exiting: bool = False
+
             # Enable mouse tracking
             self.setMouseTracking(True)
 
@@ -613,6 +649,13 @@ if HAS_QT:
             self._seen_auto_repeat = False
             print(
                 f"[RadialMenu] show_at: trigger=0x{self._trigger_keycode:04X}" if self._trigger_keycode else "[RadialMenu] show_at: trigger=None")
+
+            # Start animation
+            self._anim_start_time = _time.monotonic()
+            self._anim_active = True
+
+            # Reset branch transition (new menu opened)
+            self._branch_transition_active = False
 
             # Size widget to cover menu area (with some margin)
             size = (MENU_RADIUS + MENU_WIDGET_MARGIN) * 2
@@ -733,6 +776,12 @@ if HAS_QT:
             if not branch_item.children:
                 return
 
+            # Start branch transition animation (fade out)
+            import time as _time
+            self._branch_transition_start = _time.monotonic()
+            self._branch_transition_active = True
+            self._branch_transition_exiting = False  # Entering branch
+
             # Calculate branch node's screen position to use as new anchor
             center = QPointF(self.width() / 2, self.height() / 2)
             try:
@@ -763,7 +812,7 @@ if HAS_QT:
             self._cursor_has_left_spawn_item = False
 
             # Clear just_exited tracking - we're in a new menu context now
-            self._just_exited_from_item = None
+            self._just_exited_from_label = None
 
             # Stop any ongoing dwell timer from parent menu
             self._cancel_dwell_timer()
@@ -776,6 +825,10 @@ if HAS_QT:
             self._items = [exit_node] + list(branch_item.children)
             self._highlighted_leaf_index = None
             self._hovered_branch_item = None  # Clear parent menu hover state
+
+            # Restart appear animation for new items
+            self._anim_start_time = _time.monotonic()
+            self._anim_active = True
 
             # Reset cursor position to current global cursor in new widget coords
             # This prevents the cursor line from being offset after widget moves
@@ -790,6 +843,12 @@ if HAS_QT:
             """Pop submenu from stack and restore parent menu."""
             if not self._menu_stack:
                 return
+
+            # Start branch transition animation (fade in)
+            import time as _time
+            self._branch_transition_start = _time.monotonic()
+            self._branch_transition_active = True
+            self._branch_transition_exiting = True  # Exiting branch
 
             # Find which branch in parent we need to debounce
             # The exit node's parent is stored when menu was entered
@@ -828,6 +887,10 @@ if HAS_QT:
             self._cancel_dwell_timer()
 
             self._highlighted_leaf_index = None
+
+            # Restart appear animation for restored items
+            self._anim_start_time = _time.monotonic()
+            self._anim_active = True
             self._hovered_branch_item = None  # Clear child menu hover state
 
             # Reset cursor position to current global cursor in new widget coords
@@ -936,27 +999,68 @@ if HAS_QT:
             if not self._node_angles:
                 return
 
+            # Calculate animation progress
+            import time as _time
+            anim_progress = self._get_animation_progress()
+
+            # Calculate branch transition opacity (affects entire menu)
+            branch_opacity = self._get_branch_transition_opacity()
+
             # Get leaf nodes
             leaf_nodes = [item for item in self._items if item.is_leaf]
 
             for i, item in enumerate(self._items):
+                # Calculate per-item animation (staggered by angle)
+                angle = self._node_angles[i] if i < len(
+                    self._node_angles) else 0
+                item_delay = (angle / 360.0) * ANIM_STAGGER_MS
+                item_progress = self._ease_out_cubic(
+                    max(0.0, min(1.0, (anim_progress * ANIM_DURATION_MS -
+                        item_delay) / ANIM_DURATION_MS))
+                )
+
+                # Calculate animation transforms
+                scale = ANIM_SCALE_START + \
+                    (1.0 - ANIM_SCALE_START) * item_progress
+                opacity = ANIM_FADE_START + \
+                    (1.0 - ANIM_FADE_START) * item_progress
+
+                # Apply branch transition opacity (global fade)
+                opacity *= branch_opacity
+
+                # Skip drawing if not yet visible
+                if opacity <= 0.0:
+                    continue
+
+                # Save painter state for opacity
+                painter.save()
+                painter.setOpacity(opacity)
+
                 # Exit nodes are drawn at center (anchor), not at MENU_RADIUS
                 if item.is_exit:
                     pos = center  # Exit node at center
                 else:
-                    angle = self._node_angles[i]
                     pos = get_node_position(angle, MENU_RADIUS, center)
 
                 # Determine if this node is highlighted
                 is_highlighted = False
+                leaf_index_for_anim = None  # Track leaf index for animation
                 # Leaf nodes: highlight via pizza slice selection
                 if item.is_leaf:
                     leaf_index = leaf_nodes.index(item)
+                    leaf_index_for_anim = leaf_index
                     is_highlighted = (
                         leaf_index == self._highlighted_leaf_index)
                 # Branch/exit nodes: highlight if being hovered (dwell in progress)
                 elif (item.is_branch or item.is_exit) and item == self._hovered_branch_item:
                     is_highlighted = True
+
+                # Apply highlight animation scale (only for leaf nodes)
+                highlight_scale = 1.0
+                if item.is_leaf:
+                    highlight_scale = self._get_highlight_scale(
+                        leaf_index_for_anim, is_highlighted)
+                scale *= highlight_scale
 
                 # Draw pizza slice background for highlighted leaf (DEBUG only)
                 if DEBUG_PIZZA_SLICE and is_highlighted and item.is_leaf and self._slice_boundaries:
@@ -967,7 +1071,7 @@ if HAS_QT:
                 # Branch nodes get special rendering as circles (matching exit nodes)
                 if item.is_branch:
                     # Draw branch node as a circle (same size as exit node)
-                    branch_radius = BRANCH_NODE_RADIUS
+                    branch_radius = BRANCH_NODE_RADIUS * scale
                     if is_highlighted:
                         painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
                         painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
@@ -1006,12 +1110,13 @@ if HAS_QT:
                         painter, label_rect, Qt.AlignCenter, item.label,
                         COLOR_ACCENT if is_highlighted else COLOR_TEXT_PRIMARY
                     )
+                    painter.restore()  # Restore opacity
                     continue  # Skip normal squircle rendering
 
                 # Exit nodes get special rendering as a circle at center
                 if item.is_exit:
                     # Draw exit node as a circle (not squircle)
-                    exit_radius = EXIT_NODE_RADIUS
+                    exit_radius = EXIT_NODE_RADIUS * scale
                     if is_highlighted:
                         painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
                         painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
@@ -1030,6 +1135,7 @@ if HAS_QT:
                                        exit_radius * 2, exit_radius * 2)
                     painter.drawText(text_rect, Qt.AlignCenter,
                                      item.icon if item.icon else "✕")
+                    painter.restore()  # Restore opacity
                     continue  # Skip normal squircle rendering
 
                 # Prepare text and font
@@ -1053,10 +1159,13 @@ if HAS_QT:
                 squircle_height = text_height + NODE_PADDING_Y * 2
                 corner_radius = NODE_CORNER_RADIUS
 
-                # Scale up if highlighted
+                # Scale up if highlighted, and apply animation scale
+                final_scale = scale
                 if is_highlighted:
-                    squircle_width *= HIGHLIGHT_SCALE
-                    squircle_height *= HIGHLIGHT_SCALE
+                    final_scale *= HIGHLIGHT_SCALE
+
+                squircle_width *= final_scale
+                squircle_height *= final_scale
 
                 # Draw squircle (rounded rectangle)
                 squircle_rect = QRectF(
@@ -1083,6 +1192,9 @@ if HAS_QT:
                     painter.setPen(QColor(COLOR_TEXT_PRIMARY))
 
                 painter.drawText(squircle_rect, Qt.AlignCenter, text)
+
+                # Restore opacity
+                painter.restore()
 
         def _draw_pizza_slice(
             self,
@@ -1142,6 +1254,76 @@ if HAS_QT:
             path.closeSubpath()
             painter.drawPath(path)
 
+        def _get_animation_progress(self) -> float:
+            """Get current animation progress (0.0 to 1.0)."""
+            if not self._anim_active:
+                return 1.0
+
+            import time as _time
+            elapsed_ms = (_time.monotonic() - self._anim_start_time) * 1000.0
+            progress = elapsed_ms / ANIM_DURATION_MS
+            return min(1.0, progress)
+
+        def _get_highlight_anim_progress(self) -> float:
+            """Get current highlight animation progress (0.0 to 1.0)."""
+            if not self._highlight_anim_active:
+                return 1.0
+
+            import time as _time
+            elapsed_ms = (_time.monotonic() -
+                          self._highlight_anim_start) * 1000.0
+            progress = elapsed_ms / HIGHLIGHT_ANIM_MS
+            return min(1.0, progress)
+
+        def _get_highlight_scale(self, item_index: int, is_highlighted: bool) -> float:
+            """Calculate animated scale for highlight transitions."""
+            # No animation needed if no transition
+            if not self._highlight_anim_active:
+                return 1.0
+
+            progress = self._get_highlight_anim_progress()
+            eased = self._ease_out_cubic(progress)
+
+            # Check if this item is transitioning
+            was_highlighted = (self._prev_highlighted_index == item_index)
+
+            if was_highlighted and not is_highlighted:
+                # Fading out highlight: 1.0 + bonus → 1.0
+                return 1.0 + HIGHLIGHT_SCALE_BONUS * (1.0 - eased)
+            elif not was_highlighted and is_highlighted:
+                # Fading in highlight: 1.0 → 1.0 + bonus
+                return 1.0 + HIGHLIGHT_SCALE_BONUS * eased
+
+            return 1.0  # No transition for this item
+
+        def _get_branch_transition_progress(self) -> float:
+            """Get current branch transition animation progress (0.0 to 1.0)."""
+            if not self._branch_transition_active:
+                return 1.0
+
+            import time as _time
+            elapsed_ms = (_time.monotonic() -
+                          self._branch_transition_start) * 1000.0
+            duration = BRANCH_FADE_OUT_MS if not self._branch_transition_exiting else BRANCH_FADE_IN_MS
+            progress = elapsed_ms / duration
+            return min(1.0, progress)
+
+        def _get_branch_transition_opacity(self) -> float:
+            """Calculate opacity for branch transition (fade out then fade in)."""
+            if not self._branch_transition_active:
+                return 1.0
+
+            progress = self._get_branch_transition_progress()
+            eased = self._ease_out_cubic(progress)
+
+            # Always fade in (items appear from 0 to 1)
+            return eased
+
+        @staticmethod
+        def _ease_out_cubic(t: float) -> float:
+            """Cubic ease-out function for smooth animation."""
+            return 1.0 - pow(1.0 - t, 3)
+
         def _poll_cursor(self) -> None:
             """Poll cursor position every frame for smooth cursor line updates.
 
@@ -1162,6 +1344,33 @@ if HAS_QT:
             cursor_widget = self.mapFromGlobal(cursor_screen)
             self._last_cursor_widget_pos = QPointF(cursor_widget)
 
+            # Update animations and request repaint if any are active
+            any_anim_active = False
+
+            if self._anim_active:
+                progress = self._get_animation_progress()
+                if progress >= 1.0:
+                    self._anim_active = False
+                else:
+                    any_anim_active = True
+
+            if self._highlight_anim_active:
+                progress = self._get_highlight_anim_progress()
+                if progress >= 1.0:
+                    self._highlight_anim_active = False
+                else:
+                    any_anim_active = True
+
+            if self._branch_transition_active:
+                progress = self._get_branch_transition_progress()
+                if progress >= 1.0:
+                    self._branch_transition_active = False
+                else:
+                    any_anim_active = True
+
+            if any_anim_active:
+                self.update()  # Trigger repaint for animation frame
+
             # Auto-repeat timeout: detect key release by absence of key events
             # Once we've seen auto-repeat events, if they stop arriving for
             # AUTO_REPEAT_TIMEOUT_MS, the key was released.
@@ -1174,6 +1383,22 @@ if HAS_QT:
                         _time.monotonic() - self._show_time) * 1000
                     print(f"[RadialMenu] Auto-repeat timeout: {since_last_key:.0f}ms "
                           f"since last key event, closing (elapsed={elapsed_ms:.0f}ms)")
+                    self.hide_and_invoke()
+                    return
+            else:
+                # No-repeat fallback: if enough time passed without ANY key
+                # event (no press, no release, no auto-repeat), the key was
+                # likely tapped and released before the OS repeat delay kicked
+                # in. In 3DCoat's embedded Qt, the initial keyDown goes to
+                # 3DCoat (which triggers the script), and if the key is
+                # released before auto-repeat starts, keyReleaseEvent may
+                # never fire either. This fallback catches that case.
+                import time as _time
+                elapsed_ms: float = (
+                    _time.monotonic() - self._show_time) * 1000
+                if elapsed_ms >= NO_REPEAT_RELEASE_MS:
+                    print(f"[RadialMenu] No-repeat fallback: {elapsed_ms:.0f}ms "
+                          f"elapsed with no key events, assuming key released")
                     self.hide_and_invoke()
                     return
 
@@ -1245,6 +1470,13 @@ if HAS_QT:
             if old_highlight != self._highlighted_leaf_index:
                 if self._highlighted_leaf_index is not None:
                     self.highlightChanged.emit(self._highlighted_leaf_index)
+
+                # Start highlight animation transition
+                import time as _time
+                self._highlight_anim_start = _time.monotonic()
+                self._highlight_anim_active = True
+                self._prev_highlighted_index = old_highlight
+
                 self.update()
 
             super().mouseMoveEvent(event)
