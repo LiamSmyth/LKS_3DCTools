@@ -48,7 +48,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 ![Autopo Panel](./assets/2026-02-16_image.webp)
 - Basically already works but you have to click through menus. Trying to get 3DCoat autopo to act more like zremesher where you modify some settings and click the "go" button again instead of clicking through popup menus. I've exposed the autopo config entirely
 - Intention again is to stay in sculpt mode. 
-- `> will just produce a new autopo with configured settings and return to sculpt mode.
+- `>` will just produce a new autopo with configured settings and return to sculpt mode.
 - `Autopo -> sculpt` will make a new autopo mesh and bring it into sculpt mode as a new sculpt object. 
 - `Autopo -> Multires` will generate the autopo and bring it in as the lowest subdivision for the current sculpt object
 ### Action Commands -> Shortcut MenuItems
@@ -108,9 +108,11 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 - If you installed the menu items for hotkeys, you should be able to use LKS_Radial_V1 radial menu for starters. 
 - Click the dropdown "Library" to select a radial preset. You can also build one from scratch. 
 	- Radial menu definitions are simple json files. You can save / load them from disk, or store them to the addons folder library with store. Delete will remove the currently edited one.
-- With a library item selected, hit the white square button at right to load the preset. With the preset loaded, you can Register the radial menu. Registering will add a radial menu item to your scripts menu. 
+- With a library item selected, hit the white square button at right to load the preset. With the preset loaded, you can Register the radial menu. Registering will add a radial menu item to your scripts menu. As usual, when changing menu items, you will need to restart 3DCoat for them to show up.
 - This generally should be invoked with a shortcut key. Use 3DCoat's `END` shortcut mapping to map the radial menu to a key.
+
 ![alt text](./assets/2026-02-15_image-5.webp)
+
 - When the radial menu is bound, hold the key down, and release over an item to invoke it. Releasing over empty space will close the radial menu without doing anything.
 - Some items in the radial menus are "Branch Nodes": they allow you to spawn sub-radials, which contain their own actions. A bit like a hybrid of blender and maya. 
 
