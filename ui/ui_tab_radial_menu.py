@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QLabel, QComboBox, QDoubleSpinBox,
     QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QSplitter,
     QListWidget, QListWidgetItem, QMessageBox, QFileDialog,
-    QMenu, QTabWidget,
+    QMenu, QTabWidget, QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QPoint
 
@@ -92,6 +92,58 @@ class RadialMenuEditorTab(QWidget):
         self._save_load_widget.saved.connect(self._on_saved)
         self._save_load_widget.loaded.connect(self._on_loaded)
         main_layout.addWidget(self._save_load_widget)
+
+        # Registration controls
+        reg_group = QGroupBox("Hotkey Registration")
+        reg_layout = QVBoxLayout(reg_group)
+        reg_layout.setContentsMargins(4, 4, 4, 4)
+        reg_layout.setSpacing(4)
+
+        # Status label
+        self._reg_status_label = QLabel("Status: Not registered")
+        self._reg_status_label.setStyleSheet("color: #888;")
+        reg_layout.addWidget(self._reg_status_label)
+
+        # Description
+        desc = QLabel(
+            "Register this menu as an action to assign hotkeys via 3DCoat Preferences.\n"
+            "Auto-register saves to library and registers immediately."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #aaa; font-size: 10pt;")
+        reg_layout.addWidget(desc)
+
+        # Auto-register checkbox
+        self._auto_register_checkbox = QCheckBox("Auto-register when saving to library")
+        self._auto_register_checkbox.setChecked(True)
+        self._auto_register_checkbox.setToolTip(
+            "Automatically register menu as hotkey-mappable action when saving to library"
+        )
+        reg_layout.addWidget(self._auto_register_checkbox)
+
+        # Manual register/unregister buttons
+        reg_buttons_row = QHBoxLayout()
+        reg_buttons_row.setSpacing(4)
+
+        self._register_btn = QPushButton("✅ Register")
+        self._register_btn.setToolTip("Register current menu as hotkey-mappable action")
+        self._register_btn.clicked.connect(self._register_current_menu)
+        reg_buttons_row.addWidget(self._register_btn)
+
+        self._unregister_btn = QPushButton("❌ Unregister")
+        self._unregister_btn.setToolTip("Unregister menu (remove from Scripts menu)")
+        self._unregister_btn.clicked.connect(self._unregister_current_menu)
+        reg_buttons_row.addWidget(self._unregister_btn)
+
+        self._sync_all_btn = QPushButton("🔄 Sync All")
+        self._sync_all_btn.setToolTip("Sync all library menus with registration state")
+        self._sync_all_btn.clicked.connect(self._sync_all_menus)
+        reg_buttons_row.addWidget(self._sync_all_btn)
+
+        reg_buttons_row.addStretch()
+        reg_layout.addLayout(reg_buttons_row)
+
+        main_layout.addWidget(reg_group)
 
         # Preview button
         preview_row = QHBoxLayout()
@@ -205,12 +257,22 @@ class RadialMenuEditorTab(QWidget):
             raise RuntimeError(f"Load failed: {e}")
 
     def _on_saved(self, path: Path) -> None:
-        """Handle successful save (update internal state)."""
+        """Handle successful save (update internal state and register if needed)."""
         self._config_path = path
+        
+        # Auto-register if enabled and saved to library
+        if self._auto_register_checkbox.isChecked():
+            is_library = path.parent == _LIBRARY_DIR
+            if is_library:
+                self._register_menu(path)
+        
+        # Update registration status
+        self._update_registration_status()
 
     def _on_loaded(self, path: Path) -> None:
         """Handle successful load (update internal state)."""
         self._config_path = path
+        self._update_registration_status()
 
     def _load_config(self, path: Path | None = None) -> None:
         """Load configuration from JSON file (legacy method for initial load)."""
@@ -417,3 +479,136 @@ class RadialMenuEditorTab(QWidget):
             import traceback
             self._log_error(f"Preview failed: {e}")
             traceback.print_exc()
+
+    # =========================================================================
+    # REGISTRY INTEGRATION
+    # =========================================================================
+
+    def _update_registration_status(self) -> None:
+        """Update registration status label based on current file."""
+        if not self._config_path:
+            self._reg_status_label.setText("Status: No file loaded")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(False)
+            return
+        
+        is_library = self._config_path.parent == _LIBRARY_DIR
+        if not is_library:
+            self._reg_status_label.setText("Status: Not in library (save to library to register)")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(False)
+            return
+        
+        # Check registration status
+        from utils.radial_menu_registry import is_menu_registered, generate_menu_id
+        
+        menu_filename = self._config_path.name
+        is_registered = is_menu_registered(menu_filename)
+        
+        if is_registered:
+            menu_id = generate_menu_id(menu_filename)
+            self._reg_status_label.setText(
+                f"✅ Registered as: {menu_id}\n"
+                f"Assign hotkey via: 3DCoat Preferences → Hotkeys → Scripts"
+            )
+            self._reg_status_label.setStyleSheet("color: #81c784;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(True)
+        else:
+            self._reg_status_label.setText("❌ Not registered (click Register to enable hotkey assignment)")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(True)
+            self._unregister_btn.setEnabled(False)
+
+    def _register_menu(self, path: Path) -> None:
+        """Register a menu from library path."""
+        if path.parent != _LIBRARY_DIR:
+            self._log_error("Menu must be in library to register")
+            return
+        
+        try:
+            from utils.radial_menu_registry import register_menu
+            
+            menu_filename = path.name
+            
+            # Extract display name from config
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    config_data = json.load(f)
+                display_name = config_data.get("name", menu_filename[:-5])
+            except Exception:
+                display_name = menu_filename[:-5]
+            
+            # Register
+            was_registered = register_menu(menu_filename, display_name)
+            
+            if was_registered:
+                self._log_success(
+                    f"Registered: {display_name}\n"
+                    f"Assign hotkey via: 3DCoat Preferences → Hotkeys → Scripts → Radial: {display_name}"
+                )
+            else:
+                self._log_success(f"Already registered: {display_name}")
+            
+            self._update_registration_status()
+            
+        except Exception as e:
+            self._log_error(f"Registration failed: {e}")
+
+    def _register_current_menu(self) -> None:
+        """Register the currently loaded menu."""
+        if not self._config_path:
+            self._log_error("No menu loaded")
+            return
+        
+        self._register_menu(self._config_path)
+
+    def _unregister_current_menu(self) -> None:
+        """Unregister the currently loaded menu."""
+        if not self._config_path:
+            self._log_error("No menu loaded")
+            return
+        
+        if self._config_path.parent != _LIBRARY_DIR:
+            self._log_error("Menu must be in library to unregister")
+            return
+        
+        try:
+            from utils.radial_menu_registry import unregister_menu
+            
+            menu_filename = self._config_path.name
+            was_unregistered = unregister_menu(menu_filename)
+            
+            if was_unregistered:
+                self._log_success(
+                    f"Unregistered: {menu_filename}\n"
+                    f"Note: Menu item persists in Scripts menu until 3DCoat restart"
+                )
+            else:
+                self._log_error(f"Not registered: {menu_filename}")
+            
+            self._update_registration_status()
+            
+        except Exception as e:
+            self._log_error(f"Unregistration failed: {e}")
+
+    def _sync_all_menus(self) -> None:
+        """Sync all library menus with registration state."""
+        try:
+            from utils.radial_menu_registry import sync_all_menus
+            
+            registered, unregistered, updated = sync_all_menus()
+            
+            self._log_success(
+                f"Sync complete:\n"
+                f"  Registered: {registered}\n"
+                f"  Unregistered: {unregistered}\n"
+                f"  Updated: {updated}"
+            )
+            
+            self._update_registration_status()
+            
+        except Exception as e:
+            self._log_error(f"Sync failed: {e}")
