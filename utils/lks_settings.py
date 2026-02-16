@@ -76,6 +76,7 @@ AUTOPO_DEFAULTS: dict = {
 # General settings defaults (decimate, etc. - NOT autopo)
 GENERAL_DEFAULTS: dict = {
     "decimate_reduction": 50,
+    "dev_mode": True,  # When True, action scripts reload all modules before invoke
 }
 
 # Radial menu settings defaults
@@ -390,6 +391,8 @@ UI_STATE_DEFAULTS: dict = {
     "section_autopo_expanded": False,
     "section_layers_expanded": False,
     "section_booleans_expanded": False,
+    # Panel window settings
+    "panel_always_on_top": False,
 }
 
 

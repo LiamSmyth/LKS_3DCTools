@@ -51,8 +51,10 @@ Parameters for the autopo (automatic retopology) feature.
 | `$QuadragulationTask::RequiredPolycount` | Target poly count | int | e.g., 10000 |
 | `$QuadragulationTask::CaptureDetails` | Detail capture percentage | float | 0.0-100.0 |
 | `$QuadragulationTask::HardsurfaceRetopology` | Hard surface mode | bool | true/false |
-| `$QuadragulationTask::AutoDensityInfluence` | Auto density influence | float | 0.0-1.0 |
+| `$QuadragulationTask::AutoDensityInfluence` | Auto density influence | float | 0.0-2.0 |
 | `$QuadragulationTask::Voxelize` | Voxelize before autopo | bool | true/false |
+| `$QuadragulationTask::VoxelizedObjectPolycount1` | Voxelize target polycount (K) | int | e.g., 1000 |
+| `$QuadragulationTask::DecimateIfAbove` | Enable decimation if above limit | bool | true/false |
 | `$QuadragulationTask::DecimationLimit1` | Decimation limit (K) | int | e.g., 1000 |
 | `$QuadragulationTask::TangentSmoothRes` | Tangent smooth result | bool | true/false |
 | `$QuadragulationTask::BypassDensityAndStrokes` | Skip density modal | bool | true/false |

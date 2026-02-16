@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QLabel, QComboBox, QDoubleSpinBox,
     QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QSplitter,
     QListWidget, QListWidgetItem, QMessageBox, QFileDialog,
-    QMenu, QTabWidget,
+    QMenu, QTabWidget, QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QPoint
 
@@ -79,6 +79,13 @@ class RadialMenuEditorTab(QWidget):
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
 
+        # Title
+        title_label = QLabel("Radial Menu Editor")
+        title_label.setStyleSheet(
+            "font-size: 14pt; font-weight: bold; color: #90caf9; padding: 4px;"
+        )
+        main_layout.addWidget(title_label)
+
         # Save/Load/Library widget
         self._save_load_widget = SaveLoadLibrary(
             library_dir=_LIBRARY_DIR,
@@ -92,19 +99,6 @@ class RadialMenuEditorTab(QWidget):
         self._save_load_widget.saved.connect(self._on_saved)
         self._save_load_widget.loaded.connect(self._on_loaded)
         main_layout.addWidget(self._save_load_widget)
-
-        # Preview button
-        preview_row = QHBoxLayout()
-        preview_row.setSpacing(4)
-
-        preview_row.addStretch()
-
-        self._preview_btn = QPushButton("👁️ Preview")
-        self._preview_btn.setToolTip("Preview current menu configuration")
-        self._preview_btn.clicked.connect(self._preview_menu)
-        preview_row.addWidget(self._preview_btn)
-
-        main_layout.addLayout(preview_row)
 
         # Main content: splitter with tree and editor
         splitter = QSplitter(Qt.Vertical)
@@ -160,6 +154,73 @@ class RadialMenuEditorTab(QWidget):
         splitter.setSizes([200, 150])
         main_layout.addWidget(splitter)
 
+        # Registration controls (at bottom)
+        reg_group = QGroupBox("Hotkey Registration")
+        reg_layout = QVBoxLayout(reg_group)
+        reg_layout.setContentsMargins(4, 4, 4, 4)
+        reg_layout.setSpacing(4)
+
+        # Status label
+        self._reg_status_label = QLabel("Status: Not registered")
+        self._reg_status_label.setStyleSheet("color: #888;")
+        reg_layout.addWidget(self._reg_status_label)
+
+        # Register/unregister buttons
+        reg_buttons_row = QHBoxLayout()
+        reg_buttons_row.setSpacing(4)
+
+        self._register_btn = QPushButton("✅ Register")
+        self._register_btn.setToolTip(
+            "Register selected library menu as hotkey-mappable action")
+        self._register_btn.clicked.connect(self._register_current_menu)
+        reg_buttons_row.addWidget(self._register_btn)
+
+        self._unregister_btn = QPushButton("❌ Unregister")
+        self._unregister_btn.setToolTip(
+            "Unregister selected library menu")
+        self._unregister_btn.clicked.connect(self._unregister_current_menu)
+        reg_buttons_row.addWidget(self._unregister_btn)
+
+        self._unregister_all_btn = QPushButton("🗑️ Unregister All")
+        self._unregister_all_btn.setToolTip(
+            "Unregister all radial menus (requires 3DCoat restart to take effect)")
+        self._unregister_all_btn.clicked.connect(self._unregister_all_menus)
+        reg_buttons_row.addWidget(self._unregister_all_btn)
+
+        reg_buttons_row.addStretch()
+        reg_layout.addLayout(reg_buttons_row)
+
+        main_layout.addWidget(reg_group)
+
+        # About Hotkeys help menu (at bottom)
+        from utils.ui.widgets import HelpMenu
+        help_menu = HelpMenu(
+            title="Hotkeys",
+            content=(
+                "<b>How to create a hotkey-mapped radial menu:</b><br/><br/>"
+                "<b>1. Create the menu:</b><br/>"
+                "   • Use the editor below to design your radial menu structure<br/>"
+                "   • Add items, set icons, and configure actions<br/><br/>"
+                "<b>2. Save to library:</b><br/>"
+                "   • Click 💾 Save and choose 'Library' as the save location<br/>"
+                "   • Give your menu a descriptive name<br/><br/>"
+                "<b>3. Register for hotkey mapping:</b><br/>"
+                "   • Select your menu from the library dropdown<br/>"
+                "   • Click ✅ Register<br/>"
+                "   • Restart 3DCoat<br/><br/>"
+                "<b>4. Assign a shortcut:</b><br/>"
+                "   • In 3DCoat: Scripts menu → Find your menu by name<br/>"
+                "   • Hover over the menu item and press your desired shortcut key<br/>"
+                "   • The hotkey will be saved automatically<br/><br/>"
+                "<b>To unregister an individual menu:</b><br/>"
+                "   • Select it from the library dropdown<br/>"
+                "   • Click ❌ Unregister<br/>"
+                "   • Restart 3DCoat to remove it from the Scripts menu"
+            ),
+            max_height=200
+        )
+        main_layout.addWidget(help_menu)
+
         # Set initial path in SaveLoadLibrary widget
         if self._config_path.exists():
             is_library = self._config_path.parent == _LIBRARY_DIR
@@ -174,8 +235,12 @@ class RadialMenuEditorTab(QWidget):
                 items.append(self._tree_item_to_data(
                     self._tree.topLevelItem(i)))
 
+            # Extract display name from path (remove .json extension)
+            display_name = path.stem
+
             config = {
                 "version": "1.0",
+                "name": display_name,  # Add name field for registry
                 "items": [item.to_dict() for item in items]
             }
 
@@ -207,10 +272,12 @@ class RadialMenuEditorTab(QWidget):
     def _on_saved(self, path: Path) -> None:
         """Handle successful save (update internal state)."""
         self._config_path = path
+        self._update_registration_status()
 
     def _on_loaded(self, path: Path) -> None:
         """Handle successful load (update internal state)."""
         self._config_path = path
+        self._update_registration_status()
 
     def _load_config(self, path: Path | None = None) -> None:
         """Load configuration from JSON file (legacy method for initial load)."""
@@ -347,73 +414,174 @@ class RadialMenuEditorTab(QWidget):
         menu.addAction("🗑️ Delete", self._delete_item)
         menu.exec(self._tree.mapToGlobal(pos))
 
-    def _preview_menu(self) -> None:
-        """Preview the current menu configuration."""
+    # =========================================================================
+    # REGISTRY INTEGRATION
+    # =========================================================================
+
+    def _update_registration_status(self) -> None:
+        """Update registration status label based on current file."""
+        if not self._config_path:
+            self._reg_status_label.setText("Status: No file loaded")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(False)
+            return
+
+        is_library = self._config_path.parent == _LIBRARY_DIR
+        if not is_library:
+            self._reg_status_label.setText(
+                "Status: Not in library (save to library to register)")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(False)
+            return
+
+        # Check registration status
+        from utils.radial_menu_registry import is_menu_registered, generate_menu_id
+
+        menu_filename = self._config_path.name
+        is_registered = is_menu_registered(menu_filename)
+
+        if is_registered:
+            menu_id = generate_menu_id(menu_filename)
+            self._reg_status_label.setText(
+                f"✅ Registered as: {menu_id}\n"
+                f"Assign hotkey via: 3DCoat Preferences → Hotkeys → Scripts"
+            )
+            self._reg_status_label.setStyleSheet("color: #81c784;")
+            self._register_btn.setEnabled(False)
+            self._unregister_btn.setEnabled(True)
+        else:
+            self._reg_status_label.setText(
+                "❌ Not registered (click Register to enable hotkey assignment)")
+            self._reg_status_label.setStyleSheet("color: #888;")
+            self._register_btn.setEnabled(True)
+            self._unregister_btn.setEnabled(False)
+
+    def _register_menu(self, path: Path) -> None:
+        """Register a menu from library path."""
+        if path.parent != _LIBRARY_DIR:
+            self._log_error("Menu must be in library to register")
+            return
+
         try:
-            # Build menu items from tree
-            from utils.ui.widgets.radial_menu import RadialMenuItem
+            from utils.radial_menu_registry import register_menu
 
-            def tree_to_menu_items(
-                parent: QTreeWidgetItem | None = None
-            ) -> list[RadialMenuItem]:
-                items = []
-                count = (
-                    parent.childCount() if parent
-                    else self._tree.topLevelItemCount()
+            menu_filename = path.name
+
+            # Extract display name from config
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    config_data = json.load(f)
+                display_name = config_data.get("name", menu_filename[:-5])
+            except Exception:
+                display_name = menu_filename[:-5]
+
+            # Register
+            was_registered = register_menu(menu_filename, display_name)
+
+            if was_registered:
+                self._log_success(
+                    f"Registered: {display_name}\n"
+                    f"Assign hotkey via: 3DCoat Preferences → Hotkeys → Scripts → Radial: {display_name}"
                 )
+            else:
+                self._log_success(f"Already registered: {display_name}")
 
-                for i in range(count):
-                    tree_item = (
-                        parent.child(i) if parent
-                        else self._tree.topLevelItem(i)
-                    )
-                    data: MenuItemData = tree_item.data(0, Qt.UserRole)
-
-                    # Build children recursively
-                    children = None
-                    if tree_item.childCount() > 0:
-                        children = tree_to_menu_items(tree_item)
-
-                    # Create action wrapper that actually executes the command
-                    action_cmd = data.action
-
-                    def make_action(cmd: str):
-                        def action():
-                            if cmd.startswith("$"):
-                                try:
-                                    import coat
-                                    coat.ui.cmd(cmd)
-                                    self._log_success(f"Executed: {cmd}")
-                                except Exception as e:
-                                    self._log_error(f"Failed: {cmd} - {e}")
-                            else:
-                                self._log_success(f"Preview: {cmd}")
-                        return action
-
-                    menu_item = RadialMenuItem(
-                        label=data.label,
-                        action=make_action(action_cmd),
-                        icon=data.icon or None,
-                        children=children,
-                        angle=data.angle,
-                    )
-                    items.append(menu_item)
-
-                return items
-
-            menu_items = tree_to_menu_items()
-
-            if not menu_items:
-                self._log_error("Add some menu items first")
-                return
-
-            # Show preview
-            from utils.ui.widgets.radial_menu_manager import get_manager
-            manager = get_manager()
-            manager.show_menu(menu_items)
-            self._log_success("Preview opened (release key to close)")
+            self._update_registration_status()
 
         except Exception as e:
-            import traceback
-            self._log_error(f"Preview failed: {e}")
-            traceback.print_exc()
+            self._log_error(f"Registration failed: {e}")
+
+    def _register_current_menu(self) -> None:
+        """Register the currently loaded menu."""
+        if not self._config_path:
+            self._log_error("No menu loaded")
+            return
+
+        self._register_menu(self._config_path)
+
+    def _unregister_current_menu(self) -> None:
+        """Unregister the currently loaded menu."""
+        if not self._config_path:
+            self._log_error("No menu loaded")
+            return
+
+        if self._config_path.parent != _LIBRARY_DIR:
+            self._log_error("Menu must be in library to unregister")
+            return
+
+        try:
+            from utils.radial_menu_registry import unregister_menu
+
+            menu_filename = self._config_path.name
+            was_unregistered = unregister_menu(menu_filename)
+
+            if was_unregistered:
+                self._log_success(
+                    f"Unregistered: {menu_filename}\n"
+                    f"Note: Menu item persists in Scripts menu until 3DCoat restart"
+                )
+            else:
+                self._log_error(f"Not registered: {menu_filename}")
+
+            self._update_registration_status()
+
+        except Exception as e:
+            self._log_error(f"Unregistration failed: {e}")
+
+    def _sync_all_menus(self) -> None:
+        """Sync all library menus with registration state."""
+        try:
+            from utils.radial_menu_registry import sync_all_menus
+
+            registered, unregistered, updated = sync_all_menus()
+
+            self._log_success(
+                f"Sync complete:\n"
+                f"  Registered: {registered}\n"
+                f"  Unregistered: {unregistered}\n"
+                f"  Updated: {updated}"
+            )
+
+            self._update_registration_status()
+
+        except Exception as e:
+            self._log_error(f"Sync failed: {e}")
+
+    def _unregister_all_menus(self) -> None:
+        """Unregister all radial menus."""
+        try:
+            from PySide6.QtWidgets import QMessageBox
+            
+            # Confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                "Unregister All Menus",
+                "⚠️ This will unregister ALL radial menus.\n\n"
+                "You will need to restart 3DCoat for the changes to take effect.\n\n"
+                "Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                self._log_success("Unregister all cancelled")
+                return
+
+            from utils.radial_menu_registry import unregister_all_menus
+
+            count = unregister_all_menus()
+
+            if count > 0:
+                self._log_success(
+                    f"Unregistered {count} menus\n"
+                    f"Note: Restart 3DCoat for changes to take effect"
+                )
+            else:
+                self._log_success("No menus were registered")
+
+            self._update_registration_status()
+
+        except Exception as e:
+            self._log_error(f"Unregister all failed: {e}")

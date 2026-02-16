@@ -14,12 +14,13 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox,
 )
 from PySide6.QtCore import Qt
 
 from utils.ui.styles import DARK_STYLESHEET
 from utils.ui.widgets import TabWidget, ActivityLog
+from utils.lks_settings import get_ui_state, save_ui_state
 
 
 # =============================================================================
@@ -34,7 +35,14 @@ class LKSMainPanel(QWidget):
         self.setWindowTitle("LKS Tools")
         self.setMinimumSize(320, 500)
         self.resize(350, 600)
-        self.setWindowFlags(Qt.Window)
+        
+        # Apply "always on top" window flag if enabled in settings
+        ui_state = get_ui_state()
+        flags = Qt.Window
+        if ui_state.panel_always_on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        
         self.setStyleSheet(DARK_STYLESHEET)
 
         # Position window in top-left area of screen
@@ -102,6 +110,14 @@ class LKSMainPanel(QWidget):
         layout.addWidget(btn_clear)
 
         layout.addStretch()
+
+        # Always on top checkbox
+        self._always_on_top_checkbox = QCheckBox("📌 Always on Top")
+        self._always_on_top_checkbox.setToolTip("Keep panel above other windows")
+        ui_state = get_ui_state()
+        self._always_on_top_checkbox.setChecked(ui_state.panel_always_on_top)
+        self._always_on_top_checkbox.stateChanged.connect(self._toggle_always_on_top)
+        layout.addWidget(self._always_on_top_checkbox)
 
         btn_close = QPushButton("X")
         btn_close.setFixedWidth(30)
@@ -173,6 +189,25 @@ class LKSMainPanel(QWidget):
     # =========================================================================
     # CALLBACKS
     # =========================================================================
+
+    def _toggle_always_on_top(self, state: int) -> None:
+        """Toggle always-on-top window flag and save to settings."""
+        is_checked = state == Qt.CheckState.Checked.value
+        
+        # Save to settings
+        ui_state = get_ui_state()
+        ui_state.panel_always_on_top = is_checked
+        save_ui_state()
+        
+        # Update window flags
+        flags = Qt.Window
+        if is_checked:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        
+        # Re-show window (required after changing window flags)
+        self.show()
+        self._log.log_success(f"Always on top: {'enabled' if is_checked else 'disabled'}")
 
     def _do_refresh_tree(self) -> None:
         """Refresh the outliner tree."""

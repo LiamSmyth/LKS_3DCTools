@@ -1,8 +1,9 @@
 """
-Show radial tree menu at cursor position.
+Show radial menu: LKS_Radial_V1
 
 Room: All
 Action: Display radial menu with configured actions
+Auto-generated: DO NOT EDIT - regenerate via action script system
 
 NOTE: Uses dev_mode setting to conditionally reload modules.
 When dev_mode=False, skips reload_all() for instant radial menu response.
@@ -12,7 +13,7 @@ import time as _time
 
 
 def main() -> None:
-    """Show radial menu with items from config file."""
+    """Show radial menu: LKS_Radial_V1"""
     _t0: float = _time.monotonic()
 
     # Check dev mode for conditional reload
@@ -25,16 +26,24 @@ def main() -> None:
         reload_all()
     _t2: float = _time.monotonic()
 
+    from pathlib import Path
     from utils.ui.widgets import get_manager
-    from utils.radial_menu_config import get_default_menu_items
+    from utils.radial_menu_config import load_menu_config
     _t3: float = _time.monotonic()
 
-    # Load menu items from config
-    items = get_default_menu_items()
+    # Load menu config from library
+    config_path = Path(__file__).parent.parent / \
+        "../data/library/radial_menus/LKS_Radial_V1.json"
+
+    try:
+        items = load_menu_config(config_path)
+    except Exception as e:
+        print(f"[RadialMenu] Failed to load menu config: {e}")
+        return
     _t4: float = _time.monotonic()
 
     if not items:
-        print("[RadialMenu] No menu items configured")
+        print(f"[RadialMenu] No menu items in config: LKS_Radial_V1.json")
         return
 
     # Show menu at cursor position
