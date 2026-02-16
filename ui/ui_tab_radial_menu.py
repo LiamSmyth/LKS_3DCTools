@@ -21,9 +21,14 @@ from ui.radial_menu_editor import (
     MenuItemData, ActionPickerDialog, MenuItemEditorPanel,
     DEFAULT_CONFIG_PATH, COMMON_ICONS,
 )
+from utils.ui.widgets import SaveLoadLibrary
 
 import json
 from pathlib import Path
+
+# Library directory for radial menu presets
+_DATA_DIR: Path = Path(__file__).parent.parent / "data"
+_LIBRARY_DIR: Path = _DATA_DIR / "library" / "radial_menus"
 
 
 # =============================================================================
@@ -74,26 +79,32 @@ class RadialMenuEditorTab(QWidget):
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
 
-        # Toolbar
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(4)
+        # Save/Load/Library widget
+        self._save_load_widget = SaveLoadLibrary(
+            library_dir=_LIBRARY_DIR,
+            default_filename="radial_menu.json",
+            file_extension=".json",
+            on_save=self._save_to_path,
+            on_load=self._load_from_path,
+            log_success=self._log_success,
+            log_error=self._log_error,
+        )
+        self._save_load_widget.saved.connect(self._on_saved)
+        self._save_load_widget.loaded.connect(self._on_loaded)
+        main_layout.addWidget(self._save_load_widget)
 
-        self._save_btn = QPushButton("💾 Save")
-        self._save_btn.clicked.connect(self._save_config)
-        toolbar.addWidget(self._save_btn)
+        # Preview button
+        preview_row = QHBoxLayout()
+        preview_row.setSpacing(4)
 
-        self._reload_btn = QPushButton("🔄 Reload")
-        self._reload_btn.clicked.connect(lambda: self._load_config())
-        toolbar.addWidget(self._reload_btn)
-
-        toolbar.addStretch()
+        preview_row.addStretch()
 
         self._preview_btn = QPushButton("👁️ Preview")
         self._preview_btn.setToolTip("Preview current menu configuration")
         self._preview_btn.clicked.connect(self._preview_menu)
-        toolbar.addWidget(self._preview_btn)
+        preview_row.addWidget(self._preview_btn)
 
-        main_layout.addLayout(toolbar)
+        main_layout.addLayout(preview_row)
 
         # Main content: splitter with tree and editor
         splitter = QSplitter(Qt.Vertical)
@@ -149,27 +160,75 @@ class RadialMenuEditorTab(QWidget):
         splitter.setSizes([200, 150])
         main_layout.addWidget(splitter)
 
+        # Set initial path in SaveLoadLibrary widget
+        if self._config_path.exists():
+            is_library = self._config_path.parent == _LIBRARY_DIR
+            self._save_load_widget.set_current_path(
+                self._config_path, is_library)
+
+    def _save_to_path(self, path: Path) -> None:
+        """Save configuration to specified path (called by SaveLoadLibrary)."""
+        try:
+            items = []
+            for i in range(self._tree.topLevelItemCount()):
+                items.append(self._tree_item_to_data(
+                    self._tree.topLevelItem(i)))
+
+            config = {
+                "version": "1.0",
+                "items": [item.to_dict() for item in items]
+            }
+
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+
+            self._modified = False
+        except Exception as e:
+            raise RuntimeError(f"Save failed: {e}")
+
+    def _load_from_path(self, path: Path) -> None:
+        """Load configuration from specified path (called by SaveLoadLibrary)."""
+        if not path.exists():
+            raise FileNotFoundError(f"Config not found: {path}")
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            self._tree.clear()
+            items = config.get("items", [])
+            for item_data in items:
+                self._add_tree_item(MenuItemData.from_dict(item_data))
+
+            self._modified = False
+        except Exception as e:
+            raise RuntimeError(f"Load failed: {e}")
+
+    def _on_saved(self, path: Path) -> None:
+        """Handle successful save (update internal state)."""
+        self._config_path = path
+
+    def _on_loaded(self, path: Path) -> None:
+        """Handle successful load (update internal state)."""
+        self._config_path = path
+
     def _load_config(self, path: Path | None = None) -> None:
-        """Load configuration from JSON file."""
+        """Load configuration from JSON file (legacy method for initial load)."""
         if path is None:
             path = self._config_path
-
-        self._tree.clear()
 
         if not path.exists():
             self._log_error(f"Config not found: {path.name}")
             return
 
         try:
-            with open(path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-
-            items = config.get("items", [])
-            for item_data in items:
-                self._add_tree_item(MenuItemData.from_dict(item_data))
-
+            self._load_from_path(path)
             self._config_path = path
-            self._modified = False
+
+            # Update SaveLoadLibrary widget
+            is_library = path.parent == _LIBRARY_DIR
+            self._save_load_widget.set_current_path(path, is_library)
+
             self._log_success(f"Loaded: {path.name}")
         except Exception as e:
             self._log_error(f"Error loading: {e}")
@@ -198,26 +257,7 @@ class RadialMenuEditorTab(QWidget):
 
         return item
 
-    def _save_config(self) -> None:
-        """Save configuration to current path."""
-        try:
-            items = []
-            for i in range(self._tree.topLevelItemCount()):
-                items.append(self._tree_item_to_data(
-                    self._tree.topLevelItem(i)))
-
-            config = {
-                "version": "1.0",
-                "items": [item.to_dict() for item in items]
-            }
-
-            with open(self._config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=4, ensure_ascii=False)
-
-            self._modified = False
-            self._log_success(f"Saved: {self._config_path.name}")
-        except Exception as e:
-            self._log_error(f"Save failed: {e}")
+    # Note: _save_config removed - now handled by SaveLoadLibrary widget via _save_to_path
 
     def _tree_item_to_data(self, item: QTreeWidgetItem) -> MenuItemData:
         """Convert tree item back to MenuItemData."""

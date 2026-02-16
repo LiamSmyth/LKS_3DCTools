@@ -220,11 +220,13 @@ PySide6 widgets for the LKS panel.
 | File | Description |
 |------|-------------|
 | `styles.py` | Dark theme stylesheet with 20+ COLOR_* constants and f-string generation |
-| `ui_main.py` | Main panel window |
+| `ui_main.py` | Main panel window with tabs: Outliner, Tools, Radial, Hotkey, Dev |
 | `ui_tab_tools.py` | Tools tab with reorderable sections via GripBoxContainer |
-| `ui_tab_extension.py` | Extension tab (reload, register) |
 | `ui_tab_outliner.py` | Scene outliner (objects + layer stub) |
-| `ui_tab_radial_menu.py` | 🎯 Radial menu configuration editor tab |
+| `ui_tab_radial_menu.py` | Radial menu configuration editor tab with save/load/library |
+| `ui_tab_hotkey.py` | Hotkey editor tab (launches standalone editor, closes 3DCoat) |
+| `ui_tab_dev.py` | Dev tools tab (module reload, menu registration, extension info) |
+| `ui_tab_extension.py` | **DEPRECATED** - functionality moved to Hotkey and Dev tabs |
 | `ui_widget_sub_header.py` | Sub-header widget |
 | `radial_menu_editor.py` | Full radial menu editor window (standalone or tab use) |
 
@@ -262,12 +264,13 @@ Individual widget modules for better maintainability. Import from `utils.ui.widg
 | `grip_box_container.py` | GripBoxContainer - parent managing drag-drop reordering with live preview |
 | `radial_menu.py` | 🎯 Core radial tree menu widget with pie navigation and cursor line |
 | `radial_menu_manager.py` | RadialMenuManager singleton for showing/hiding menus globally |
+| `save_load_library.py` | SaveLoadLibrary - reusable save/load/library management widget |
 
 **Usage:**
 ```python
 from utils.ui.widgets import (
     CollapsibleSection, ButtonGrid, add_tooltip, ToolTip,
-    create_tab_with_revert, GripBoxContainer, GripBox
+    create_tab_with_revert, GripBoxContainer, GripBox, SaveLoadLibrary
 )
 
 # Tab with revert button
@@ -279,6 +282,16 @@ return tab.widget
 container = GripBoxContainer()
 container.add_widget(section1, state_key="section1")
 container.add_widget(section2, state_key="section2")
+
+# Save/Load/Library widget
+save_load = SaveLoadLibrary(
+    library_dir=Path("data/library/configs"),
+    default_filename="config.json",
+    on_save=lambda path: save_config(path),
+    on_load=lambda path: load_config(path),
+    log_success=log.log_success,
+    log_error=log.log_error,
+)
 ```
 
 ---

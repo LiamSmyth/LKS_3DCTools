@@ -5,11 +5,11 @@
         "children": [
             {
                 "label": "Decimate",
-                "action": "$DecimateToRetopo"
+                "action": "$Decimate"
             },
             {
                 "label": "Ghost",
-                "action": "$ToggleGhost"
+                "action": "$Toggle_ghosting"
             }
         ]
     }

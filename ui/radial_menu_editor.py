@@ -41,14 +41,15 @@ except ImportError:
 # CONSTANTS
 # =============================================================================
 
-# Default config path
+# Default config path (in data/state/ folder)
 _DATA_DIR: Path = Path(__file__).parent.parent / "data"
-DEFAULT_CONFIG_PATH: Path = _DATA_DIR / "radial_menu_config.json"
+_STATE_DIR: Path = _DATA_DIR / "state"
+DEFAULT_CONFIG_PATH: Path = _STATE_DIR / "radial_menu_config.json"
 
 # Common 3DCoat commands that users might want to map
 COMMON_3DCOAT_COMMANDS: list[tuple[str, str]] = [
     # Ghost/Visibility
-    ("$ToggleGhost", "Toggle Ghost (Native)"),
+    ("$Toggle_ghosting", "Toggle Ghost (Native)"),
     ("$HideObject", "Hide Object"),
     ("$ShowAllObjects", "Show All Objects"),
     ("$Isolate_ghosting", "Isolate Ghosting"),

@@ -131,7 +131,35 @@ class LKSMainPanel(QWidget):
         )
         self._tabs.add_tab("Tools", tools_tab)
 
-        # Extension Tab
+        # Radial Menu Tab (removed emoji)
+        from ui.ui_tab_radial_menu import create_radial_menu_tab
+        radial_tab = create_radial_menu_tab(
+            log_success=self._log.log_success,
+            log_error=self._log.log_error,
+        )
+        self._tabs.add_tab("Radial", radial_tab)
+
+        # Hotkey Tab (new)
+        from ui.ui_tab_hotkey import create_hotkey_tab
+        hotkey_tab = create_hotkey_tab(
+            log_success=self._log.log_success,
+            log_error=self._log.log_error,
+            log_info=self._log.log_info,
+            log_warn=self._log.log_warn,
+        )
+        self._tabs.add_tab("Hotkey", hotkey_tab)
+
+        # Dev Tab (new - combines module reload and menu registration)
+        from ui.ui_tab_dev import create_dev_tab
+        dev_tab = create_dev_tab(
+            log_success=self._log.log_success,
+            log_error=self._log.log_error,
+            log_info=self._log.log_info,
+            log_warn=self._log.log_warn,
+        )
+        self._tabs.add_tab("Dev", dev_tab)
+
+        # Extension Tab (legacy - kept for backwards compatibility)
         from ui.ui_tab_extension import create_extension_tab
         ext_tab = create_extension_tab(
             log_success=self._log.log_success,
@@ -139,15 +167,8 @@ class LKSMainPanel(QWidget):
             log_info=self._log.log_info,
             log_warn=self._log.log_warn,
         )
-        self._tabs.add_tab("Extension", ext_tab)
-
-        # Radial Menu Tab
-        from ui.ui_tab_radial_menu import create_radial_menu_tab
-        radial_tab = create_radial_menu_tab(
-            log_success=self._log.log_success,
-            log_error=self._log.log_error,
-        )
-        self._tabs.add_tab("🎯 Radial", radial_tab)
+        # Commenting out for now - content moved to Dev and Hotkey tabs
+        # self._tabs.add_tab("Extension", ext_tab)
 
     # =========================================================================
     # CALLBACKS

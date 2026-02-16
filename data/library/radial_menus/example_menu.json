@@ -1,0 +1,42 @@
+{
+    "version": "1.0",
+    "items": [
+        {
+            "label": "Example Menu",
+            "icon": "🎨",
+            "action": "",
+            "description": "Example radial menu with common 3DCoat commands",
+            "angle": null,
+            "children": [
+                {
+                    "label": "Smooth",
+                    "icon": "🌊",
+                    "action": "$SmoothSurface",
+                    "description": "Smooth current object",
+                    "angle": 0
+                },
+                {
+                    "label": "Decimate 50%",
+                    "icon": "🔻",
+                    "action": "actions/SculptObject_Decimate_Half_Selected.py",
+                    "description": "Decimate selected object to 50%",
+                    "angle": 90
+                },
+                {
+                    "label": "Ghost Toggle",
+                    "icon": "👻",
+                    "action": "actions/SculptObject_Ghost_Toggle_Subtree.py",
+                    "description": "Toggle ghost on subtree",
+                    "angle": 180
+                },
+                {
+                    "label": "Remesh",
+                    "icon": "🔄",
+                    "action": "$Remesh",
+                    "description": "Remesh current object",
+                    "angle": 270
+                }
+            ]
+        }
+    ]
+}
