@@ -96,7 +96,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 4. Click start to launch. Click `always on top` if you want it to be pinned to screen.
 ![Panel Window](./assets/2026-02-15_image-2.webp)
 5. Navigate to Tools tab for basic use
-   ![Tools Tab](./assets/2026-02-15_image-4.webp)
+![Tools Tab](./assets/2026-02-15_image-4.webp)
 
 ### Install Menu Items to enable Hotkeys
 ![Menu Registration](./assets/2026-02-15_image-3.webp)
