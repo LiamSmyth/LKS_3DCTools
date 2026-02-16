@@ -1,4 +1,4 @@
 {
   "decimate_reduction": 50,
-  "dev_mode": true
+  "dev_mode": false
 }

@@ -78,3 +78,13 @@ except Exception as e:
 #     traceback.print_exc()
 
 print("[LKS] Startup complete. Use panel buttons for menu registration.")
+
+# =============================================================================
+# FAST REIMPORT - Install MetaPathFinder for instant action script re-invocation
+# =============================================================================
+
+try:
+    from utils.fast_reimport import FastReimportFinder
+    FastReimportFinder.get_instance()
+except Exception as e:
+    print(f"[LKS] Warning: FastReimportFinder not installed: {e}")

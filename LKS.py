@@ -77,10 +77,24 @@ class LKSExtension(cPy.cCore.cExtension):
         # This allows action scripts to be re-executed on subsequent menu clicks
         import sys
         if hasattr(sys, '_lks_modules_to_clear') and sys._lks_modules_to_clear:
+            from utils.fast_reimport import FastReimportFinder
+            from utils.lks_settings import get_settings
+
+            finder: FastReimportFinder = FastReimportFinder.get_instance()
+            dev_mode: bool = get_settings().dev_mode
+
             for module_name in list(sys._lks_modules_to_clear):
                 if module_name in sys.modules:
+                    if not dev_mode:
+                        # Cache compiled code for instant reimport next press
+                        cached: bool = finder.cache_module(module_name)
+                        label: str = "cached+cleared" if cached else "cleared"
+                    else:
+                        # Dev mode: uncache so code changes are picked up
+                        finder.uncache_module(module_name)
+                        label = "cleared (dev)"
                     del sys.modules[module_name]
-                    print(f"[LKS] Cleared module cache: {module_name}")
+                    print(f"[LKS] {label}: {module_name}")
             sys._lks_modules_to_clear.clear()
 
     def onNew(self) -> None:
