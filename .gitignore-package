@@ -1,0 +1,16 @@
+# Package-specific exclusions for creating distribution archives
+# These patterns are used by package_release.py in addition to .gitignore and .gitignore-remote
+# Only include patterns NOT already covered by those files
+# Format: gitignore-style patterns
+
+# This file itself
+.gitignore-package
+
+# The packager script
+package_release.py
+
+# Git workflow automation scripts
+git_*.py
+
+# Assets folder (development resources not needed in distribution)
+assets/

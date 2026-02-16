@@ -117,16 +117,13 @@ def main() -> None:
     """CLI entry point for menu cleanup."""
     import sys
 
-    # Try to get path from coat module, fall back to hardcoded path
+    # Get path from coat module
     extra_menu_path: Path | None = get_extra_menu_items_path()
 
     if extra_menu_path is None:
-        # Fallback for running outside 3DCoat
-        fallback: str = r"C:\BTS_SSD\3DCoat_Userprefs_SSD_2025\MyDocuments\UserPrefs\Scripts\ExtraMenuItems"
-        extra_menu_path = Path(fallback)
-        if not extra_menu_path.exists():
-            print(f"Error: ExtraMenuItems folder not found at {fallback}")
-            sys.exit(1)
+        print("Error: Cannot locate ExtraMenuItems folder.")
+        print("This script must be run from within 3DCoat or with coat module available.")
+        sys.exit(1)
 
     files: list[Path] = find_lks_menu_files(extra_menu_path)
 
