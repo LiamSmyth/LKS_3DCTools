@@ -95,6 +95,7 @@ class RadialMenuEditorTab(QWidget):
             on_load=self._load_from_path,
             log_success=self._log_success,
             log_error=self._log_error,
+            before_load=self._confirm_before_load,
         )
         self._save_load_widget.saved.connect(self._on_saved)
         self._save_load_widget.loaded.connect(self._on_loaded)
@@ -226,6 +227,48 @@ class RadialMenuEditorTab(QWidget):
             is_library = self._config_path.parent == _LIBRARY_DIR
             self._save_load_widget.set_current_path(
                 self._config_path, is_library)
+
+    def _confirm_before_load(self) -> bool:
+        """
+        Guard callback invoked by SaveLoadLibrary before loading a new item.
+
+        Returns True to proceed with the load, False to cancel.
+        Prompts the user to save/discard unsaved changes when present.
+        """
+        if not self._modified:
+            return True
+
+        reply = QMessageBox.question(
+            self,
+            "Unsaved Changes",
+            "The current menu has unsaved changes.\n\n"
+            "Save before loading the new menu?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save,
+        )
+
+        if reply == QMessageBox.Cancel:
+            return False
+
+        if reply == QMessageBox.Save:
+            current_path = self._save_load_widget.get_current_path()
+            if current_path is None:
+                # No existing path – route via Save As (returns if user cancels there)
+                self._save_load_widget._on_save_as_clicked()
+                # If still modified, user cancelled the Save As dialog – abort load
+                if self._modified:
+                    return False
+            else:
+                try:
+                    self._save_to_path(current_path)
+                    self._save_load_widget.saved.emit(current_path)
+                except Exception as e:
+                    self._log_error(f"Auto-save failed: {e}")
+                    return False
+
+        # Discard or successful save – proceed
+        self._modified = False
+        return True
 
     def _save_to_path(self, path: Path) -> None:
         """Save configuration to specified path (called by SaveLoadLibrary)."""
@@ -553,7 +596,7 @@ class RadialMenuEditorTab(QWidget):
         """Unregister all radial menus."""
         try:
             from PySide6.QtWidgets import QMessageBox
-            
+
             # Confirmation dialog
             reply = QMessageBox.question(
                 self,

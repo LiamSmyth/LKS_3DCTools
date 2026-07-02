@@ -1,7 +1,8 @@
 """
-SculptObject_VoxBool Operator
+SculptObject_NewVoxBool Operator
 
-Create live boolean children for sculpt objects.
+Create a NEW voxel boolean child object under the selected sculpt object.
+This clones the parent, parents the clone under it and assigns a live boolean mode.
 
 Supports subtract, intersect, and union boolean operations.
 Handles voxelization of parent and proper ordering of operations
@@ -10,7 +11,6 @@ to prevent crashes (extrusion before boolean mode for intersect).
 Uses scope resolution to determine parent element.
 """
 import coat
-from enum import Enum
 from utils.scene_api import SceneAPI
 from utils.SceneElement_boolean_utils import (
     create_boolean_child, BooleanMode
@@ -25,6 +25,7 @@ from utils.coat_ui_utils import wait_frames, show_message, show_error
 
 DEFAULT_MIN_POLYCOUNT: int = 50000
 DEFAULT_WAIT_FRAMES: int = 4
+DEFAULT_EXTRUSION: float = 1.0
 
 
 # =============================================================================
@@ -33,16 +34,19 @@ DEFAULT_WAIT_FRAMES: int = 4
 
 def main(
     mode: BooleanMode = BooleanMode.SUBTRACT,
-    extrusion_amount: float = 0.2,
+    extrusion_amount: float = DEFAULT_EXTRUSION,
     min_voxel_polycount: int = DEFAULT_MIN_POLYCOUNT,
 ) -> coat.SceneElement | None:
     """
-    Create a live boolean child for the current element.
+    Create a NEW voxel boolean child for the current element.
+
+    Clones the selected object, parents the clone under it and assigns
+    the requested live boolean mode. Parent is voxelised first if needed.
 
     Args:
         mode: The boolean mode (SUBTRACT, INTERSECT, UNION)
         extrusion_amount: Extrusion amount for INTERSECT mode
-        min_voxel_polycount: Minimum polycount when voxelizing parent
+        min_voxel_polycount: Minimum polycount when voxelising parent
 
     Returns:
         The created child element, or None if failed
@@ -99,7 +103,7 @@ def subtract() -> coat.SceneElement | None:
     return main(mode=BooleanMode.SUBTRACT)
 
 
-def intersect(extrusion: float = 0.2) -> coat.SceneElement | None:
+def intersect(extrusion: float = DEFAULT_EXTRUSION) -> coat.SceneElement | None:
     """Create an intersect boolean child with extrusion."""
     return main(mode=BooleanMode.INTERSECT, extrusion_amount=extrusion)
 

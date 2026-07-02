@@ -57,8 +57,8 @@ def create_subdiv_section(
             from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
             from utils.lks_settings import get_brush_settings, save_brush_settings
             settings = get_brush_settings()
-            new_level: float = min(8.0, settings.details_level + 1.0)
-            settings.details_level = int(new_level)
+            new_level: float = min(8.0, settings.details_level + 0.5)
+            settings.details_level = new_level
             settings.auto_subdivide = True
             save_brush_settings()
             apply_auto_subdivide_all(True)
@@ -72,8 +72,8 @@ def create_subdiv_section(
             from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
             from utils.lks_settings import get_brush_settings, save_brush_settings
             settings = get_brush_settings()
-            new_level: float = max(0.0, settings.details_level - 1.0)
-            settings.details_level = int(new_level)
+            new_level: float = max(-1.0, settings.details_level - 0.5)
+            settings.details_level = new_level
             settings.auto_subdivide = True
             save_brush_settings()
             apply_auto_subdivide_all(True)

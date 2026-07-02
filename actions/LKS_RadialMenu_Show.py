@@ -43,7 +43,7 @@ def main() -> None:
 
     # Show menu at cursor position
     manager = get_manager()
-    manager.show_menu(items)
+    manager.show_menu(items, action_id="LKS_RadialMenu_Show")
     _t5: float = _time.monotonic()
 
     print(f"[RadialMenu] Timing: settings={(_t1-_t0)*1000:.0f}ms, "

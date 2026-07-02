@@ -18,6 +18,8 @@ try:
 except ImportError:
     HAS_QT = False
 
+from .dwell_progress_node import DwellProgressNode
+
 # Try to import colors from LKS styles
 try:
     from utils.ui.styles import (
@@ -47,22 +49,36 @@ DEBUG_PIZZA_SLICE: bool = False
 # Pixels - no selection within this radius (~50% to nodes)
 DEAD_ZONE_RADIUS: int = 75
 MENU_RADIUS: int = 150              # Pixels - distance from anchor to item centers
-# Pixels - hover detection radius for branches/exit
-BRANCH_HOVER_RADIUS: int = 20
 # Milliseconds - dwell time before submenu entry/exit
 BRANCH_DWELL_MS: int = 250
 HIGHLIGHT_SCALE: float = 1.15       # Scale factor for highlighted nodes
 # Pixels - extra margin around menu radius for widget size
 MENU_WIDGET_MARGIN: int = 100
 
-# Minimum time (ms) before key release can close the menu
-# Prevents instant close from stray events during show/grab transition
-MIN_SHOW_MS: float = 50.0
+# Milliseconds - allow very fast flicks to settle after show if the key was
+# already released before the popup fully appeared.
+FLICK_CONFIRM_TIMEOUT_MS: float = 120.0
 
-# Auto-repeat timeout (ms): if no key event arrives within this window
-# after seeing auto-repeat, assume key was released.
-# OS auto-repeat is typically every 30-50ms; 100ms gives generous margin.
-AUTO_REPEAT_TIMEOUT_MS: float = 100.0
+# ---- Branch / Exit node geometry (UNIFIED) ----------------------------------
+# Branch nodes (open submenu) and exit nodes (close submenu) share identical
+# circle geometry so their visual + hover regions can never drift. This avoids
+# back-and-forth bouncing when a user grazes the boundary of one but not the
+# other during submenu transitions.
+BRANCH_NODE_RADIUS: int = 20        # Visible circle radius for both
+EXIT_NODE_RADIUS: int = BRANCH_NODE_RADIUS  # Alias kept for readability
+# Hover detection radius == visible radius (guaranteed equal).
+BRANCH_HOVER_RADIUS: int = BRANCH_NODE_RADIUS
+# Hysteresis margin: once a node is the active hover target, the cursor must
+# move BRANCH_HOVER_HYSTERESIS_PX past the visible edge before hover is lost.
+# Prevents flicker / repeated dwell timer restarts at the boundary.
+BRANCH_HOVER_HYSTERESIS_PX: int = 6
+
+# Spawn-item exit buffer: when a menu opens with the cursor already over a
+# branch/exit node (e.g. the exit node right after entering a submenu),
+# dwell on that node is suppressed until the cursor moves at least this
+# many pixels past its outer edge. Prevents micro-jitter from bouncing the
+# user back out of a submenu they just entered.
+SPAWN_EXIT_BUFFER_PX: int = 18
 
 # No-repeat fallback (ms): if this long after show_at() we still haven't
 # received ANY key event (no keyPress, no keyRelease, no auto-repeat),
@@ -70,12 +86,7 @@ AUTO_REPEAT_TIMEOUT_MS: float = 100.0
 # OS repeat delay is typically 250-500ms; 600ms gives generous margin.
 NO_REPEAT_RELEASE_MS: float = 600.0
 
-# Exit node appearance
-EXIT_NODE_RADIUS: int = 20          # Pixels - size of exit node circle
 EXIT_ICON_FONT_SIZE: int = 7        # Font size for exit icon (✕)
-
-# Branch node appearance (matches exit node size for consistency)
-BRANCH_NODE_RADIUS: int = 20        # Pixels - same as EXIT_NODE_RADIUS
 BRANCH_DOT_RADIUS: int = 3          # Pixels - center dot size
 BRANCH_LABEL_OFFSET: int = 25       # Pixels - distance of label above circle
 BRANCH_LABEL_FONT_SIZE: int = 9     # Font size for branch label
@@ -506,20 +517,31 @@ if HAS_QT:
             self._dwell_timer: QTimer = QTimer(self)
             self._dwell_timer.setSingleShot(True)
             self._dwell_timer.timeout.connect(self._on_dwell_timeout)
+            # Timestamp (monotonic seconds) when the current dwell started.
+            # 0.0 means no dwell in progress. Used to drive the dwell-fill
+            # animation in paint() so the visual progress maps 1:1 to the
+            # actual timer.
+            self._dwell_start_time: float = 0.0
 
             # Hover debounce: track if cursor spawned on top of a node
             self._cursor_has_left_spawn_item: bool = True  # Start True for root menu
+            # The specific item the cursor was sitting on when this menu
+            # appeared (e.g. the new exit node after entering a submenu).
+            # Dwell on this item is blocked until the cursor moves a
+            # generous distance away from it — preventing the auto-bounce
+            # back into the parent menu when the user is just holding
+            # still over the branch they intentionally entered.
+            self._spawn_item: RadialMenuItem | None = None
             # Track label of branch we exited from
             self._just_exited_from_label: str | None = None
 
             # Key release tracking
             self._keys_currently_pressed: set[int] = set()
             self._trigger_keycode: int | None = None  # Qt keycode for the trigger key
-            # Time-based guard: don't close for first N ms after show
+            self._trigger_vk: int | None = None       # Win32 virtual-key for polling
             self._show_time: float = 0.0
-            # Auto-repeat timeout: track last key event to detect release
-            self._last_key_event_time: float = 0.0
-            self._seen_auto_repeat: bool = False
+            self._flick_mode: bool = False
+            self._flick_deadline: float = 0.0
 
             # Cursor tracking for drawing live cursor line
             self._last_cursor_widget_pos: QPointF | None = None
@@ -533,6 +555,18 @@ if HAS_QT:
             self._leaf_angles: list[float] = []
             self._slice_boundaries: list[tuple[float, float]] = []
             self._node_angles: list[float] = []
+
+            # Shared paint helper for branch + exit nodes. Using one renderer
+            # instance for both guarantees identical visual geometry.
+            self._dwell_node_renderer: DwellProgressNode = DwellProgressNode(
+                outer_radius=float(BRANCH_NODE_RADIUS),
+                border_color=COLOR_BORDER,
+                border_color_active=COLOR_ACCENT,
+                bg_color=COLOR_BG_PRIMARY,
+                fill_color=COLOR_ACCENT,
+                icon_color=COLOR_TEXT_MUTED,
+                icon_color_active=COLOR_ACCENT,
+            )
 
             # Animation state
             self._anim_start_time: float = 0.0  # Timestamp when animation started
@@ -583,13 +617,21 @@ if HAS_QT:
                 branch_dwell_ms: Dwell time in milliseconds
             """
             global DEAD_ZONE_RADIUS, MENU_RADIUS, BRANCH_HOVER_RADIUS, BRANCH_DWELL_MS
+            global BRANCH_NODE_RADIUS, EXIT_NODE_RADIUS
 
             if dead_zone_radius is not None:
                 DEAD_ZONE_RADIUS = dead_zone_radius
             if menu_radius is not None:
                 MENU_RADIUS = menu_radius
             if branch_hover_radius is not None:
+                # Keep visual + hover + renderer locked together so they
+                # cannot drift and cause hover/visual mismatches.
                 BRANCH_HOVER_RADIUS = branch_hover_radius
+                BRANCH_NODE_RADIUS = branch_hover_radius
+                EXIT_NODE_RADIUS = branch_hover_radius
+                if hasattr(self, "_dwell_node_renderer"):
+                    self._dwell_node_renderer.outer_radius = float(
+                        branch_hover_radius)
             if branch_dwell_ms is not None:
                 BRANCH_DWELL_MS = branch_dwell_ms
 
@@ -608,7 +650,10 @@ if HAS_QT:
             Args:
                 keycode: Qt keycode (e.g., Qt.Key_X), or None for fallback behavior
             """
+            from utils.win32_key_state import qt_key_to_vk
+
             self._trigger_keycode = keycode
+            self._trigger_vk = qt_key_to_vk(keycode)
 
         def _recalculate_geometry(self) -> None:
             """Recalculate node positions and slice boundaries."""
@@ -643,15 +688,26 @@ if HAS_QT:
 
             # Reset key press state for new menu invocation
             import time as _time
+            from utils.win32_key_state import is_vk_down
+
             self._keys_currently_pressed.clear()
             self._show_time = _time.monotonic()
-            self._last_key_event_time = self._show_time
-            self._seen_auto_repeat = False
+            self._flick_mode = False
+            self._flick_deadline = 0.0
+
+            if self._trigger_vk is not None and not is_vk_down(self._trigger_vk):
+                self._flick_mode = True
+                self._flick_deadline = self._show_time + \
+                    (FLICK_CONFIRM_TIMEOUT_MS / 1000.0)
+
             print(
-                f"[RadialMenu] show_at: trigger=0x{self._trigger_keycode:04X}" if self._trigger_keycode else "[RadialMenu] show_at: trigger=None")
+                f"[RadialMenu] show_at: trigger=0x{self._trigger_keycode:04X}, flick_mode={self._flick_mode}"
+                if self._trigger_keycode else
+                f"[RadialMenu] show_at: trigger=None, flick_mode={self._flick_mode}"
+            )
 
             # Start animation
-            self._anim_start_time = _time.monotonic()
+            self._anim_start_time = self._show_time
             self._anim_active = True
 
             # Reset branch transition (new menu opened)
@@ -677,10 +733,12 @@ if HAS_QT:
             # Start cursor polling timer for smooth cursor line updates
             self._cursor_poll_timer.start()
 
-            # Initialize cursor position
+            # Initialize cursor position and highlight immediately so
+            # very fast flicks can resolve before the first poll tick.
             from PySide6.QtGui import QCursor
-            cursor_widget = self.mapFromGlobal(QCursor.pos())
-            self._last_cursor_widget_pos = QPointF(cursor_widget)
+            cursor_screen = QCursor.pos()
+            cursor_widget = self.mapFromGlobal(cursor_screen)
+            self._update_cursor_state(cursor_screen, QPointF(cursor_widget))
 
             self.update()
 
@@ -709,8 +767,32 @@ if HAS_QT:
         # Phase 2: Tree Navigation Methods
         # ---------------------------------------------------------------------
 
+        def _get_item_widget_pos(self, item: RadialMenuItem) -> QPointF | None:
+            """
+            Return the widget-coordinate center of ``item`` (or None).
+
+            Exit nodes are at widget center; branches are at MENU_RADIUS
+            along their assigned angle.
+            """
+            center = QPointF(self.width() / 2, self.height() / 2)
+            if item.is_exit:
+                return center
+            try:
+                idx = self._items.index(item)
+                angle = self._node_angles[idx]
+            except (ValueError, IndexError):
+                return None
+            return get_node_position(angle, MENU_RADIUS, center)
+
         def _is_cursor_over_branch(self, cursor: QPoint, branch_item: RadialMenuItem) -> bool:
-            """Check if cursor is within hover radius of a branch or exit node."""
+            """
+            Check if cursor is within hover radius of a branch or exit node.
+
+            Applies hysteresis when ``branch_item`` is already the active
+            hover target: the effective radius is expanded by
+            BRANCH_HOVER_HYSTERESIS_PX so cursor jitter at the boundary cannot
+            cause the dwell timer to restart / cancel repeatedly.
+            """
             if not (branch_item.is_branch or branch_item.is_exit):
                 return False
 
@@ -737,17 +819,26 @@ if HAS_QT:
             dy = cursor_widget.y() - branch_pos.y()
             dist_sq = dx * dx + dy * dy
 
-            return dist_sq <= (BRANCH_HOVER_RADIUS * BRANCH_HOVER_RADIUS)
+            # Hysteresis: expand effective radius if this is the currently
+            # hovered item, so we "stick" to it.
+            effective_radius: float = float(BRANCH_HOVER_RADIUS)
+            if branch_item is self._hovered_branch_item:
+                effective_radius += BRANCH_HOVER_HYSTERESIS_PX
+
+            return dist_sq <= (effective_radius * effective_radius)
 
         def _start_dwell_timer(self, branch_item: RadialMenuItem) -> None:
             """Start dwell timer to enter submenu after delay."""
+            import time as _time
             self._hovered_branch_item = branch_item
+            self._dwell_start_time = _time.monotonic()
             self._dwell_timer.start(BRANCH_DWELL_MS)
             self.update()  # Repaint to show highlight
 
         def _cancel_dwell_timer(self) -> None:
             """Cancel dwell timer when cursor leaves branch hover region."""
             self._dwell_timer.stop()
+            self._dwell_start_time = 0.0
             # Note: Don't clear _hovered_branch_item here - let caller decide
             # This allows exit nodes to remain highlighted during activation
 
@@ -821,6 +912,11 @@ if HAS_QT:
             exit_node = self._create_exit_node()
             # Exit node stays at center (no angle needed)
 
+            # The newly-created exit node is the spawn item for this submenu:
+            # the cursor sits on top of it the moment we open and must move
+            # SPAWN_EXIT_BUFFER_PX past its outer edge before dwell is allowed.
+            self._spawn_item = exit_node
+
             # Set new items from branch children + exit node
             self._items = [exit_node] + list(branch_item.children)
             self._highlighted_leaf_index = None
@@ -882,6 +978,20 @@ if HAS_QT:
 
             # Can interact with other items immediately
             self._cursor_has_left_spawn_item = True
+
+            # The branch the cursor is sitting on (the one we exited back into)
+            # is the spawn item for this restored menu — block its dwell until
+            # the cursor moves clear of it. _just_exited_from_label provides
+            # an additional label-based block as a belt-and-braces measure.
+            self._spawn_item = None
+            if exited_branch_label is not None:
+                for parent_item in self._items:
+                    if (
+                        parent_item.is_branch
+                        and parent_item.label == exited_branch_label
+                    ):
+                        self._spawn_item = parent_item
+                        break
 
             # Stop any ongoing dwell timer from child menu
             self._cancel_dwell_timer()
@@ -1070,37 +1180,25 @@ if HAS_QT:
 
                 # Branch nodes get special rendering as circles (matching exit nodes)
                 if item.is_branch:
-                    # Draw branch node as a circle (same size as exit node)
-                    branch_radius = BRANCH_NODE_RADIUS * scale
-                    if is_highlighted:
-                        painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
-                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
-                    else:
-                        painter.setPen(QPen(QColor(COLOR_BORDER), 2))
-                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
-                    painter.drawEllipse(pos, branch_radius, branch_radius)
+                    # Unified circle render via DwellProgressNode so visual
+                    # geometry matches hover detection geometry exactly.
+                    icon_font = QFont(
+                        "Arial", EXIT_ICON_FONT_SIZE,
+                        QFont.Bold if is_highlighted else QFont.Normal,
+                    ) if item.icon else None
+                    self._dwell_node_renderer.paint(
+                        painter,
+                        pos,
+                        progress=self._get_dwell_progress(item),
+                        highlighted=is_highlighted,
+                        scale=scale,
+                        icon=item.icon,
+                        icon_font=icon_font,
+                        center_dot_radius=(
+                            0.0 if item.icon else float(BRANCH_DOT_RADIUS)),
+                    )
 
-                    # Draw icon in center if present, otherwise draw center dot
-                    if item.icon:
-                        # Draw icon in center (similar to exit node)
-                        icon_font = QFont("Arial", EXIT_ICON_FONT_SIZE,
-                                          QFont.Bold if is_highlighted else QFont.Normal)
-                        painter.setFont(icon_font)
-                        painter.setPen(
-                            QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED))
-                        text_rect = QRectF(pos.x() - branch_radius, pos.y() - branch_radius,
-                                           branch_radius * 2, branch_radius * 2)
-                        painter.drawText(text_rect, Qt.AlignCenter, item.icon)
-                    else:
-                        # Draw center dot if no icon
-                        painter.setPen(Qt.NoPen)
-                        painter.setBrush(QBrush(
-                            QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED)))
-                        painter.drawEllipse(
-                            pos, BRANCH_DOT_RADIUS, BRANCH_DOT_RADIUS)
-
-                    # Draw label above circle (without icon - icon is in circle now)
-                    # Always bold for better visibility with outline
+                    # Draw label above circle (always bold + outlined)
                     label_font = QFont(
                         "Arial", BRANCH_LABEL_FONT_SIZE, QFont.Bold)
                     painter.setFont(label_font)
@@ -1115,26 +1213,20 @@ if HAS_QT:
 
                 # Exit nodes get special rendering as a circle at center
                 if item.is_exit:
-                    # Draw exit node as a circle (not squircle)
-                    exit_radius = EXIT_NODE_RADIUS * scale
-                    if is_highlighted:
-                        painter.setPen(QPen(QColor(COLOR_ACCENT), 3))
-                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
-                    else:
-                        painter.setPen(QPen(QColor(COLOR_BORDER), 2))
-                        painter.setBrush(QBrush(QColor(COLOR_BG_PRIMARY)))
-                    painter.drawEllipse(pos, exit_radius, exit_radius)
-
-                    # Draw X icon in center
-                    font = QFont("Arial", EXIT_ICON_FONT_SIZE,
-                                 QFont.Bold if is_highlighted else QFont.Normal)
-                    painter.setFont(font)
-                    painter.setPen(
-                        QColor(COLOR_ACCENT if is_highlighted else COLOR_TEXT_MUTED))
-                    text_rect = QRectF(pos.x() - exit_radius, pos.y() - exit_radius,
-                                       exit_radius * 2, exit_radius * 2)
-                    painter.drawText(text_rect, Qt.AlignCenter,
-                                     item.icon if item.icon else "✕")
+                    icon_glyph = item.icon if item.icon else "✕"
+                    icon_font = QFont(
+                        "Arial", EXIT_ICON_FONT_SIZE,
+                        QFont.Bold if is_highlighted else QFont.Normal,
+                    )
+                    self._dwell_node_renderer.paint(
+                        painter,
+                        pos,
+                        progress=self._get_dwell_progress(item),
+                        highlighted=is_highlighted,
+                        scale=scale,
+                        icon=icon_glyph,
+                        icon_font=icon_font,
+                    )
                     painter.restore()  # Restore opacity
                     continue  # Skip normal squircle rendering
 
@@ -1264,6 +1356,24 @@ if HAS_QT:
             progress = elapsed_ms / ANIM_DURATION_MS
             return min(1.0, progress)
 
+        def _get_dwell_progress(self, item: RadialMenuItem) -> float:
+            """
+            Return dwell progress 0.0 → 1.0 for ``item``.
+
+            Mirrors the underlying QTimer 1:1 — when this returns 1.0 the
+            timeout has fired (or is firing this same frame). Returns 0.0 for
+            any item that is not the current dwell target.
+            """
+            if (
+                self._hovered_branch_item is not item
+                or self._dwell_start_time <= 0.0
+                or BRANCH_DWELL_MS <= 0
+            ):
+                return 0.0
+            import time as _time
+            elapsed_ms = (_time.monotonic() - self._dwell_start_time) * 1000.0
+            return max(0.0, min(1.0, elapsed_ms / BRANCH_DWELL_MS))
+
         def _get_highlight_anim_progress(self) -> float:
             """Get current highlight animation progress (0.0 to 1.0)."""
             if not self._highlight_anim_active:
@@ -1325,24 +1435,20 @@ if HAS_QT:
             return 1.0 - pow(1.0 - t, 3)
 
         def _poll_cursor(self) -> None:
-            """Poll cursor position every frame for smooth cursor line updates.
-
-            Called by timer since mouseMoveEvent may not fire when cursor
-            moves over transparent areas or during 3DCoat viewport interactions.
-
-            Also checks if all keys have been released and closes menu when they are.
-            """
+            """Poll cursor position every frame for smooth cursor line updates."""
             if not self.isVisible() or not self._anchor:
                 return
 
+            import time as _time
             from PySide6.QtGui import QCursor
+            from utils.win32_key_state import is_vk_down
 
             # Get global cursor position
             cursor_screen = QCursor.pos()
 
             # Convert to widget coordinates
             cursor_widget = self.mapFromGlobal(cursor_screen)
-            self._last_cursor_widget_pos = QPointF(cursor_widget)
+            self._update_cursor_state(cursor_screen, QPointF(cursor_widget))
 
             # Update animations and request repaint if any are active
             any_anim_active = False
@@ -1368,92 +1474,77 @@ if HAS_QT:
                 else:
                     any_anim_active = True
 
-            if any_anim_active:
-                self.update()  # Trigger repaint for animation frame
+            if self._flick_mode:
+                if self._highlighted_leaf_index is not None:
+                    self.hide_and_invoke()
+                    return
+                if _time.monotonic() >= self._flick_deadline:
+                    self.hide_and_invoke()
+                    return
+            elif self._trigger_vk is not None and not is_vk_down(self._trigger_vk):
+                self.hide_and_invoke()
+                return
 
-            # Auto-repeat timeout: detect key release by absence of key events
-            # Once we've seen auto-repeat events, if they stop arriving for
-            # AUTO_REPEAT_TIMEOUT_MS, the key was released.
-            if self._seen_auto_repeat:
-                import time as _time
-                since_last_key: float = (
-                    _time.monotonic() - self._last_key_event_time) * 1000
-                if since_last_key >= AUTO_REPEAT_TIMEOUT_MS:
-                    elapsed_ms: float = (
-                        _time.monotonic() - self._show_time) * 1000
-                    print(f"[RadialMenu] Auto-repeat timeout: {since_last_key:.0f}ms "
-                          f"since last key event, closing (elapsed={elapsed_ms:.0f}ms)")
-                    self.hide_and_invoke()
-                    return
-            else:
-                # No-repeat fallback: if enough time passed without ANY key
-                # event (no press, no release, no auto-repeat), the key was
-                # likely tapped and released before the OS repeat delay kicked
-                # in. In 3DCoat's embedded Qt, the initial keyDown goes to
-                # 3DCoat (which triggers the script), and if the key is
-                # released before auto-repeat starts, keyReleaseEvent may
-                # never fire either. This fallback catches that case.
-                import time as _time
-                elapsed_ms: float = (
-                    _time.monotonic() - self._show_time) * 1000
-                if elapsed_ms >= NO_REPEAT_RELEASE_MS:
-                    print(f"[RadialMenu] No-repeat fallback: {elapsed_ms:.0f}ms "
-                          f"elapsed with no key events, assuming key released")
-                    self.hide_and_invoke()
-                    return
+            if any_anim_active:
+                self.update()
 
             # Trigger repaint to update cursor line
             self.update()
 
-        def mouseMoveEvent(self, event):
-            """Track cursor position and update highlighting."""
-            if not self._anchor:
-                super().mouseMoveEvent(event)
-                return
+        def _update_cursor_state(self, cursor_screen: QPoint, cursor_widget: QPointF) -> None:
+            """Update branch hover and highlighted leaf from the current cursor."""
+            self._last_cursor_widget_pos = QPointF(cursor_widget)
 
-            # Convert to screen coordinates (use position() instead of deprecated pos())
-            cursor_screen = self.mapToGlobal(event.position().toPoint())
-
-            # Track cursor position in widget coords for drawing the live cursor line
-            self._last_cursor_widget_pos = QPointF(event.position())
-
-            # Phase 2: Check for branch or exit node hover
             hovered_branch: RadialMenuItem | None = None
-            for item in self._items:
-                # Branch nodes and exit nodes both require dwell
-                if (item.is_branch or item.is_exit) and self._is_cursor_over_branch(cursor_screen, item):
-                    hovered_branch = item
-                    break
+            # Check the currently-hovered item FIRST so hysteresis can keep
+            # us locked to it through tiny boundary jitter. Only if it has
+            # truly left (incl. hysteresis margin) do we look elsewhere.
+            if self._hovered_branch_item is not None:
+                if self._is_cursor_over_branch(cursor_screen, self._hovered_branch_item):
+                    hovered_branch = self._hovered_branch_item
+            if hovered_branch is None:
+                for item in self._items:
+                    if item is self._hovered_branch_item:
+                        continue  # already tested above
+                    if (item.is_branch or item.is_exit) and self._is_cursor_over_branch(cursor_screen, item):
+                        hovered_branch = item
+                        break
 
-            # Hover debounce: track if cursor has left the spawn item
             if not hovered_branch and not self._cursor_has_left_spawn_item:
-                # Cursor left the item we spawned on top of
                 self._cursor_has_left_spawn_item = True
 
-            # Clear just-exited tracking when cursor leaves that item
+            # Distance-based spawn-item release: once the cursor has moved
+            # clear of the spawn item's outer edge by SPAWN_EXIT_BUFFER_PX,
+            # we consider it "left" and dwell on that item is unblocked.
+            # This is robust against per-frame jitter at the boundary, which
+            # the simple "is cursor over branch?" check is not.
+            if self._spawn_item is not None:
+                spawn_pos = self._get_item_widget_pos(self._spawn_item)
+                if spawn_pos is not None:
+                    dx = cursor_widget.x() - spawn_pos.x()
+                    dy = cursor_widget.y() - spawn_pos.y()
+                    release_radius = BRANCH_NODE_RADIUS + SPAWN_EXIT_BUFFER_PX
+                    if (dx * dx + dy * dy) > (release_radius * release_radius):
+                        self._spawn_item = None
+
             if self._just_exited_from_label and (not hovered_branch or hovered_branch.label != self._just_exited_from_label):
                 self._just_exited_from_label = None
 
-            # Handle dwell timer state
             if hovered_branch:
-                # Check if this is the item we just exited from - needs debounce
-                if self._just_exited_from_label and hovered_branch.label == self._just_exited_from_label:
-                    # Don't trigger until cursor leaves and comes back
+                # Block dwell while cursor still sits on the spawn item
+                # (e.g. the new exit node right after entering a submenu, or
+                # the parent branch right after exiting back to it).
+                if hovered_branch is self._spawn_item:
                     pass
-                # Only start dwell if cursor has left spawn item at least once
-                elif self._cursor_has_left_spawn_item:
-                    # Start or continue dwell timer
-                    if self._hovered_branch_item != hovered_branch:
-                        self._start_dwell_timer(hovered_branch)
-                # else: cursor still on spawn item, ignore hover
-            else:
-                # Cancel dwell timer if cursor left branch region
-                if self._hovered_branch_item is not None:
-                    self._cancel_dwell_timer()
-                    self._hovered_branch_item = None  # Clear hover state
-                    self.update()  # Repaint to remove highlight
+                elif self._just_exited_from_label and hovered_branch.label == self._just_exited_from_label:
+                    pass
+                elif self._cursor_has_left_spawn_item and self._hovered_branch_item != hovered_branch:
+                    self._start_dwell_timer(hovered_branch)
+            elif self._hovered_branch_item is not None:
+                self._cancel_dwell_timer()
+                self._hovered_branch_item = None
+                self.update()
 
-            # Get highlighted leaf (only if not hovering over branch/exit and we have leaves)
             old_highlight = self._highlighted_leaf_index
             if not hovered_branch and self._leaf_angles:
                 self._highlighted_leaf_index = get_highlighted_leaf(
@@ -1463,89 +1554,54 @@ if HAS_QT:
                     self._slice_boundaries,
                 )
             else:
-                # Don't highlight leaves when hovering over branch/exit or no leaves exist
                 self._highlighted_leaf_index = None
 
-            # Emit signal and repaint if changed
             if old_highlight != self._highlighted_leaf_index:
                 if self._highlighted_leaf_index is not None:
                     self.highlightChanged.emit(self._highlighted_leaf_index)
 
-                # Start highlight animation transition
                 import time as _time
                 self._highlight_anim_start = _time.monotonic()
                 self._highlight_anim_active = True
                 self._prev_highlighted_index = old_highlight
-
                 self.update()
 
+        def mouseMoveEvent(self, event):
+            """Track cursor position and update highlighting."""
+            if not self._anchor:
+                super().mouseMoveEvent(event)
+                return
+
+            cursor_screen = self.mapToGlobal(event.position().toPoint())
+            self._update_cursor_state(cursor_screen, QPointF(event.position()))
             super().mouseMoveEvent(event)
 
         def keyReleaseEvent(self, event):
-            """
-            Handle key release events.
-
-            Close menu on key release if past minimum show time.
-            Note: In 3DCoat's embedded Qt, this may never fire for the
-            trigger key. Auto-repeat timeout in _poll_cursor is the
-            primary detection mechanism.
-            """
-            # Ignore auto-repeat key events
+            """Handle key release events."""
             if event.isAutoRepeat():
                 return
 
-            import time as _time
             key: int = event.key()
-            elapsed_ms: float = (_time.monotonic() - self._show_time) * 1000
-
-            # Debug: log every key release
-            trigger_str: str = f"0x{self._trigger_keycode:04X}" if self._trigger_keycode else "None"
-            print(f"[RadialMenu] KEY_RELEASE: key=0x{key:04X}, "
-                  f"trigger={trigger_str}, elapsed={elapsed_ms:.0f}ms, "
-                  f"pressed={self._keys_currently_pressed}")
-
-            # Update timing
-            self._last_key_event_time = _time.monotonic()
-
-            # Remove from pressed keys set
             if key in self._keys_currently_pressed:
                 self._keys_currently_pressed.remove(key)
 
-            # Close if past minimum show time (prevents instant close from stray events)
-            if elapsed_ms >= MIN_SHOW_MS:
-                print(
-                    f"[RadialMenu] Closing on key release after {elapsed_ms:.0f}ms")
+            if self._trigger_keycode is not None and key == self._trigger_keycode:
+                from PySide6.QtGui import QCursor
+
+                cursor_screen = QCursor.pos()
+                cursor_widget = self.mapFromGlobal(cursor_screen)
+                self._update_cursor_state(
+                    cursor_screen, QPointF(cursor_widget))
                 self.hide_and_invoke()
-            else:
-                print(
-                    f"[RadialMenu] Ignoring release, too soon ({elapsed_ms:.0f}ms < {MIN_SHOW_MS}ms)")
 
         def keyPressEvent(self, event):
             """Handle key press events."""
-            import time as _time
-            key: int = event.key()
-            is_auto: bool = event.isAutoRepeat()
-
-            # Update timing for ALL key events (including auto-repeat)
-            self._last_key_event_time = _time.monotonic()
-
-            # Track auto-repeat detection
-            if is_auto:
-                if not self._seen_auto_repeat:
-                    self._seen_auto_repeat = True
-                    print(f"[RadialMenu] First auto-repeat detected for key=0x{key:04X}, "
-                          f"enabling release-by-timeout detection")
-                # Don't track auto-repeat in pressed set, but DO update timing
+            if event.isAutoRepeat():
                 return
 
-            # Debug: log non-auto-repeat key presses
-            print(f"[RadialMenu] KEY_PRESS: key=0x{key:04X}, "
-                  f"pressed={self._keys_currently_pressed}")
-
-            # Track pressed keys
+            key: int = event.key()
             self._keys_currently_pressed.add(key)
 
-            # Escape always closes immediately
             if key == Qt.Key_Escape:
                 self._cursor_poll_timer.stop()
                 self.releaseKeyboard()

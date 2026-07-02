@@ -122,7 +122,7 @@ def main() -> None:
     
     # Show menu at cursor position
     manager = get_manager()
-    manager.show_menu(items)
+    manager.show_menu(items, action_id="{action_id}")
 
     # Queue this module for cache clearing (so next press re-executes)
     if not hasattr(sys, '_lks_modules_to_clear'):
@@ -314,7 +314,8 @@ def delete_action_script(
 def generate_radial_menu_script(
     config_filename: str,
     display_name: str,
-    config_path_relative: str = None
+    config_path_relative: str = None,
+    action_id: str | None = None,
 ) -> str:
     """
     Generate a radial menu action script.
@@ -325,6 +326,7 @@ def generate_radial_menu_script(
         config_filename: Name of config file (e.g., "my_menu.json")
         display_name: Human-readable menu name
         config_path_relative: Relative path from script to config (auto-calculated if None)
+        action_id: Menu/action identifier used in 3DCoat hotkeys
 
     Returns:
         Generated script content
@@ -334,11 +336,15 @@ def generate_radial_menu_script(
         # Need ../data/ to get from actions/ to data/ (up to LKS root, then down to data/)
         config_path_relative = f"../data/library/radial_menus/{config_filename}"
 
+    if action_id is None:
+        action_id = f"LKS_Radial_{sanitize_identifier(config_filename, style='PascalCase')}"
+
     return generate_action_script(
         "radial_menu",
         display_name=display_name,
         config_path_relative=config_path_relative,
         config_filename=config_filename,
+        action_id=action_id,
     )
 
 

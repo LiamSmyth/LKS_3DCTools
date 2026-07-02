@@ -52,13 +52,19 @@ class RadialMenuManager:
         self._current_items: list[RadialMenuItem] = []
         self._trigger_keycode: int | None = None  # Qt keycode for the trigger key
 
-    def show_menu(self, items: list[RadialMenuItem], pos: QPoint | None = None) -> None:
+    def show_menu(
+        self,
+        items: list[RadialMenuItem],
+        pos: QPoint | None = None,
+        action_id: str | None = None,
+    ) -> None:
         """
         Show radial menu at specified position (or cursor if None).
 
         Args:
             items: List of menu items to display
             pos: Position to show menu at (None = cursor position)
+            action_id: 3DCoat action/menu identifier that launched this menu
         """
         # CRITICAL: Close any existing menu first (singleton enforcement)
         if self._widget.isVisible():
@@ -74,7 +80,7 @@ class RadialMenuManager:
         self._current_items = items
 
         # Query hotkey for the trigger key
-        self._trigger_keycode = self._query_trigger_key()
+        self._trigger_keycode = self._query_trigger_key(action_id)
 
         # Load settings from lks_settings
         self._load_settings()
@@ -95,11 +101,14 @@ class RadialMenuManager:
         """Hide the menu without invoking action."""
         self._widget.hide()
 
-    def _query_trigger_key(self) -> int | None:
-        """Query hotkeys file to find which key is mapped to LKS_RadialMenu_Show."""
+    def _query_trigger_key(self, action_id: str | None = None) -> int | None:
+        """Query hotkeys file to find which key is mapped to this action."""
         try:
-            from utils.hotkey_utils import parse_hotkeys_file, get_default_hotkeys_path
+            from utils.hotkey_utils import HotkeyEntry, parse_hotkeys_file, get_default_hotkeys_path
             from utils.keycode_map import coat_to_qt_key
+            from utils.win32_key_state import binding_is_active
+
+            resolved_action_id: str = action_id or "LKS_RadialMenu_Show"
 
             # Get hotkeys path
             hotkeys_path = get_default_hotkeys_path()
@@ -108,14 +117,55 @@ class RadialMenuManager:
 
             hotkeys_file = parse_hotkeys_file(hotkeys_path)
 
-            # Look for entries with our action ID
-            action_id = "LKS_RadialMenu_Show"  # Match the script name
+            candidates: list[tuple[HotkeyEntry, int]] = []
+            action_variants: set[str] = {
+                resolved_action_id,
+                f"${resolved_action_id}",
+            }
+
+            if resolved_action_id.startswith("$"):
+                action_variants.add(resolved_action_id[1:])
+
             for entry in hotkeys_file.entries:
-                if action_id in entry.id:
-                    # Convert 3DCoat keycode to Qt keycode
-                    qt_key = coat_to_qt_key(entry.code)
-                    if qt_key is not None:
-                        return qt_key
+                if entry.id not in action_variants or not entry.is_assigned:
+                    continue
+
+                qt_key = coat_to_qt_key(entry.code)
+                if qt_key is not None:
+                    candidates.append((entry, qt_key))
+
+            if not candidates:
+                return None
+
+            active_candidates: list[int] = []
+            for entry, qt_key in candidates:
+                if binding_is_active(
+                    qt_key,
+                    ctrl=entry.ctrl,
+                    alt=entry.alt,
+                    shift=entry.shift,
+                ):
+                    active_candidates.append(qt_key)
+
+            unique_active: list[int] = list(dict.fromkeys(active_candidates))
+            if len(unique_active) == 1:
+                return unique_active[0]
+            if len(unique_active) > 1:
+                print(
+                    f"[RadialMenuManager] Ambiguous active bindings for {resolved_action_id}: "
+                    f"{len(unique_active)} candidates"
+                )
+                return unique_active[0]
+
+            unique_candidates: list[int] = list(
+                dict.fromkeys(qt_key for _, qt_key in candidates))
+            if len(unique_candidates) == 1:
+                return unique_candidates[0]
+
+            print(
+                f"[RadialMenuManager] Ambiguous bindings for {resolved_action_id}: "
+                f"{len(unique_candidates)} candidates and none currently held"
+            )
 
             return None
         except Exception as e:

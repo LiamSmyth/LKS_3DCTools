@@ -5,7 +5,7 @@ Useful for evening out triangle sizes after using split tools, or preparing
 for export with uniform mesh density.
 
 Room: Sculpt
-Action: Resamples all children to match parent's polygon density
+Action: Resamples all subtree objects to match selected object's density
 """
 from utils.action_base import action
 
@@ -18,7 +18,5 @@ def main() -> None:
 
     op_main(scope=Scope.TREE, mode=DensityMode.RESAMPLE)
 
-
-main()
 
 main()

@@ -4,18 +4,17 @@ SculptObject_RemeshResymm Operator
 Safely remesh and symmetrize sculpt objects while preserving polycount.
 
 Process:
-1. Resample at higher detail if surface mode (4x scale)
-2. Convert to voxels
-3. Make symmetrical
-4. Convert back to surface
-5. Decimate back to original polycount if needed
+1. If surface mode, resample at higher detail and convert to voxels
+2. Make symmetrical in voxel mode
+3. If originally surface, convert back to surface and decimate to target
+4. If originally voxel, stay in voxel mode
 
 Uses scope resolution to determine which elements to process.
 """
 import coat
 from utils.scene_api import SceneAPI
 from utils.scope_utils import Scope, resolve_scope
-from utils.Volume_resample_utils import execute_resample
+from utils.Volume_resample_utils import execute_resample_scale_only
 from utils.Volume_decimate_utils import decimate_to_target
 from utils.Volume_subdivide_utils import make_symmetrical
 from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
@@ -110,17 +109,21 @@ def _remesh_resymm_element(
     if target_polycount <= 0:
         return False
 
-    # Resample to preserve detail if surface (4x scale)
-    if not vol.isVoxelized():
-        resample_target: int = int(target_polycount * resample_scale)
-        execute_resample(target_polycount=resample_target,
-                         scale=resample_scale)
+    was_surface: bool = vol.isSurface()
+
+    # Resample to preserve detail only for surface inputs.
+    if was_surface:
+        execute_resample_scale_only(ratio=resample_scale)
         vol.toVoxels()
 
     # Make symmetrical in voxel mode
     make_symmetrical()
 
-    # Convert back to surface
+    # Voxel inputs remain voxel to avoid unnecessary mode switching.
+    if not was_surface:
+        return True
+
+    # Surface inputs return to surface and restore target density.
     vol.toSurface()
     new_polycount: int = vol.getPolycount()
 

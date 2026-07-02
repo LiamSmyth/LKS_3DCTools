@@ -5,8 +5,8 @@ Toggle sculpt objects between surface (mesh) and voxel modes
 while preserving approximately the same polycount.
 
 Process:
-- Surface → Voxels: Resample, convert, resample to original count
-- Voxels → Surface: Convert directly
+- Surface → Voxels: volume.toVoxels() (native API)
+- Voxels → Surface: volume.toSurface() (native API)
 
 Uses scope resolution to determine which elements to process.
 """
@@ -16,9 +16,8 @@ import coat
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.object_utils import ObjectUtils
-from utils.Volume_resample_utils import resample_to_target
-from utils.Volume_mode_utils import convert_to_surface
-from utils.coat_ui_utils import show_message, show_error
+from utils.Volume_mode_utils import convert_to_surface, convert_to_voxels_safe
+from utils.coat_ui_utils import show_message, show_error, wait_frames
 
 
 # =============================================================================
@@ -48,16 +47,15 @@ def main(scope: Scope = Scope.CURRENT) -> int:
             continue
 
         element.selectOne()
+        coat.io.step(1)  # Let 3DCoat register the new active selection
         vol: coat.Volume = element.Volume()
         initial_polycount: int = vol.getPolycount()
         object_name: str = element.name()
 
         if vol.isSurface():
-            # Surface → Voxels
+            # Surface → Voxels: native API (no UI command exists for this).
             print(f"Converting {object_name} to Voxels...")
-            resample_to_target(initial_polycount, initial_polycount)
-            vol.toVoxels()
-            resample_to_target(vol.getPolycount(), initial_polycount)
+            convert_to_voxels_safe(vol)
             mode_str: str = "Voxels"
         else:
             # Voxels → Surface

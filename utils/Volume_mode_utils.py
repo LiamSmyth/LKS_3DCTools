@@ -3,66 +3,47 @@ Volume Mode Utilities - Surface/Voxel conversion on Volumes.
 
 Low-level primitives with RAW ARGUMENTS ONLY (no dataclasses).
 Operators in `_ops/` own Config dataclasses and call these functions.
+
+Uses native `volume.toSurface()` / `volume.toVoxels()` API methods from coat.pyi.
+There are NO `$ToVoxels` / `$ToSurface` UI commands - those were hallucinated.
 """
 import coat
-from typing import Callable
 
-from utils.coat_ui_utils import CMD_DIALOG_OK, wait_frames
-
-# =============================================================================
-# MAGIC UI STRINGS (NOT in coat.pyi - discovered experimentally)
-# =============================================================================
-
-CMD_VOXELIZE: str = "$ToVoxels"
-CMD_TO_SURFACE: str = "$ToSurface"
-SETTING_VOXELIZE_POLYCOUNT: str = "$VoxelizeParams::SuggestedPolycount"
+from utils.coat_ui_utils import wait_frames
 
 # =============================================================================
 # DEFAULTS
 # =============================================================================
 
 DEFAULT_VOXELIZE_POLYCOUNT: int = 100000
-MESH_OP_WAIT_FRAMES: int = 2
-
-
-# =============================================================================
-# CONFIGURATOR (returns closure with raw args captured)
-# =============================================================================
-
-def configure_voxelize_dialog(
-    suggested_polycount: int = DEFAULT_VOXELIZE_POLYCOUNT,
-) -> Callable[[], None]:
-    """
-    Create a callback to configure the voxelize dialog.
-
-    Args:
-        suggested_polycount: Target polycount for voxelization
-
-    Returns:
-        Closure that configures dialog and clicks OK
-    """
-    def configurator() -> None:
-        coat.ui.setEditBoxValue(
-            SETTING_VOXELIZE_POLYCOUNT, suggested_polycount)
-        coat.ui.cmd(CMD_DIALOG_OK)
-    return configurator
+MESH_OP_WAIT_FRAMES: int = 4
 
 
 # =============================================================================
 # EXECUTE FUNCTIONS (raw args)
 # =============================================================================
 
-def execute_voxelize(suggested_polycount: int = DEFAULT_VOXELIZE_POLYCOUNT) -> None:
+def execute_voxelize(
+    suggested_polycount: int = DEFAULT_VOXELIZE_POLYCOUNT,
+    volume: coat.Volume | None = None,
+) -> None:
     """
-    Execute voxelize on current Volume.
+    Voxelize a Volume.
+
+    `suggested_polycount` is accepted for API compatibility but is not honored
+    by the native `toVoxels()` method (which has no polycount argument).
 
     Args:
-        suggested_polycount: Target polycount for voxelization
+        suggested_polycount: Ignored (kept for backwards compatibility)
+        volume: Volume to voxelize. If None, uses the current active volume
+            (obtained via ``coat.Scene.current().Volume()``).
     """
-    callback: Callable[[], None] = configure_voxelize_dialog(
-        suggested_polycount)
-    coat.ui.cmd(CMD_VOXELIZE, callback)
-    wait_frames(MESH_OP_WAIT_FRAMES)
+    if volume is None:
+        scene: coat.Scene = coat.Scene.current()
+        volume = scene.Volume()
+    if volume.isSurface():
+        volume.toVoxels()
+        wait_frames(MESH_OP_WAIT_FRAMES)
 
 
 # =============================================================================
@@ -73,21 +54,20 @@ def convert_to_surface(volume: coat.Volume) -> None:
     """Convert a volume from voxels to surface mode."""
     if volume.isVoxelized():
         volume.toSurface()
+        wait_frames(MESH_OP_WAIT_FRAMES)
 
 
 def convert_to_voxels(volume: coat.Volume, polycount: int | None = None) -> None:
     """
-    Convert a volume from surface to voxels.
+    Convert a volume from surface to voxels using the native API.
 
     Args:
         volume: The volume to convert
-        polycount: Target polycount (uses Volume.toVoxels() default if None)
+        polycount: Ignored (native toVoxels() has no polycount argument)
     """
     if volume.isSurface():
-        if polycount is not None:
-            execute_voxelize(polycount)
-        else:
-            volume.toVoxels()
+        volume.toVoxels()
+        wait_frames(MESH_OP_WAIT_FRAMES)
 
 
 def ensure_surface_mode(volume: coat.Volume) -> None:
@@ -95,15 +75,31 @@ def ensure_surface_mode(volume: coat.Volume) -> None:
     convert_to_surface(volume)
 
 
-def ensure_voxel_mode(volume: coat.Volume) -> None:
-    """Ensure volume is in voxel mode (convert from surface if needed)."""
+def convert_to_voxels_safe(volume: coat.Volume) -> None:
+    """
+    Voxelize a surface volume using the native API.
+
+    Args:
+        volume: A surface-mode volume to convert
+    """
     if volume.isSurface():
         volume.toVoxels()
         wait_frames(MESH_OP_WAIT_FRAMES)
 
 
+def ensure_voxel_mode(volume: coat.Volume) -> None:
+    """Ensure volume is in voxel mode (convert from surface if needed)."""
+    if volume.isSurface():
+        convert_to_voxels_safe(volume)
+
+
 def voxelize_to_polycount(target_polycount: int) -> None:
-    """Voxelize current Volume to target polycount."""
+    """
+    Voxelize current Volume.
+
+    `target_polycount` is accepted for API compatibility but ignored
+    (native toVoxels() has no polycount argument).
+    """
     execute_voxelize(target_polycount)
 
 
@@ -113,9 +109,12 @@ def voxelize_to_polycount(target_polycount: int) -> None:
 
 def resample_and_voxelize(volume: coat.Volume, multiplier: float) -> int:
     """
-    Resample a surface volume to Nx polycount, then convert to voxels.
+    Voxelize a surface volume at Nx polycount.
 
     If already voxelized, converts back to surface.
+
+    Note: native `toVoxels()` does not accept a target polycount; the multiplier
+    is applied via a pre-resample pass on the surface mesh before voxelization.
 
     Args:
         volume: The volume to process
@@ -124,25 +123,23 @@ def resample_and_voxelize(volume: coat.Volume, multiplier: float) -> int:
     Returns:
         New polycount after operation
     """
-    # Import here to avoid circular dependency
-    from utils.Volume_resample_utils import execute_resample
-
     if volume.isVoxelized():
         # Already voxel - convert to surface
         volume.toSurface()
+        wait_frames(MESH_OP_WAIT_FRAMES)
         return volume.getPolycount()
 
-    # Surface mode - resample and voxelize
+    # Surface mode - resample to multiplied polycount, then voxelize
     current_polycount: int = volume.getPolycount()
     if current_polycount <= 0:
         return 0
 
     target_polycount: int = int(current_polycount * multiplier)
-
-    # Resample to target
-    execute_resample(target_polycount=target_polycount, scale=multiplier)
-
-    # Convert to voxels
+    # Local import to avoid circular dependency
+    from utils.Volume_resample_utils import resample_to_target
+    resample_to_target(current_polycount, target_polycount)
+    wait_frames(2)
     volume.toVoxels()
+    wait_frames(MESH_OP_WAIT_FRAMES)
 
     return volume.getPolycount()

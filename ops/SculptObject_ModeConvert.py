@@ -55,6 +55,7 @@ def _convert_element(
 
     vol: coat.Volume = element.Volume()
     element.selectOne()
+    coat.io.step(1)  # Wait for 3DCoat to register new active selection
 
     if mode == ConvertMode.TO_SURFACE:
         convert_to_surface(vol)

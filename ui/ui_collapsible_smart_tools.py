@@ -97,6 +97,19 @@ def create_other_section(
         except Exception as e:
             log_error(f"Merge failed: {e}")
 
+    def toggle_mesh_vox() -> None:
+        try:
+            from ops.SculptObject_ToggleMeshVox import main as toggle_main
+            from utils.scope_utils import Scope
+            count: int = toggle_main(scope=Scope.CURRENT)
+            if count > 0:
+                log_success("Toggled selected object between mesh and voxels")
+            else:
+                log_error("No objects processed")
+            refresh_tree()
+        except Exception as e:
+            log_error(f"Toggle mesh/vox failed: {e}")
+
     mesh_grid = ButtonGrid(columns=2)
     mesh_grid.add_button("ID Map (🌳)", id_colors,
                          "Fill subtree with ID colors for baking")
@@ -106,6 +119,8 @@ def create_other_section(
                          "Remesh and symmetrize selection safely")
     mesh_grid.add_button("Merge Parts", merge_preserve,
                          "Merge subtree preserving parts")
+    mesh_grid.add_button("Mesh↔Vox", toggle_mesh_vox,
+                         "Toggle selected object between surface and voxel modes")
     layout.addWidget(mesh_grid)
 
     return section

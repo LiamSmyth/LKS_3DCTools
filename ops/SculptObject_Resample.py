@@ -10,7 +10,7 @@ import coat
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.Volume_resample_utils import (
-    execute_resample,
+    execute_resample_scale_only,
     resample_to_half,
 )
 from utils.Volume_mode_utils import ensure_surface_mode
@@ -58,11 +58,10 @@ def _resample_element(
         resample_to_half(current_polycount)
     elif target_polycount is not None:
         ratio: float = target_polycount / current_polycount
-        execute_resample(target_polycount=target_polycount, scale=ratio)
+        execute_resample_scale_only(ratio=ratio)
     else:
         # Scale-based resample
-        new_target: int = int(current_polycount * scale)
-        execute_resample(target_polycount=new_target, scale=scale)
+        execute_resample_scale_only(ratio=scale)
 
     return True
 

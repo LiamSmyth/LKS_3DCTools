@@ -68,6 +68,7 @@ from .grip_box_container import GripBoxContainer
 from .grip_box_item import GripBox
 from .radial_menu import RadialMenuWidget, RadialMenuItem
 from .radial_menu_manager import get_manager
+from .dwell_progress_node import DwellProgressNode
 from .save_load_library import SaveLoadLibrary
 from .help_menu import HelpMenu
 
@@ -93,6 +94,7 @@ __all__ = [
     "GripBox",
     "RadialMenuWidget",
     "RadialMenuItem",
+    "DwellProgressNode",
     "SaveLoadLibrary",
     "HelpMenu",
     "get_manager",

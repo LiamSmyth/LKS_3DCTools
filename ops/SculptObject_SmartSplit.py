@@ -11,6 +11,7 @@ Uses scope resolution to determine which element(s) to split.
 import coat
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
+from utils.Volume_resample_utils import execute_resample_scale_only
 from utils.coat_ui_utils import wait_frames, show_message, show_error
 
 
@@ -21,6 +22,7 @@ from utils.coat_ui_utils import wait_frames, show_message, show_error
 CMD_HIDE_FROZEN_AREA: str = "$HideFrozenArea"
 CMD_SEPARATE_HIDDEN: str = "$SeparateHidden"
 CMD_DELETE_HIDDEN: str = "$DeleteHidden"
+CMD_INVERT_HIDE: str = "$InvertHide"
 CMD_CLOSE_HOLES: str = "$CloseSurfHoles"
 CMD_DIALOG_OK: str = "$DialogButton#1"
 SETTING_MAX_CONTOUR_LENGTH: str = "$InputContourLength::MaxContourLength"
@@ -93,9 +95,11 @@ def main(
         if vol.isVoxelized():
             new_count: int = _split_voxel_element(element, close_holes)
             voxel_count += 1
+
         elif vol.isSurface():
             new_count: int = _split_surface_element(element, close_holes)
             surface_count += 1
+
         else:
             # Unknown mode, skip
             continue
@@ -130,63 +134,59 @@ def main(
 
 def _split_voxel_element(element: coat.SceneElement, close_holes: bool) -> int:
     """
-    Split voxel mode element (separates hidden geometry directly).
+    Split voxel mode element using duplicate + invert-hide approach.
+
+    This avoids $SeparateHidden which loses colored-surface data.
+
+    Voxel path:
+    1. duplicate()      - clone the object (inherits same vox-hide state)
+    2. Original: $DeleteHidden  - original keeps only the VISIBLE part
+    3. Dupe: $InvertHide        - flip hidden↔visible on the duplicate
+    4. Dupe: $DeleteHidden      - dupe keeps only what was originally HIDDEN
+
+    Note: close_holes is intentionally skipped — $CloseSurfHoles is a
+    surface command and is not meaningful in voxel mode.
 
     Args:
         element: The voxel element to split
-        close_holes: Whether to close holes on resulting elements
+        close_holes: Ignored for voxel path
 
     Returns:
-        Number of new elements created
+        Number of new elements created (always 1 if successful, 0 on failure)
     """
-    # Cache parent and existing children BEFORE split
-    parent: coat.SceneElement = element.parent()
+    # Required order: invert hide first, then duplicate.
+    coat.ui.cmd(CMD_INVERT_HIDE)
+    wait_frames(1)
 
-    existing_children: list[coat.SceneElement] = []
-    for i in range(parent.childCount()):
-        existing_children.append(parent.child(i))
-
-    # Ensure element is selected
-    element.selectOne()
-
-    # In voxel mode: separate hidden, then delete hidden from original
-    coat.ui.cmd(CMD_SEPARATE_HIDDEN)
+    dupe: coat.SceneElement | None = element.duplicate()
+    if not dupe:
+        return 0
     wait_frames(DEFAULT_WAIT_FRAMES)
 
-    # Delete the hidden geometry from the original object
-    # (it's now a separate object but still hidden in the source)
-    element.selectOne()
+    # Duplicate keeps hidden side.
+    dupe.selectOne()
+    wait_frames(1)
     coat.ui.cmd(CMD_DELETE_HIDDEN)
     wait_frames(DEFAULT_WAIT_FRAMES)
 
-    # Find newly created elements
-    new_elements: list[coat.SceneElement] = []
-    for i in range(parent.childCount()):
-        child: coat.SceneElement = parent.child(i)
-        is_existing: bool = False
-        for existing in existing_children:
-            if child == existing:
-                is_existing = True
-                break
-        if not is_existing:
-            new_elements.append(child)
+    # Original keeps visible side.
+    element.selectOne()
+    wait_frames(1)
+    coat.ui.cmd(CMD_DELETE_HIDDEN)
+    wait_frames(DEFAULT_WAIT_FRAMES)
 
-    # Close holes on original element and new elements if requested
-    if close_holes and new_elements:
-        # Close holes on original element
-        element.selectOne()
-        wait_frames(1)
-        coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
-        wait_frames(DEFAULT_WAIT_FRAMES)
-
-        # Close holes on each new element
-        for new_elem in new_elements:
-            new_elem.selectOne()
-            wait_frames(1)
-            coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
+    # Force resample on duplicate to stabilize voxel data after split.
+    dupe.selectOne()
+    wait_frames(1)
+    dupe_vol: coat.Volume = dupe.Volume()
+    if dupe_vol and dupe_vol.isVoxelized():
+        polycount: int = dupe_vol.getPolycount()
+        if polycount > 0:
+            execute_resample_scale_only(ratio=1.1)
             wait_frames(DEFAULT_WAIT_FRAMES)
 
-    return len(new_elements)
+    element.selectOne()
+    return 1
 
 
 def _split_surface_element(element: coat.SceneElement, close_holes: bool) -> int:

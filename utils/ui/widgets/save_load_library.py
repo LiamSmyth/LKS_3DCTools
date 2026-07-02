@@ -52,6 +52,7 @@ class SaveLoadLibrary(QWidget):
         on_load: Callable[[Path], None] | None = None,
         log_success: Callable[[str], None] | None = None,
         log_error: Callable[[str], None] | None = None,
+        before_load: Callable[[], bool] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """
@@ -65,6 +66,9 @@ class SaveLoadLibrary(QWidget):
             on_load: Callback(path) to load state from path
             log_success: Optional callback for success messages
             log_error: Optional callback for error messages
+            before_load: Optional guard callback invoked before any load.
+                Return True to proceed, False to cancel (e.g., prompt for
+                unsaved changes).  When False the dropdown reverts.
             parent: Parent widget
         """
         super().__init__(parent)
@@ -76,10 +80,15 @@ class SaveLoadLibrary(QWidget):
         self._on_load: Callable[[Path], None] | None = on_load
         self._log_success: Callable[[str], None] | None = log_success
         self._log_error: Callable[[str], None] | None = log_error
+        self._before_load: Callable[[], bool] | None = before_load
 
         # Track current file (None if never saved)
         self._current_path: Path | None = None
         self._is_library_item: bool = False
+
+        # Suppress combo-signal during programmatic index changes
+        self._suppress_combo_signal: bool = False
+        self._prev_library_index: int = -1
 
         self._setup_ui()
         self._refresh_library_list()
@@ -162,21 +171,32 @@ class SaveLoadLibrary(QWidget):
         self._delete_btn.setEnabled(
             has_library_selection and self._is_library_item)
 
-    def _refresh_library_list(self) -> None:
+    def _refresh_library_list(self, keep_selection: str = "") -> None:
         """Refresh the library combo box with available items."""
-        self._library_combo.clear()
+        self._suppress_combo_signal = True
+        try:
+            self._library_combo.clear()
 
-        if not self._library_dir.exists():
-            self._library_dir.mkdir(parents=True, exist_ok=True)
-            return
+            if not self._library_dir.exists():
+                self._library_dir.mkdir(parents=True, exist_ok=True)
+                return
 
-        # Find all files with matching extension
-        items = sorted([
-            f.stem for f in self._library_dir.glob(f"*{self._file_extension}")
-        ])
+            # Find all files with matching extension
+            items = sorted([
+                f.stem for f in self._library_dir.glob(f"*{self._file_extension}")
+            ])
 
-        if items:
-            self._library_combo.addItems(items)
+            if items:
+                self._library_combo.addItems(items)
+
+            # Restore previous selection when refreshing
+            if keep_selection:
+                idx = self._library_combo.findText(keep_selection)
+                if idx >= 0:
+                    self._library_combo.setCurrentIndex(idx)
+                    self._prev_library_index = idx
+        finally:
+            self._suppress_combo_signal = False
 
         self._update_button_states()
 
@@ -230,11 +250,9 @@ class SaveLoadLibrary(QWidget):
 
                 # Refresh library if saved to library dir
                 if self._is_library_item:
-                    self._refresh_library_list()
-                    # Select the newly saved item
-                    index = self._library_combo.findText(path.stem)
-                    if index >= 0:
-                        self._library_combo.setCurrentIndex(index)
+                    self._refresh_library_list(keep_selection=path.stem)
+                    idx = self._library_combo.findText(path.stem)
+                    self._prev_library_index = idx if idx >= 0 else self._prev_library_index
 
                 self._update_button_states()
         except Exception as e:
@@ -274,9 +292,12 @@ class SaveLoadLibrary(QWidget):
 
                 # If loaded from library, update combo selection
                 if self._is_library_item:
+                    self._suppress_combo_signal = True
                     index = self._library_combo.findText(path.stem)
                     if index >= 0:
                         self._library_combo.setCurrentIndex(index)
+                        self._prev_library_index = index
+                    self._suppress_combo_signal = False
 
                 self._update_button_states()
         except Exception as e:
@@ -284,7 +305,57 @@ class SaveLoadLibrary(QWidget):
                 self._log_error(f"Load failed: {e}")
 
     def _on_library_selection_changed(self, text: str) -> None:
-        """Handle library combo selection change."""
+        """Handle library combo selection change - auto-loads the selected item."""
+        if self._suppress_combo_signal:
+            self._update_button_states()
+            return
+
+        if not text:
+            self._update_button_states()
+            return
+
+        path = self._library_dir / f"{text}{self._file_extension}"
+        if not path.exists():
+            self._update_button_states()
+            return
+
+        # Don't reload if this is already the current file
+        if self._current_path == path:
+            self._update_button_states()
+            return
+
+        new_index = self._library_combo.currentIndex()
+
+        # Guard callback: ask about unsaved changes etc.
+        if self._before_load is not None:
+            if not self._before_load():
+                # User cancelled – revert combo to previous selection
+                self._suppress_combo_signal = True
+                self._library_combo.setCurrentIndex(self._prev_library_index)
+                self._suppress_combo_signal = False
+                self._update_button_states()
+                return
+
+        # Proceed with load
+        self._prev_library_index = new_index
+        try:
+            if self._on_load:
+                self._on_load(path)
+                self._current_path = path
+                self._is_library_item = True
+
+                if self._log_success:
+                    self._log_success(f"Loaded from library: {text}")
+
+                self.loaded.emit(path)
+        except Exception as e:
+            if self._log_error:
+                self._log_error(f"Load from library failed: {e}")
+            # Revert combo on failure
+            self._suppress_combo_signal = True
+            self._library_combo.setCurrentIndex(self._prev_library_index)
+            self._suppress_combo_signal = False
+
         self._update_button_states()
 
     def _on_load_library_clicked(self) -> None:
@@ -366,10 +437,13 @@ class SaveLoadLibrary(QWidget):
                 self.saved.emit(path)
 
                 # Refresh and select new item
-                self._refresh_library_list()
+                self._refresh_library_list(keep_selection=path.stem)
+                self._suppress_combo_signal = True
                 index = self._library_combo.findText(path.stem)
                 if index >= 0:
                     self._library_combo.setCurrentIndex(index)
+                    self._prev_library_index = index
+                self._suppress_combo_signal = False
 
                 self._update_button_states()
         except Exception as e:
@@ -427,9 +501,12 @@ class SaveLoadLibrary(QWidget):
         self._is_library_item = is_library
 
         if is_library and path:
+            self._suppress_combo_signal = True
             index = self._library_combo.findText(path.stem)
             if index >= 0:
                 self._library_combo.setCurrentIndex(index)
+                self._prev_library_index = index
+            self._suppress_combo_signal = False
 
         self._update_button_states()
 

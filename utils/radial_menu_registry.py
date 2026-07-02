@@ -49,13 +49,15 @@ def _get_lks_root() -> Path:
 
 
 # Library folder where menu configs are saved
-RADIAL_MENUS_LIBRARY_DIR: Path = _get_lks_root() / "data" / "library" / "radial_menus"
+RADIAL_MENUS_LIBRARY_DIR: Path = _get_lks_root() / "data" / "library" / \
+    "radial_menus"
 
 # Generated action scripts folder
 RADIAL_ACTIONS_DIR: Path = _get_lks_root() / "actions" / "radial"
 
 # Registry state file (tracks which menus are registered)
-REGISTRY_STATE_FILE: Path = _get_lks_root() / "data" / "state" / "radial_menu_registry.json"
+REGISTRY_STATE_FILE: Path = _get_lks_root() / "data" / "state" / \
+    "radial_menu_registry.json"
 
 
 # =============================================================================
@@ -65,12 +67,12 @@ REGISTRY_STATE_FILE: Path = _get_lks_root() / "data" / "state" / "radial_menu_re
 def sanitize_menu_name(menu_name: str) -> str:
     """
     Sanitize menu name for use in menu ID and filename.
-    
+
     Converts "My Cool Menu!" -> "MyCoolMenu"
-    
+
     Args:
         menu_name: Display name of menu
-        
+
     Returns:
         Sanitized name (PascalCase, alphanumeric only)
     """
@@ -81,12 +83,12 @@ def sanitize_menu_name(menu_name: str) -> str:
 def generate_menu_id(menu_name: str) -> str:
     """
     Generate unique menu ID for registration.
-    
+
     Format: LKS_Radial_{SanitizedName}
-    
+
     Args:
         menu_name: Display name or filename of menu
-        
+
     Returns:
         Menu ID string for coat.ui.insertInMenu()
     """
@@ -97,12 +99,12 @@ def generate_menu_id(menu_name: str) -> str:
 def generate_action_script_name(menu_name: str) -> str:
     """
     Generate action script filename.
-    
+
     Format: LKS_RadialMenu_{SanitizedName}.py
-    
+
     Args:
         menu_name: Display name or filename of menu
-        
+
     Returns:
         Action script filename
     """
@@ -117,11 +119,11 @@ def generate_action_script_name(menu_name: str) -> str:
 def generate_action_script(menu_filename: str, display_name: str) -> str:
     """
     Generate action script content for a radial menu.
-    
+
     Args:
         menu_filename: Filename of menu config in library (e.g., "my_menu.json")
         display_name: Human-readable name for menu
-        
+
     Returns:
         Python script content
     """
@@ -129,23 +131,24 @@ def generate_action_script(menu_filename: str, display_name: str) -> str:
     return generate_radial_menu_script(
         config_filename=menu_filename,
         display_name=display_name,
+        action_id=generate_menu_id(menu_filename),
     )
 
 
 def write_action_script(menu_filename: str, display_name: str) -> Path:
     """
     Write action script to disk.
-    
+
     Args:
         menu_filename: Filename of menu config in library
         display_name: Human-readable name for menu
-        
+
     Returns:
         Path to written action script
     """
     # Generate script content
     script_content = generate_action_script(menu_filename, display_name)
-    
+
     # Write using action_generator
     script_name = generate_action_script_name(menu_filename)
     script_path = gen_write_script(
@@ -154,7 +157,7 @@ def write_action_script(menu_filename: str, display_name: str) -> Path:
         content=script_content,
         overwrite=True
     )
-    
+
     print(f"[RadialRegistry] Generated action script: {script_path}")
     return script_path
 
@@ -162,26 +165,26 @@ def write_action_script(menu_filename: str, display_name: str) -> Path:
 def delete_action_script(menu_filename: str) -> bool:
     """
     Delete generated action script.
-    
+
     Args:
         menu_filename: Filename of menu config in library
-        
+
     Returns:
         True if script was deleted, False if not found
     """
     script_name = generate_action_script_name(menu_filename)
-    
+
     # Delete using action_generator
     was_deleted = gen_delete_script(
         output_dir=RADIAL_ACTIONS_DIR,
         script_name=script_name
     )
-    
+
     if was_deleted:
         print(f"[RadialRegistry] Deleted action script: {script_name}")
     else:
         print(f"[RadialRegistry] Action script not found: {script_name}")
-    
+
     return was_deleted
 
 
@@ -192,15 +195,15 @@ def delete_action_script(menu_filename: str) -> bool:
 def load_registry_state() -> dict[str, str]:
     """
     Load registry state from disk.
-    
+
     State format: {menu_filename: display_name}
-    
+
     Returns:
         Dictionary mapping menu filenames to display names
     """
     if not REGISTRY_STATE_FILE.exists():
         return {}
-    
+
     try:
         with open(REGISTRY_STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -212,12 +215,12 @@ def load_registry_state() -> dict[str, str]:
 def save_registry_state(state: dict[str, str]) -> None:
     """
     Save registry state to disk.
-    
+
     Args:
         state: Dictionary mapping menu filenames to display names
     """
     REGISTRY_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         with open(REGISTRY_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
@@ -232,34 +235,34 @@ def save_registry_state(state: dict[str, str]) -> None:
 def register_menu(menu_filename: str, display_name: str) -> bool:
     """
     Register a radial menu as a hotkey-mappable action.
-    
+
     Steps:
     1. Generate action script in actions/radial/
     2. Register menu item via coat.ui.insertInMenu()
     3. Update registry state
-    
+
     Args:
         menu_filename: Filename in library (e.g., "my_menu.json")
         display_name: Human-readable name for menu
-        
+
     Returns:
         True if registered, False if already registered
     """
     import coat
     from utils.coat_menu_utils import register_action
-    
+
     # Check if already registered
     state = load_registry_state()
     if menu_filename in state:
         print(f"[RadialRegistry] Menu already registered: {menu_filename}")
         return False
-    
+
     # Generate action script
     script_path = write_action_script(menu_filename, display_name)
-    
+
     # Generate menu ID
     menu_id = generate_menu_id(menu_filename)
-    
+
     # Register with 3DCoat
     register_action(
         menu_id=menu_id,
@@ -267,11 +270,11 @@ def register_menu(menu_filename: str, display_name: str) -> bool:
         script_path=script_path,
         menu_name="Scripts",
     )
-    
+
     # Update registry state
     state[menu_filename] = display_name
     save_registry_state(state)
-    
+
     print(f"[RadialRegistry] Registered menu: {display_name} (ID: {menu_id})")
     return True
 
@@ -279,15 +282,15 @@ def register_menu(menu_filename: str, display_name: str) -> bool:
 def unregister_menu(menu_filename: str) -> bool:
     """
     Unregister a radial menu.
-    
+
     Steps:
     1. Delete action script
     2. Update registry state
     3. (Menu item XML persists until 3DCoat restart - manual cleanup required)
-    
+
     Args:
         menu_filename: Filename in library
-        
+
     Returns:
         True if unregistered, False if not registered
     """
@@ -296,14 +299,14 @@ def unregister_menu(menu_filename: str) -> bool:
     if menu_filename not in state:
         print(f"[RadialRegistry] Menu not registered: {menu_filename}")
         return False
-    
+
     # Delete action script
     delete_action_script(menu_filename)
-    
+
     # Update registry state
     del state[menu_filename]
     save_registry_state(state)
-    
+
     print(f"[RadialRegistry] Unregistered menu: {menu_filename}")
     print("[RadialRegistry] Note: Menu item XML persists until 3DCoat restart")
     return True
@@ -312,10 +315,10 @@ def unregister_menu(menu_filename: str) -> bool:
 def is_menu_registered(menu_filename: str) -> bool:
     """
     Check if a menu is currently registered.
-    
+
     Args:
         menu_filename: Filename in library
-        
+
     Returns:
         True if registered
     """
@@ -326,7 +329,7 @@ def is_menu_registered(menu_filename: str) -> bool:
 def get_registered_menus() -> dict[str, str]:
     """
     Get all registered menus.
-    
+
     Returns:
         Dictionary mapping menu filenames to display names
     """
@@ -340,36 +343,36 @@ def get_registered_menus() -> dict[str, str]:
 def sync_all_menus() -> tuple[int, int, int]:
     """
     Sync all menus in library with registration state.
-    
+
     - Registers menus that exist in library but not in registry
     - Unregisters menus that exist in registry but not in library
     - Updates action scripts for registered menus
-    
+
     Returns:
         Tuple of (registered_count, unregistered_count, updated_count)
     """
     # Load current state
     state = load_registry_state()
-    
+
     # Get all menus in library
     if not RADIAL_MENUS_LIBRARY_DIR.exists():
         RADIAL_MENUS_LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     library_menus = {
         f.name for f in RADIAL_MENUS_LIBRARY_DIR.glob("*.json")
         if f.name != "README.md"
     }
-    
+
     registered_count = 0
     unregistered_count = 0
     updated_count = 0
-    
+
     # Unregister menus no longer in library
     for menu_filename in list(state.keys()):
         if menu_filename not in library_menus:
             unregister_menu(menu_filename)
             unregistered_count += 1
-    
+
     # Register/update menus in library
     for menu_filename in library_menus:
         if menu_filename in state:
@@ -386,32 +389,32 @@ def sync_all_menus() -> tuple[int, int, int]:
                 display_name = config_data.get("name", menu_filename[:-5])
             except Exception:
                 display_name = menu_filename[:-5]
-            
+
             register_menu(menu_filename, display_name)
             registered_count += 1
-    
+
     print(f"[RadialRegistry] Sync complete: {registered_count} registered, "
           f"{unregistered_count} unregistered, {updated_count} updated")
-    
+
     return registered_count, unregistered_count, updated_count
 
 
 def cleanup_orphaned_scripts() -> int:
     """
     Delete action scripts that aren't in registry state.
-    
+
     Uses pattern-based detection as fallback - safe even if registry is corrupted.
     Only deletes scripts matching "LKS_RadialMenu_*.py" pattern.
-    
+
     Returns:
         Number of scripts deleted
     """
     if not RADIAL_ACTIONS_DIR.exists():
         return 0
-    
+
     state = load_registry_state()
     deleted_count = 0
-    
+
     # Pattern-based cleanup: Only touch LKS_RadialMenu_*.py files
     for script_path in RADIAL_ACTIONS_DIR.glob("LKS_RadialMenu_*.py"):
         # If we have state, check against it; otherwise delete all pattern-matched files
@@ -423,38 +426,40 @@ def cleanup_orphaned_scripts() -> int:
             }
             if script_path.name not in registered_scripts:
                 script_path.unlink()
-                print(f"[RadialRegistry] Deleted orphaned script: {script_path.name}")
+                print(
+                    f"[RadialRegistry] Deleted orphaned script: {script_path.name}")
                 deleted_count += 1
         else:
             # No registry state: pattern-based cleanup (recovery mode)
             script_path.unlink()
-            print(f"[RadialRegistry] Deleted untracked script (no registry): {script_path.name}")
+            print(
+                f"[RadialRegistry] Deleted untracked script (no registry): {script_path.name}")
             deleted_count += 1
-    
+
     return deleted_count
 
 
 def unregister_all_menus() -> int:
     """
     Unregister all radial menus.
-    
+
     Deletes all action scripts and clears the registry.
     Menu item XML files persist until 3DCoat restart.
-    
+
     Returns:
         Number of menus unregistered
     """
     state = load_registry_state()
     count = len(state)
-    
+
     if count == 0:
         print("[RadialRegistry] No menus to unregister")
         return 0
-    
+
     # Unregister each menu
     for menu_filename in list(state.keys()):
         unregister_menu(menu_filename)
-    
+
     print(f"[RadialRegistry] Unregistered all {count} menus")
     print("[RadialRegistry] Note: Menu item XML persists until 3DCoat restart")
     return count

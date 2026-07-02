@@ -61,19 +61,20 @@ def create_tools_tab(
     legend_layout = QHBoxLayout(legend_frame)
     legend_layout.setContentsMargins(8, 4, 8, 4)
     legend_layout.setSpacing(12)
-    
+
     legend_title = QLabel("Scope:")
-    legend_title.setStyleSheet("font-weight: bold; color: #90caf9; background: transparent;")
+    legend_title.setStyleSheet(
+        "font-weight: bold; color: #90caf9; background: transparent;")
     legend_layout.addWidget(legend_title)
-    
+
     sel_label = QLabel("☝️ Selected")
     sel_label.setStyleSheet("color: #ddd; background: transparent;")
     legend_layout.addWidget(sel_label)
-    
+
     tree_label = QLabel("🌳 Subtree")
     tree_label.setStyleSheet("color: #ddd; background: transparent;")
     legend_layout.addWidget(tree_label)
-    
+
     all_label = QLabel("🌎 All")
     all_label.setStyleSheet("color: #ddd; background: transparent;")
     legend_layout.addWidget(all_label)
@@ -81,7 +82,7 @@ def create_tools_tab(
     invert_label = QLabel("🔄 Invert")
     invert_label.setStyleSheet("color: #ddd; background: transparent;")
     legend_layout.addWidget(invert_label)
-    
+
     legend_layout.addStretch()
     layout.addWidget(legend_frame)
 
@@ -114,6 +115,12 @@ def create_tools_tab(
     mode_section = create_mode_section(log_success, log_error, refresh_tree)
     grip_container.add_widget(mode_section, "mode_section")
 
+    # Boolean Tools (Create / Set Mode / Apply)
+    from ui.ui_collapsible_boolean_tools import create_boolean_section
+    boolean_section = create_boolean_section(
+        log_success, log_error, refresh_tree)
+    grip_container.add_widget(boolean_section, "boolean_section")
+
     # Scale Tools
     from ui.ui_collapsible_scale_tools import create_scale_section
     scale_section = create_scale_section(log_success, log_error, refresh_tree)
@@ -123,7 +130,8 @@ def create_tools_tab(
     from ui.ui_collapsible_visibility_ghost_tools import create_visibility_ghost_section
     visibility_ghost_section = create_visibility_ghost_section(
         log_success, log_error, refresh_tree)
-    grip_container.add_widget(visibility_ghost_section, "visibility_ghost_section")
+    grip_container.add_widget(visibility_ghost_section,
+                              "visibility_ghost_section")
 
     # Smart Actions
     from ui.ui_collapsible_smart_tools import create_smart_section

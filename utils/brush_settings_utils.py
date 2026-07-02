@@ -51,7 +51,7 @@ DEFAULT_DETAILS_LEVEL: float = 1.0
 DEFAULT_REMOVE_STRETCHING: bool = True
 
 # Range limits
-MIN_DETAILS_LEVEL: float = 0.0
+MIN_DETAILS_LEVEL: float = -1.0
 MAX_DETAILS_LEVEL: float = 16.0
 
 

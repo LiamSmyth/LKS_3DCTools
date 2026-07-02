@@ -1,6 +1,6 @@
 # LKS 3DCoat Tools
 
-A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
+A cModule for [3DCoat](https://3dcoat.com/) by Liam
 
 ## Features
 ### Customizable Radial Tree Menu
@@ -18,6 +18,12 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam avec copilot
 #### Match Density Decimate
 ![Match Density Decimate Animation](./assets/3DCoatGL64_2026-02-15_22-31-51_7WL4nALNmL_anim_000000.webp)
 - From a reference mesh, the tool will try to decimate or subdivide either the subtree or everything in the scene to match the source object's polygon density. Good for mass optimizing your 3dcoat scenes before export
+
+#### Target Polycount & Density Resample
+- Resample any sculpt object (or entire subtree/scene) to a specific target polycount in one click. No more fiddling with the resample dialog sliders.
+- **Target Density** mode: resample all visible objects to a uniform world-space detail level (tris/unit²). A live preview shows the predicted total scene polycount at your chosen density.
+- Supports Current / Subtree / All scopes with smart instance deduplication — linked meshes are only resampled once.
+- Works around 3DCoat's resample dialog quirks (double-application bug, scale=1.0 no-op) so polycounts hit their target reliably.
 
 #### Ghost / Visibility Batchers
 ![Ghost Visibility Tools](./assets/2026-02-15_image-7.webp)

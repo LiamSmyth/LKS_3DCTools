@@ -31,8 +31,8 @@ from utils.coat_ui_utils import show_message, show_error
 # CONSTANTS
 # =============================================================================
 
-MIN_DETAILS_LEVEL: int = 1
-MAX_DETAILS_LEVEL: int = 16
+MIN_DETAILS_LEVEL: float = -1.0
+MAX_DETAILS_LEVEL: float = 16.0
 
 
 # =============================================================================
@@ -58,9 +58,9 @@ class ApplyScope(Enum):
 
 def adjust_details_level(
     mode: DetailsLevelMode = DetailsLevelMode.INCREMENT,
-    value: int | None = None,
+    value: float | None = None,
     apply_scope: ApplyScope = ApplyScope.CURRENT,
-) -> int | None:
+) -> float | None:
     """
     Adjust the brush details level.
 
@@ -80,18 +80,19 @@ def adjust_details_level(
     # Force reload from disk to get latest value
     reload_brush_settings()
     settings = get_brush_settings()
-    current: int = int(settings.details_level)
+    current: float = float(settings.details_level)
 
     # Calculate new value
     if mode == DetailsLevelMode.INCREMENT:
-        new_value: int = min(MAX_DETAILS_LEVEL, current + 1)
+        new_value: float = min(MAX_DETAILS_LEVEL, current + 0.5)
     elif mode == DetailsLevelMode.DECREMENT:
-        new_value = max(MIN_DETAILS_LEVEL, current - 1)
+        new_value = max(MIN_DETAILS_LEVEL, current - 0.5)
     else:  # SET
         if value is None:
             show_error("Value required for SET mode", 2000)
             return None
-        new_value = max(MIN_DETAILS_LEVEL, min(MAX_DETAILS_LEVEL, value))
+        new_value = max(MIN_DETAILS_LEVEL, min(
+            MAX_DETAILS_LEVEL, float(value)))
 
     # Update and save settings
     settings.details_level = new_value

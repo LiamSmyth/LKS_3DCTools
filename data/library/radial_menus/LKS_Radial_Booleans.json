@@ -1,0 +1,96 @@
+{
+    "version": "1.0",
+    "name": "LKS_Radial_Booleans",
+    "items": [
+        {
+            "label": "New",
+            "icon": "➕",
+            "children": [
+                {
+                    "label": "New Union",
+                    "icon": "➕",
+                    "action": "$LKS_SculptObject_NewVoxBool_Union",
+                    "description": "Clone selected → parent under it → Union mode"
+                },
+                {
+                    "label": "New Subtract",
+                    "icon": "➖",
+                    "action": "$LKS_SculptObject_NewVoxBool_Subtract",
+                    "description": "Clone selected → parent under it → Subtract mode"
+                },
+                {
+                    "label": "New Intersect",
+                    "icon": "✴️",
+                    "action": "$LKS_SculptObject_NewVoxBool_Intersect",
+                    "description": "Clone selected → extrude → parent under it → Intersect"
+                }
+            ]
+        },
+        {
+            "label": "Set Mode",
+            "icon": "🔁",
+            "children": [
+                {
+                    "label": "Union",
+                    "icon": "➕",
+                    "action": "$LKS_SculptObject_LiveBool_Union",
+                    "description": "Set selected to Union (rename suffix _Union)"
+                },
+                {
+                    "label": "Subtract",
+                    "icon": "➖",
+                    "action": "$LKS_SculptObject_LiveBool_Subtract",
+                    "description": "Set selected to Subtract (rename suffix _Subtract)"
+                },
+                {
+                    "label": "Intersect",
+                    "icon": "✴️",
+                    "action": "$LKS_SculptObject_LiveBool_Intersect",
+                    "description": "Set selected to Intersect (rename suffix _Intersect)"
+                },
+                {
+                    "label": "Clear",
+                    "icon": "🚫",
+                    "action": "$LKS_SculptObject_LiveBool_None",
+                    "description": "Disable live booleans on selected, strip suffix"
+                }
+            ]
+        },
+        {
+            "label": "Apply",
+            "icon": "✅",
+            "children": [
+                {
+                    "label": "Apply",
+                    "icon": "✅",
+                    "action": "$LKS_SculptObject_ApplyBoolean_Selected",
+                    "description": "Collapse boolean subtree on selected"
+                },
+                {
+                    "label": "Apply (keep)",
+                    "icon": "📋",
+                    "action": "$LKS_SculptObject_ApplyBoolean_KeepOriginal_Selected",
+                    "description": "Duplicate + apply, hide original"
+                }
+            ]
+        },
+        {
+            "label": "Voxelize",
+            "icon": "⚙️",
+            "children": [
+                {
+                    "label": "To Voxels",
+                    "icon": "⚙️",
+                    "action": "$LKS_SculptObject_ToVoxel_All",
+                    "description": "Convert all to voxels (booleans require voxel mode)"
+                },
+                {
+                    "label": "Toggle Mesh/Vox",
+                    "icon": "🔄",
+                    "action": "$LKS_SculptObject_ToggleMeshVox_Selected",
+                    "description": "Toggle selected between surface and voxel"
+                }
+            ]
+        }
+    ]
+}

@@ -417,7 +417,7 @@ class LKSToolsConfig:
 
     def _resample_elements(self, elements: list, scale: float) -> int:
         """Helper to resample a list of elements."""
-        from utils.Volume_resample_utils import execute_resample
+        from utils.Volume_resample_utils import execute_resample_scale_only
         from utils.Volume_mode_utils import ensure_surface_mode
         count: int = 0
         for el in elements:
@@ -425,9 +425,7 @@ class LKSToolsConfig:
                 vol = el.Volume()
                 ensure_surface_mode(vol)
                 el.selectOne()
-                target = int(vol.getPolycount() * scale)
-                execute_resample(
-                    target_polycount=target, scale=scale)
+                execute_resample_scale_only(ratio=scale)
                 count += 1
         return count
 
@@ -497,13 +495,15 @@ class LKSToolsConfig:
         return count
 
     def _convert_to_voxels(self, elements: list) -> int:
-        """Helper to convert elements to voxels."""
+        """Helper to convert elements to voxels via voxelize dialog."""
+        from utils.Volume_mode_utils import execute_voxelize
         count: int = 0
         for el in elements:
             if el.isSculptObject():
+                el.selectOne()
                 vol = el.Volume()
                 if vol.isSurface():
-                    vol.toVoxels()
+                    execute_voxelize(vol.getPolycount())
                     count += 1
         return count
 

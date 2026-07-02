@@ -124,7 +124,7 @@ from utils.Volume_proxy_utils import (
 
 # Volume utilities - Resample (raw args pattern)
 from utils.Volume_resample_utils import (
-    execute_resample,
+    execute_resample_scale_only,
     resample_to_half,
     resample_to_target,
 )

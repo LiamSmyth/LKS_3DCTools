@@ -8,31 +8,25 @@
             "children": [
                 {
                     "label": "50%",
-                    "icon": "🔻",
                     "action": "$LKS_SculptObject_Decimate_Half_Selected",
                     "description": "Decimate current object to 50% via retopo room"
                 },
                 {
                     "label": "80%",
-                    "icon": "🔻",
                     "action": "$LKS_SculptObject_Decimate_80Percent_Selected"
-                },
+                }
+            ]
+        },
+        {
+            "label": "Proxy",
+            "icon": "🔻",
+            "children": [
                 {
                     "label": "Proxy 16x",
                     "action": "$LKS_SculptObject_ProxyToggle_Decimate16X_Selected",
                     "description": "Toggle 16x decimation proxy cache"
                 }
             ]
-        },
-        {
-            "label": "Unghost All",
-            "icon": "👻",
-            "action": "$LKS_SculptObject_Unghost_All"
-        },
-        {
-            "label": "Ghost Toggle",
-            "icon": "👻",
-            "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
         },
         {
             "label": "Visibility",
@@ -57,6 +51,16 @@
                     "label": "Show",
                     "icon": "👁️",
                     "action": "$LKS_SculptObject_Show_Selected"
+                },
+                {
+                    "label": "Ghost Toggle",
+                    "icon": "👻",
+                    "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
+                },
+                {
+                    "label": "Unghost All",
+                    "icon": "👻",
+                    "action": "$LKS_SculptObject_Unghost_All"
                 }
             ]
         },
@@ -73,6 +77,89 @@
                     "action": "$LKS_SculptObject_ToVoxel_All"
                 }
             ]
+        },
+        {
+            "label": "Bools",
+            "icon": "🗂️",
+            "children": [
+                {
+                    "label": "New Union",
+                    "action": "$LKS_SculptObject_NewVoxBool_Union"
+                },
+                {
+                    "label": "New Subtract",
+                    "action": "$LKS_SculptObject_NewVoxBool_Subtract"
+                },
+                {
+                    "label": "New Intersect",
+                    "action": "$LKS_SculptObject_NewVoxBool_Intersect"
+                },
+                {
+                    "label": "Set Union",
+                    "action": "$LKS_SculptObject_LiveBool_Union"
+                },
+                {
+                    "label": "Set Subtract",
+                    "action": "$LKS_SculptObject_LiveBool_Subtract"
+                },
+                {
+                    "label": "Set Intersect",
+                    "action": "$LKS_SculptObject_LiveBool_Intersect"
+                },
+                {
+                    "label": "Set None",
+                    "action": "$$LKS_SculptObject_LiveBool_None"
+                }
+            ]
+        },
+        {
+            "label": "Mask",
+            "icon": "⚙️",
+            "children": [
+                {
+                    "label": "Blur Mask",
+                    "action": "$MENU_BLUR_FREEZE"
+                },
+                {
+                    "label": "Sharpen Mask",
+                    "action": "$MENU_SHARPEN_FREEZE"
+                },
+                {
+                    "label": "Grow mask",
+                    "action": "$MENU_EXPAND_FREEZE"
+                },
+                {
+                    "label": "Shrink Mask",
+                    "action": "$MENU_CONTRACT_FREEZE"
+                }
+            ]
+        },
+        {
+            "label": "Add Prim",
+            "children": [
+                {
+                    "label": "Cube",
+                    "action": "$LKS_Scene_AddPrim_Capsule"
+                },
+                {
+                    "label": "Sphere"
+                },
+                {
+                    "label": "Cylinder"
+                },
+                {
+                    "label": "Capsule"
+                },
+                {
+                    "label": "Ellipse"
+                }
+            ]
+        },
+        {
+            "label": "Add Mesh Prim"
+        },
+        {
+            "label": "Add FFD Prim"
         }
     ]
 }

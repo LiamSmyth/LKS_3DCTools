@@ -9,7 +9,7 @@ import math
 
 from utils.coat_ui_utils import wait_frames
 from utils.Volume_decimate_utils import decimate_by_percent
-from utils.Volume_resample_utils import execute_resample, resample_to_target
+from utils.Volume_resample_utils import execute_resample_scale_only, resample_to_target
 from utils.Volume_subdivide_utils import subdivide_once
 
 # =============================================================================
@@ -113,14 +113,9 @@ def resample_to_match_density(
         print(f"Skipped '{element.name()}' - invalid target polycount")
         return
 
-    # Calculate resample ratio
-    resample_ratio: float = math.sqrt(target_polycount / current_polycount)
-
-    # Resample
-    execute_resample(
-        target_polycount=target_polycount,
-        scale=resample_ratio,
-    )
+    # Resample — scale-only so 3DCoat applies it exactly once
+    scale: float = target_polycount / current_polycount
+    execute_resample_scale_only(ratio=scale)
 
     print(
         f"Resampled '{element.name()}': {current_polycount:,} -> {target_polycount:,}")
