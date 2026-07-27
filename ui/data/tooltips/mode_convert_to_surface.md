@@ -1,0 +1,1 @@
+<p><b>Convert to Surface</b> — Convert voxel objects to surface (polygon) mode. Required for polygon-based sculpting and decimation. Uses 3DCoat's native <span style='color:#90caf9;'>toSurface()</span> API.</p>

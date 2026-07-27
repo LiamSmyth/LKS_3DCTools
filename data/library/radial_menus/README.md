@@ -46,17 +46,18 @@ This folder contains your saved radial menu configurations. Each menu can be reg
 
 ```json
 {
-  "version": "1.0",
+  "version": 2,
   "name": "My Menu",
   "items": [
     {
+      "type": "branch",
       "label": "Action",
       "icon": "🔨",
-      "action": "actions/SculptObject_Decimate_Half_Selected.py",
       "description": "Description shown in tooltip",
       "angle": 0.0,
       "children": [
         {
+          "type": "action",
           "label": "Submenu Item",
           "action": "$SomeCommand"
         }

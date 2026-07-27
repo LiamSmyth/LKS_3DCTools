@@ -1,0 +1,2 @@
+<p><b>Convert to Voxels</b> — Convert surface objects to voxel mode. Required for boolean operations, voxel sculpting, and volume-based workflows. Uses 3DCoat's native <span style='color:#90caf9;'>toVoxels()</span> API.</p>
+<p><span style='color:#ffb74d;'>⚠️ Note:</span> Surface objects with corrupted topology may need a pre-resample before voxelization to produce clean results.</p>

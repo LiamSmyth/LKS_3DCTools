@@ -1,28 +1,41 @@
 {
-    "version": "1.0",
+    "version": 3,
     "name": "LKS_Radial_V1",
+    "radius": 128,
     "items": [
         {
+            "label": "New Item",
+            "type": "action"
+        },
+        {
             "label": "Decimate",
+            "type": "branch",
             "icon": "🔻",
             "children": [
                 {
                     "label": "50%",
+                    "type": "action",
+                    "icon": "decimate.svg",
                     "action": "$LKS_SculptObject_Decimate_Half_Selected",
                     "description": "Decimate current object to 50% via retopo room"
                 },
                 {
                     "label": "80%",
+                    "type": "action",
+                    "icon": "decimate.svg",
                     "action": "$LKS_SculptObject_Decimate_80Percent_Selected"
                 }
             ]
         },
         {
             "label": "Proxy",
+            "type": "branch",
             "icon": "🔻",
             "children": [
                 {
                     "label": "Proxy 16x",
+                    "type": "action",
+                    "icon": "proxy.svg",
                     "action": "$LKS_SculptObject_ProxyToggle_Decimate16X_Selected",
                     "description": "Toggle 16x decimation proxy cache"
                 }
@@ -30,136 +43,100 @@
         },
         {
             "label": "Visibility",
-            "icon": "👁️",
+            "type": "branch",
+            "icon": "📦",
             "children": [
                 {
                     "label": "Isolate Toggle",
-                    "icon": "👁️",
+                    "type": "action",
+                    "icon": "visibility.svg",
                     "action": "$LKS_SculptObject_ToggleIsolateVisible_Selected"
                 },
                 {
                     "label": "Hide",
-                    "icon": "👁️",
+                    "type": "action",
+                    "icon": "visibility_off.svg",
                     "action": "$LKS_SculptObject_Hide_Selected"
                 },
                 {
                     "label": "Show All",
-                    "icon": "👁️",
+                    "type": "action",
+                    "icon": "visibility.svg",
                     "action": "$LKS_SculptObject_Show_All"
                 },
                 {
                     "label": "Show",
-                    "icon": "👁️",
+                    "type": "action",
+                    "icon": "visibility.svg",
                     "action": "$LKS_SculptObject_Show_Selected"
                 },
                 {
                     "label": "Ghost Toggle",
-                    "icon": "👻",
+                    "type": "action",
+                    "icon": "ghost.svg",
                     "action": "$LKS_SculptObject_ToggleIsolateGhost_Selected"
                 },
                 {
                     "label": "Unghost All",
-                    "icon": "👻",
+                    "type": "action",
+                    "icon": "ghost_off.svg",
                     "action": "$LKS_SculptObject_Unghost_All"
                 }
             ]
         },
         {
             "label": "Mode Convert",
-            "icon": "⚙️",
+            "type": "branch",
+            "icon": "👁️",
             "children": [
                 {
                     "label": "All To Surface",
+                    "type": "action",
+                    "icon": "mode_convert.svg",
                     "action": "$LKS_SculptObject_ToSurface_All"
                 },
                 {
                     "label": "All To Voxels",
+                    "type": "action",
+                    "icon": "mode_convert.svg",
                     "action": "$LKS_SculptObject_ToVoxel_All"
                 }
             ]
         },
         {
-            "label": "Bools",
-            "icon": "🗂️",
-            "children": [
-                {
-                    "label": "New Union",
-                    "action": "$LKS_SculptObject_NewVoxBool_Union"
-                },
-                {
-                    "label": "New Subtract",
-                    "action": "$LKS_SculptObject_NewVoxBool_Subtract"
-                },
-                {
-                    "label": "New Intersect",
-                    "action": "$LKS_SculptObject_NewVoxBool_Intersect"
-                },
-                {
-                    "label": "Set Union",
-                    "action": "$LKS_SculptObject_LiveBool_Union"
-                },
-                {
-                    "label": "Set Subtract",
-                    "action": "$LKS_SculptObject_LiveBool_Subtract"
-                },
-                {
-                    "label": "Set Intersect",
-                    "action": "$LKS_SculptObject_LiveBool_Intersect"
-                },
-                {
-                    "label": "Set None",
-                    "action": "$$LKS_SculptObject_LiveBool_None"
-                }
-            ]
-        },
-        {
             "label": "Mask",
-            "icon": "⚙️",
+            "type": "branch",
+            "icon": "🎭",
             "children": [
                 {
                     "label": "Blur Mask",
+                    "type": "action",
+                    "icon": "🌫️",
                     "action": "$MENU_BLUR_FREEZE"
                 },
                 {
                     "label": "Sharpen Mask",
+                    "type": "action",
+                    "icon": "✨",
                     "action": "$MENU_SHARPEN_FREEZE"
                 },
                 {
                     "label": "Grow mask",
+                    "type": "action",
+                    "icon": "add.svg",
                     "action": "$MENU_EXPAND_FREEZE"
                 },
                 {
                     "label": "Shrink Mask",
+                    "type": "action",
+                    "icon": "subtract.svg",
                     "action": "$MENU_CONTRACT_FREEZE"
                 }
             ]
         },
         {
-            "label": "Add Prim",
-            "children": [
-                {
-                    "label": "Cube",
-                    "action": "$LKS_Scene_AddPrim_Capsule"
-                },
-                {
-                    "label": "Sphere"
-                },
-                {
-                    "label": "Cylinder"
-                },
-                {
-                    "label": "Capsule"
-                },
-                {
-                    "label": "Ellipse"
-                }
-            ]
-        },
-        {
-            "label": "Add Mesh Prim"
-        },
-        {
-            "label": "Add FFD Prim"
+            "label": "New Item",
+            "type": "action"
         }
     ]
 }

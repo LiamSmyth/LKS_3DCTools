@@ -12,8 +12,9 @@ Process:
 Uses scope resolution to determine which elements to process.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.Volume_resample_utils import execute_resample_scale_only
 from utils.Volume_decimate_utils import decimate_to_target
 from utils.Volume_subdivide_utils import make_symmetrical
@@ -38,6 +39,7 @@ def main(
     scope: Scope = Scope.CURRENT,
     resample_scale: float = DEFAULT_RESAMPLE_SCALE,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Remesh and symmetrize sculpt objects.
@@ -46,6 +48,7 @@ def main(
         scope: Which objects to operate on
         resample_scale: Scale factor for resampling before voxelization
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects processed
@@ -58,7 +61,7 @@ def main(
         saved_selection = SelectionAPI.save_selection()
 
     # Get elements to process
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
     if not elements:
         show_error("No object selected", 2000)
         return 0
@@ -72,8 +75,12 @@ def main(
         show_error("No sculpt objects in scope", 2000)
         return 0
 
+    total: int = len(sculpt_objects)
+
     count: int = 0
-    for element in sculpt_objects:
+    for i, element in enumerate(sculpt_objects):
+        if progress_callback is not None:
+            progress_callback(i, total, element.name())
         success: bool = _remesh_resymm_element(element, resample_scale)
         if success:
             count += 1

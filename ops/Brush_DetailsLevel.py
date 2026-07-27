@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from enum import Enum
 from utils.brush_settings_utils import (
-    apply_auto_subdivide_current,
     apply_details_level_current,
     BrushSettingsUtils,
 )
@@ -32,7 +31,6 @@ from utils.coat_ui_utils import show_message, show_error
 # =============================================================================
 
 MIN_DETAILS_LEVEL: float = -1.0
-MAX_DETAILS_LEVEL: float = 16.0
 
 
 # =============================================================================
@@ -82,28 +80,27 @@ def adjust_details_level(
     settings = get_brush_settings()
     current: float = float(settings.details_level)
 
-    # Calculate new value
+    # Calculate new value (no upper max — only floor at MIN_DETAILS_LEVEL)
     if mode == DetailsLevelMode.INCREMENT:
-        new_value: float = min(MAX_DETAILS_LEVEL, current + 0.5)
+        new_value: float = current + 0.5
     elif mode == DetailsLevelMode.DECREMENT:
         new_value = max(MIN_DETAILS_LEVEL, current - 0.5)
     else:  # SET
         if value is None:
             show_error("Value required for SET mode", 2000)
             return None
-        new_value = max(MIN_DETAILS_LEVEL, min(
-            MAX_DETAILS_LEVEL, float(value)))
+        new_value = max(MIN_DETAILS_LEVEL, float(value))
 
     # Update and save settings
     settings.details_level = new_value
     settings.auto_subdivide = True
     save_brush_settings()
 
-    # Apply to brushes
-    if apply_scope == ApplyScope.CURRENT:
-        apply_auto_subdivide_current(True)
-        apply_details_level_current(float(new_value))
-    else:
+    # Always update the live current-brush UI first (hardened for conditional
+    # AutoSubdivide → DetailsLevel). Then optionally sync all brush types.
+    apply_details_level_current(float(new_value))
+
+    if apply_scope == ApplyScope.ALL:
         BrushSettingsUtils.apply_global_brush_settings(
             True,  # auto_subdivide
             new_value,
@@ -119,8 +116,12 @@ def apply_all_brush_settings() -> None:
     Apply cached dynamic subdiv settings to all brush types.
 
     Reads auto_subdivide, details_level, and remove_stretching from cache.
+    Also refreshes the live current-brush UI so the visible number updates.
     """
     settings = get_brush_settings()
+
+    if settings.auto_subdivide:
+        apply_details_level_current(float(settings.details_level))
 
     BrushSettingsUtils.apply_global_brush_settings(
         settings.auto_subdivide,

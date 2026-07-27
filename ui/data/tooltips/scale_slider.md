@@ -1,0 +1,1 @@
+<p><b>Scale Slider</b> — Drag to set scale factor from <span style='color:#90caf9;'>0.01x</span> (extreme shrink) to <span style='color:#90caf9;'>100x</span> (extreme grow). Uses a logarithmic scale for precise control across orders of magnitude.</p>

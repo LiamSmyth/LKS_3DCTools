@@ -23,6 +23,33 @@ if str(_LKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_LKS_ROOT))
     print(f"[LKS] Added to sys.path: {_LKS_ROOT}")
 
+# Add vendor/ to sys.path for lks_utils imports
+_VENDOR: Path = _LKS_ROOT / "vendor"
+if _VENDOR.exists() and str(_VENDOR) not in sys.path:
+    sys.path.insert(0, str(_VENDOR))
+    print(f"[LKS] Added vendor path: {_VENDOR}")
+
+# =============================================================================
+# DEPENDENCY INSTALL — lks_utils needs ftfy at import time
+# =============================================================================
+# ftfy is imported by lks_utils.text.normalization at module level.
+# It must be installed before ANY lks_utils import chain fires later.
+# 3DCoat's coat.io.pipInstall uses internal pip, not sys.executable.
+
+try:
+    import coat
+    try:
+        __import__("ftfy")
+    except ImportError:
+        print("[LKS] Installing dependency: ftfy...")
+        try:
+            coat.io.pipInstall("ftfy")
+            print("[LKS]   Installed ftfy successfully")
+        except Exception as _dep_e:
+            print(f"[LKS]   WARNING: Failed to install ftfy: {_dep_e}")
+except ImportError:
+    pass  # coat not available (not running in 3DCoat)
+
 # =============================================================================
 # QT INITIALIZATION
 # =============================================================================

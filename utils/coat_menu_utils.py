@@ -78,6 +78,7 @@ def register_action(
     display_name: str,
     script_path: Path,
     menu_name: str = LKS_MENU_NAME,
+    force: bool = False,
 ) -> bool:
     """
     Register a single action script in 3DCoat's menu.
@@ -87,6 +88,7 @@ def register_action(
         display_name: Human-readable name shown in menu
         script_path: Path to the action script
         menu_name: Target menu (default: "Scripts")
+        force: If True, delete stale XML and re-insert even if already registered
 
     Returns:
         True if newly registered, False if already existed (translation still updated)
@@ -94,9 +96,13 @@ def register_action(
     # Always update translation (in case display name changed)
     coat.ui.addTranslation(menu_id, display_name)
 
-    # Check if already registered in menu
-    if coat.ui.checkIfMenuItemInserted(menu_id):
+    # If already registered and not forcing, just update translation
+    if coat.ui.checkIfMenuItemInserted(menu_id) and not force:
         return False
+
+    # If forcing re-registration, delete the stale XML file first
+    if force:
+        _delete_menu_xml(menu_id)
 
     # Get path in 3DCoat format
     path_str: str = resolve_script_path(script_path)
@@ -105,6 +111,26 @@ def register_action(
     coat.ui.insertInMenu(menu_name, menu_id, path_str)
 
     return True
+
+
+def _delete_menu_xml(menu_id: str) -> None:
+    """
+    Delete the stale ExtraMenuItems XML file for a menu_id.
+
+    3DCoat persists menu registrations as XML files and loads them
+    on restart. Deleting the XML forces a fresh insertInMenu with
+    the current display name translation.
+    """
+    from pathlib import Path
+
+    try:
+        docs_path: str = coat.io.documents("")
+        xml_path: Path = Path(docs_path) / "UserPrefs" / "Scripts" / "ExtraMenuItems" / f"{menu_id}.xml"
+        if xml_path.exists():
+            xml_path.unlink()
+            print(f"[coat_menu_utils] Deleted stale XML: {xml_path.name}")
+    except Exception as e:
+        print(f"[coat_menu_utils] Failed to delete stale XML for {menu_id}: {e}")
 
 
 def register_actions_from_discovery(

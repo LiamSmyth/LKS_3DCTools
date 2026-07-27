@@ -21,6 +21,21 @@ except ImportError:
 
 
 # =============================================================================
+# LOGGING HELPER
+# =============================================================================
+
+def _log_manager(message: str) -> None:
+    """Log a radial menu manager event to the InvocationLogger and console."""
+    print(f"[RadialMenuManager] {message}")
+    try:
+        from utils.invocation_logger import get_invocation_logger
+        logger = get_invocation_logger()
+        logger.log_debug(f"[RadialMenuManager] {message}")
+    except ImportError:
+        pass
+
+
+# =============================================================================
 # MANAGER CLASS
 # =============================================================================
 
@@ -57,6 +72,9 @@ class RadialMenuManager:
         items: list[RadialMenuItem],
         pos: QPoint | None = None,
         action_id: str | None = None,
+        script_path: str | None = None,
+        menu_radius: int | None = None,
+        **kwargs: object,
     ) -> None:
         """
         Show radial menu at specified position (or cursor if None).
@@ -65,13 +83,41 @@ class RadialMenuManager:
             items: List of menu items to display
             pos: Position to show menu at (None = cursor position)
             action_id: 3DCoat action/menu identifier that launched this menu
+            script_path: Absolute path to the launching action script (optional).
+                Used to also match ``execute:<path>`` hotkey IDs that 3DCoat
+                creates when the script is bound from the Scripts browser.
+            menu_radius: Fixed pie radius in pixels (overrides global setting).
         """
-        # CRITICAL: Close any existing menu first (singleton enforcement)
+        # CRITICAL: If menu is already visible, directly update the existing widget
+        # instead of hide→processEvents→show_at, which causes a visible flicker gap.
         if self._widget.isVisible():
-            self._widget.releaseKeyboard()  # Release keyboard grab first
-            self._widget.hide()
-            # Force Qt to process the hide event
-            QApplication.processEvents()
+            self._current_items = items
+
+            # Query hotkey for the trigger key
+            self._trigger_keycode = self._query_trigger_key(
+                action_id, script_path=script_path)
+
+            # Load settings from lks_settings
+            self._load_settings()
+            if menu_radius is not None:
+                self._widget.set_geometry_params(menu_radius=int(menu_radius))
+
+            # Set items on widget
+            self._widget.set_items(items)
+
+            # Set menu name for center label
+            menu_name: str = str(kwargs.pop("menu_name", "") or "")
+            self._widget.set_menu_name(menu_name)
+
+            # Pass trigger keycode to widget
+            self._widget.set_trigger_keycode(self._trigger_keycode)
+
+            # Restart appear animation without hide/show cycle
+            import time as _time
+            self._widget._anim_start_time = _time.monotonic()
+            self._widget._anim_active = True
+            self._widget.update()
+            return
 
         if not items:
             return
@@ -80,13 +126,20 @@ class RadialMenuManager:
         self._current_items = items
 
         # Query hotkey for the trigger key
-        self._trigger_keycode = self._query_trigger_key(action_id)
+        self._trigger_keycode = self._query_trigger_key(
+            action_id, script_path=script_path)
 
         # Load settings from lks_settings
         self._load_settings()
+        if menu_radius is not None:
+            self._widget.set_geometry_params(menu_radius=int(menu_radius))
 
         # Set items on widget
         self._widget.set_items(items)
+
+        # Set menu name for center label
+        menu_name = str(kwargs.pop("menu_name", "") or "")
+        self._widget.set_menu_name(menu_name)
 
         # Pass trigger keycode to widget
         self._widget.set_trigger_keycode(self._trigger_keycode)
@@ -98,17 +151,54 @@ class RadialMenuManager:
         self._widget.show_at(pos)
 
     def hide_menu(self) -> None:
-        """Hide the menu without invoking action."""
-        self._widget.hide()
+        """Hide the menu without invoking action.
 
-    def _query_trigger_key(self, action_id: str | None = None) -> int | None:
-        """Query hotkeys file to find which key is mapped to this action."""
+        Fully tears down polling, fade animations, and opacity so a cancelled
+        preview / Escape path cannot leave an invisible always-on-top ToolTip
+        overlay that blocks mouse and keyboard to the LKS panel.
+        """
+        widget = self._widget
+        if hasattr(widget, "dismiss_without_invoke"):
+            widget.dismiss_without_invoke()
+            return
+        if hasattr(widget, "_cursor_poll_timer"):
+            widget._cursor_poll_timer.stop()
+        widget.hide()
+
+    def _query_trigger_key(
+        self,
+        action_id: str | None = None,
+        script_path: str | None = None,
+    ) -> int | None:
+        """Query hotkeys file to find which key is mapped to this action.
+
+        3DCoat often stores TWO hotkey IDs for the same radial script:
+        - The registered menu id (e.g. ``LKS_Radial_LksRadialV1``)
+        - An ``execute:<absolute-script-path>`` id from the Scripts browser
+
+        Those can be bound to *different* keys. Prefer the binding that is
+        currently held. Never fall back to a non-held key when multiple
+        distinct keys are candidates — that falsely enables flick mode and
+        closes the menu in ~120ms ("bounce").
+
+        When both ``action_id`` and ``script_path`` are omitted (editor
+        preview / programmatic show), return ``None`` — do **not** invent
+        ``LKS_RadialMenu_Show``. That fallback falsely arms flick-close and
+        synthetic key-up for whatever hotkey that id has bound, which can
+        steal/leave panel keyboard focus permanently broken.
+        """
         try:
+            from pathlib import Path
+
             from utils.hotkey_utils import HotkeyEntry, parse_hotkeys_file, get_default_hotkeys_path
             from utils.keycode_map import coat_to_qt_key
             from utils.win32_key_state import binding_is_active
 
-            resolved_action_id: str = action_id or "LKS_RadialMenu_Show"
+            # Preview / bare show_menu(items): no launching action → no trigger.
+            if action_id is None and not script_path:
+                return None
+
+            resolved_action_id: str | None = action_id
 
             # Get hotkeys path
             hotkeys_path = get_default_hotkeys_path()
@@ -118,16 +208,39 @@ class RadialMenuManager:
             hotkeys_file = parse_hotkeys_file(hotkeys_path)
 
             candidates: list[tuple[HotkeyEntry, int]] = []
-            action_variants: set[str] = {
-                resolved_action_id,
-                f"${resolved_action_id}",
-            }
+            action_variants: set[str] = set()
+            if resolved_action_id is not None:
+                action_variants.add(resolved_action_id)
+                action_variants.add(f"${resolved_action_id}")
+                if resolved_action_id.startswith("$"):
+                    action_variants.add(resolved_action_id[1:])
 
-            if resolved_action_id.startswith("$"):
-                action_variants.add(resolved_action_id[1:])
+            # Script basenames that identify execute:<path> hotkey IDs
+            script_basenames: set[str] = set()
+            if script_path:
+                script_basenames.add(Path(script_path).name.lower())
+            # Derive from menu action id: LKS_Radial_Foo → LKS_RadialMenu_Foo.py
+            if resolved_action_id is not None:
+                if resolved_action_id.startswith("LKS_Radial_"):
+                    suffix: str = resolved_action_id[len("LKS_Radial_"):]
+                    script_basenames.add(f"LKS_RadialMenu_{suffix}.py".lower())
+                elif resolved_action_id == "LKS_RadialMenu_Show":
+                    script_basenames.add("lks_radialmenu_show.py")
+
+            def _matches_execute_id(entry_id: str) -> bool:
+                if not entry_id.startswith("execute:"):
+                    return False
+                if not script_basenames:
+                    return False
+                # Normalize slashes then compare basename
+                normalized: str = entry_id.replace("\\", "/")
+                basename: str = normalized.rsplit("/", 1)[-1].lower()
+                return basename in script_basenames
 
             for entry in hotkeys_file.entries:
-                if entry.id not in action_variants or not entry.is_assigned:
+                if not entry.is_assigned:
+                    continue
+                if entry.id not in action_variants and not _matches_execute_id(entry.id):
                     continue
 
                 qt_key = coat_to_qt_key(entry.code)
@@ -147,29 +260,37 @@ class RadialMenuManager:
                 ):
                     active_candidates.append(qt_key)
 
+            label: str = resolved_action_id or (script_path or "unknown")
+
             unique_active: list[int] = list(dict.fromkeys(active_candidates))
             if len(unique_active) == 1:
                 return unique_active[0]
             if len(unique_active) > 1:
-                print(
-                    f"[RadialMenuManager] Ambiguous active bindings for {resolved_action_id}: "
+                _log_manager(
+                    f"Ambiguous active bindings for {label}: "
                     f"{len(unique_active)} candidates"
                 )
                 return unique_active[0]
 
+            # Nothing currently held — flick-mode fallback.
             unique_candidates: list[int] = list(
                 dict.fromkeys(qt_key for _, qt_key in candidates))
             if len(unique_candidates) == 1:
+                # Same physical key across all matching IDs (menu id + execute:
+                # duplicate). Safe to treat as a flick of that key.
                 return unique_candidates[0]
 
-            print(
-                f"[RadialMenuManager] Ambiguous bindings for {resolved_action_id}: "
-                f"{len(unique_candidates)} candidates and none currently held"
+            # Distinct keys bound to the same script (e.g. Shift+B on menu id
+            # and Alt+~ on execute:path). Guessing either one enables flick
+            # mode for a key the user did not press → menu bounce-closes.
+            _log_manager(
+                f"Ambiguous bindings for {label}: "
+                f"{len(unique_candidates)} distinct keys and none currently held "
+                f"— skipping flick fallback to avoid bounce-close"
             )
-
             return None
         except Exception as e:
-            print(f"[RadialMenuManager] Failed to query trigger key: {e}")
+            _log_manager(f"Failed to query trigger key: {e}")
             return None
 
     def _load_settings(self) -> None:
@@ -202,9 +323,9 @@ class RadialMenuManager:
             )
         except ImportError:
             # lks_settings not available (standalone mode)
-            print("[RadialMenuManager] lks_settings not available, using defaults")
+            _log_manager("lks_settings not available, using defaults")
         except Exception as e:
-            print(f"[RadialMenuManager] Failed to load settings: {e}")
+            _log_manager(f"Failed to load settings: {e}")
 
 
 # =============================================================================

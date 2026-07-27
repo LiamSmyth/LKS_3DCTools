@@ -10,6 +10,7 @@ There are NO `$ToVoxels` / `$ToSurface` UI commands - those were hallucinated.
 import coat
 
 from utils.coat_ui_utils import wait_frames
+from utils.Volume_resample_utils import resample_to_target
 
 # =============================================================================
 # DEFAULTS
@@ -42,6 +43,11 @@ def execute_voxelize(
         scene: coat.Scene = coat.Scene.current()
         volume = scene.Volume()
     if volume.isSurface():
+        polycount: int = volume.getPolycount()
+        if polycount <= 0:
+            print("[execute_voxelize] skip: zero polycount")
+            return
+        resample_to_target(polycount, polycount)  # nudged to 1.02x by _avoid_noop()
         volume.toVoxels()
         wait_frames(MESH_OP_WAIT_FRAMES)
 
@@ -66,6 +72,11 @@ def convert_to_voxels(volume: coat.Volume, polycount: int | None = None) -> None
         polycount: Ignored (native toVoxels() has no polycount argument)
     """
     if volume.isSurface():
+        pc: int = volume.getPolycount()
+        if pc <= 0:
+            print("[convert_to_voxels] skip: zero polycount")
+            return
+        resample_to_target(pc, pc)  # nudged to 1.02x by _avoid_noop()
         volume.toVoxels()
         wait_frames(MESH_OP_WAIT_FRAMES)
 
@@ -79,10 +90,18 @@ def convert_to_voxels_safe(volume: coat.Volume) -> None:
     """
     Voxelize a surface volume using the native API.
 
+    Pre-resamples to current polycount (nudged to 1.02x) before voxelizing
+    to ensure a clean mesh rebuild, avoiding corruption on certain topologies.
+
     Args:
         volume: A surface-mode volume to convert
     """
     if volume.isSurface():
+        pc: int = volume.getPolycount()
+        if pc <= 0:
+            print("[convert_to_voxels_safe] skip: zero polycount")
+            return
+        resample_to_target(pc, pc)  # nudged to 1.02x by _avoid_noop()
         volume.toVoxels()
         wait_frames(MESH_OP_WAIT_FRAMES)
 

@@ -1,0 +1,1 @@
+<p><b>Hide</b> — Set selected objects to be completely invisible in the viewport. Hidden objects are preserved in the scene but not rendered. <span style='color:#81c784;'>&#x2713; Use</span> to declutter the viewport without deleting objects.</p>

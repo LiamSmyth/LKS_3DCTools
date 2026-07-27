@@ -15,17 +15,37 @@ if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
 try:
-    from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame
-    from utils.ui.widgets import CollapsibleSection, ButtonGrid
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QSizePolicy, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame
+    from utils.ui.widgets import CollapsibleSection, ButtonGrid, ScopeButtonRow, add_tooltip
+    from utils.ui.widgets.markdown_file_resource import MarkdownFileResource
+    from utils.ui.widgets.badge_button import _make_icon_from_svg
+    from utils.ui.widgets.grid_row_table import GridRowTable, Align
+    from utils.menu_action_tooltip import action_menu_tooltip
+    from pathlib import Path
+    _ICONS_DIR: Path = Path(__file__).resolve().parent.parent / "utils" / "ui" / "data"
+    _INVERT_ICON: QIcon = _make_icon_from_svg("invert")
+    _VISIBILITY_ICON: QIcon = _make_icon_from_svg("visibility")
+    _GHOST_ICON: QIcon = _make_icon_from_svg("ghost")
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
+
+
+# Text resources for tooltips (module-local directory)
+_LABEL_WIDTH: int = 70
+_TT_VIS_HIDE = MarkdownFileResource("data/tooltips/visibility_hide.md", base_dir=__file__)
+_TT_VIS_SHOW = MarkdownFileResource("data/tooltips/visibility_show.md", base_dir=__file__)
+_TT_GHOST_MODE = MarkdownFileResource("data/tooltips/ghost_mode.md", base_dir=__file__)
+_TT_GHOST_UNGHOST = MarkdownFileResource("data/tooltips/ghost_unghost.md", base_dir=__file__)
+_HELP = MarkdownFileResource("data/tooltips/help_visibility_ghost.md", base_dir=__file__)
 
 
 def create_visibility_ghost_section(
     log_success: Callable[[str], None],
     log_error: Callable[[str], None],
     refresh_tree: Callable[[], None],
+    log_info: Callable[[str], None] | None = None,
 ) -> "QWidget":
     """
     Create merged visibility + ghost section with 2-column layout.
@@ -34,12 +54,19 @@ def create_visibility_ghost_section(
         log_success: Callback for success messages
         log_error: Callback for error messages
         refresh_tree: Callback to refresh the outliner tree
+        log_info: Callback for info/progress messages (falls back to log_success)
 
     Returns:
         CollapsibleSection widget
     """
     section = CollapsibleSection(
-        title="👁️👻 Visibility & Ghost", collapsed=False, state_key="section_visibility_ghost")
+        title="Visibility & Ghost", icon_name="visibility", collapsed=False, state_key="section_visibility_ghost",
+        help_text=_HELP.text,
+    )
+    # Resolve the info logger (falls back to success if not provided)
+    _log_info: Callable[[str], None] = log_info if log_info is not None else log_success
+
+    from utils.ui.progress import make_iteration_context
 
     # Two-column container
     columns_layout = QHBoxLayout()
@@ -66,6 +93,7 @@ def create_visibility_ghost_section(
 
     def on_visibility(scope_name: str, visible: bool) -> None:
         try:
+            from utils.hot_reload import reload_if_dev; reload_if_dev()
             from ops.SculptObject_Visibility import main as op_visibility
             from utils.scope_utils import Scope
             scope = getattr(Scope, scope_name)
@@ -78,6 +106,7 @@ def create_visibility_ghost_section(
 
     def on_invert_visibility() -> None:
         try:
+            from utils.hot_reload import reload_if_dev; reload_if_dev()
             from ops.SculptObject_Visibility import main as op_visibility, VisibilityMode
             from utils.scope_utils import Scope
             count = op_visibility(scope=Scope.ALL, mode=VisibilityMode.INVERT)
@@ -106,53 +135,68 @@ def create_visibility_ghost_section(
         except Exception as e:
             log_error(f"Toggle isolate failed: {e}")
 
-    # Hide row
-    hide_row = QHBoxLayout()
-    hide_row.setContentsMargins(0, 0, 0, 0)
-    hide_label = QLabel("Hide:")
-    hide_label.setMinimumWidth(45)
-    hide_row.addWidget(hide_label)
+    # Visibility rows (GridRowTable)
+    vis_table = GridRowTable()
 
-    hide_grid = ButtonGrid(columns=3)
-    hide_grid.add_button("☝️", lambda: on_visibility(
-        "CURRENT", False), "Hide selected")
-    hide_grid.add_button("🌳", lambda: on_visibility(
-        "TREE", False), "Hide subtree")
-    hide_grid.add_button(
-        "🌎", lambda: on_visibility("ALL", False), "Hide all")
-    hide_row.addWidget(hide_grid)
+    hide_scope_row = ScopeButtonRow()
+    hide_scope_row.set_callback("sel", lambda: on_visibility("CURRENT", False))
+    hide_scope_row.set_callback("tree", lambda: on_visibility("TREE", False))
+    hide_scope_row.set_callback("all", lambda: on_visibility("ALL", False))
+    hide_scope_row.set_tooltips(
+        sel=action_menu_tooltip(
+            "Hide selected",
+            "SculptObject_Hide_Selected.py",
+        ),
+        tree="Hide subtree",
+        all=action_menu_tooltip(
+            "Hide all",
+            "SculptObject_Hide_All.py",
+        ),
+    )
+    vis_hide_label = QLabel("Hide:")
+    vis_hide_label.setFixedWidth(_LABEL_WIDTH)
+    add_tooltip(vis_hide_label, _TT_VIS_HIDE)
+    vis_table.add_cell(0, 0, vis_hide_label, Align.LEFT)
+    vis_table.add_cell(0, 1, hide_scope_row)
 
-    hide_container = QWidget()
-    hide_container.setLayout(hide_row)
-    hide_container.setContentsMargins(0, 0, 0, 0)
-    left_layout.addWidget(hide_container)
+    show_scope_row = ScopeButtonRow()
+    show_scope_row.set_callback("sel", lambda: on_visibility("CURRENT", True))
+    show_scope_row.set_callback("tree", lambda: on_visibility("TREE", True))
+    show_scope_row.set_callback("all", lambda: on_visibility("ALL", True))
+    show_scope_row.set_tooltips(
+        sel=action_menu_tooltip(
+            "Show selected",
+            "SculptObject_Show_Selected.py",
+        ),
+        tree="Show subtree",
+        all=action_menu_tooltip(
+            "Show all",
+            "SculptObject_Show_All.py",
+        ),
+    )
+    vis_show_label = QLabel("Show:")
+    vis_show_label.setFixedWidth(_LABEL_WIDTH)
+    add_tooltip(vis_show_label, _TT_VIS_SHOW)
+    vis_table.add_cell(1, 0, vis_show_label, Align.LEFT)
+    vis_table.add_cell(1, 1, show_scope_row)
 
-    # Show row
-    show_row = QHBoxLayout()
-    show_row.setContentsMargins(0, 0, 0, 0)
-    show_label = QLabel("Show:")
-    show_label.setMinimumWidth(45)
-    show_row.addWidget(show_label)
-
-    show_grid = ButtonGrid(columns=3)
-    show_grid.add_button("☝️", lambda: on_visibility(
-        "CURRENT", True), "Show selected")
-    show_grid.add_button("🌳", lambda: on_visibility(
-        "TREE", True), "Show subtree")
-    show_grid.add_button("🌎", lambda: on_visibility("ALL", True), "Show all")
-    show_row.addWidget(show_grid)
-
-    show_container = QWidget()
-    show_container.setLayout(show_row)
-    show_container.setContentsMargins(0, 0, 0, 0)
-    left_layout.addWidget(show_container)
+    vis_table.finalize()
+    vis_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+    left_layout.addWidget(vis_table)
 
     # Special buttons: [Invert][Toggle Isolate]
     special_grid = ButtonGrid(columns=2)
-    special_grid.add_button("🔄 Invert", on_invert_visibility,
-                            "Invert all visibility states")
-    special_grid.add_button("Toggle Isolate", on_toggle_isolate_visible,
-                            "Toggle isolation (show all / isolate)")
+    special_grid.add_button("Invert", on_invert_visibility,
+                            "Invert all visibility states", icon=_INVERT_ICON)
+    special_grid.add_button(
+        "Toggle Isolate",
+        on_toggle_isolate_visible,
+        action_menu_tooltip(
+            "Toggle isolation (show all / isolate)",
+            "SculptObject_ToggleIsolateVisible_Selected.py",
+        ),
+        icon=_VISIBILITY_ICON,
+    )
     left_layout.addWidget(special_grid)
 
     columns_layout.addWidget(left_column)
@@ -177,61 +221,75 @@ def create_visibility_ghost_section(
 
     def ghost(scope_name: str, ghosted: bool) -> None:
         try:
+            from utils.hot_reload import reload_if_dev; reload_if_dev()
             from ops.SculptObject_SetGhost import main as set_ghost
             from utils.scope_utils import Scope
             scope = getattr(Scope, scope_name)
-            set_ghost(scope=scope, ghost=ghosted)
+            action = "Ghosting" if ghosted else "Unghosting"
+            ctx = make_iteration_context(action, _log_info, log_success)
+            set_ghost(scope=scope, ghost=ghosted,
+                      progress_callback=ctx.on_progress)
             action: str = "Ghosted" if ghosted else "Unghosted"
             log_success(f"{action} {scope_name.lower()}")
             refresh_tree()
         except Exception as e:
             log_error(f"Ghost failed: {e}")
 
-    # Ghost row
-    ghost_row = QHBoxLayout()
-    ghost_row.setContentsMargins(0, 0, 0, 0)
+    # Ghost rows (GridRowTable)
+    ghost_table = GridRowTable()
+
+    ghost_scope_row = ScopeButtonRow()
+    ghost_scope_row.set_callback("sel", lambda: ghost("CURRENT", True))
+    ghost_scope_row.set_callback("tree", lambda: ghost("TREE", True))
+    ghost_scope_row.set_callback("all", lambda: ghost("ALL", True))
+    ghost_scope_row.set_tooltips(
+        sel=action_menu_tooltip(
+            "Ghost selected",
+            "SculptObject_Ghost_Selected.py",
+        ),
+        tree="Ghost subtree",
+        all="Ghost all",
+    )
     ghost_label = QLabel("Ghost:")
-    ghost_label.setMinimumWidth(60)
-    ghost_row.addWidget(ghost_label)
+    ghost_label.setFixedWidth(_LABEL_WIDTH)
+    add_tooltip(ghost_label, _TT_GHOST_MODE)
+    ghost_table.add_cell(0, 0, ghost_label, Align.LEFT)
+    ghost_table.add_cell(0, 1, ghost_scope_row)
 
-    ghost_grid = ButtonGrid(columns=3)
-    ghost_grid.add_button("☝️", lambda: ghost(
-        "CURRENT", True), "Ghost selected")
-    ghost_grid.add_button("🌳", lambda: ghost("TREE", True), "Ghost subtree")
-    ghost_grid.add_button("🌎", lambda: ghost("ALL", True), "Ghost all")
-    ghost_row.addWidget(ghost_grid)
-
-    ghost_container = QWidget()
-    ghost_container.setLayout(ghost_row)
-    ghost_container.setContentsMargins(0, 0, 0, 0)
-    right_layout.addWidget(ghost_container)
-
-    # Unghost row
-    unghost_row = QHBoxLayout()
-    unghost_row.setContentsMargins(0, 0, 0, 0)
+    unghost_scope_row = ScopeButtonRow()
+    unghost_scope_row.set_callback("sel", lambda: ghost("CURRENT", False))
+    unghost_scope_row.set_callback("tree", lambda: ghost("TREE", False))
+    unghost_scope_row.set_callback("all", lambda: ghost("ALL", False))
+    unghost_scope_row.set_tooltips(
+        sel=action_menu_tooltip(
+            "Unghost selected",
+            "SculptObject_Unghost_Selected.py",
+        ),
+        tree="Unghost subtree",
+        all=action_menu_tooltip(
+            "Unghost all",
+            "SculptObject_Unghost_All.py",
+        ),
+    )
     unghost_label = QLabel("Unghost:")
-    unghost_label.setMinimumWidth(60)
-    unghost_row.addWidget(unghost_label)
+    unghost_label.setFixedWidth(_LABEL_WIDTH)
+    add_tooltip(unghost_label, _TT_GHOST_UNGHOST)
+    ghost_table.add_cell(1, 0, unghost_label, Align.LEFT)
+    ghost_table.add_cell(1, 1, unghost_scope_row)
 
-    unghost_grid = ButtonGrid(columns=3)
-    unghost_grid.add_button("☝️", lambda: ghost(
-        "CURRENT", False), "Unghost selected")
-    unghost_grid.add_button("🌳", lambda: ghost(
-        "TREE", False), "Unghost subtree")
-    unghost_grid.add_button("🌎", lambda: ghost("ALL", False), "Unghost all")
-    unghost_row.addWidget(unghost_grid)
-
-    unghost_container = QWidget()
-    unghost_container.setLayout(unghost_row)
-    unghost_container.setContentsMargins(0, 0, 0, 0)
-    right_layout.addWidget(unghost_container)
+    ghost_table.finalize()
+    ghost_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+    right_layout.addWidget(ghost_table)
 
     # Special row: [Invert][Toggle Isolate]
     def invert_ghost() -> None:
         try:
+            from utils.hot_reload import reload_if_dev; reload_if_dev()
             from ops.SculptObject_SetGhost import main as set_ghost, GhostMode
             from utils.scope_utils import Scope
-            set_ghost(scope=Scope.ALL, mode=GhostMode.INVERT)
+            ctx = make_iteration_context("Inverting ghost", _log_info, log_success)
+            set_ghost(scope=Scope.ALL, mode=GhostMode.INVERT,
+                      progress_callback=ctx.on_progress)
             log_success("Inverted ghost states")
             refresh_tree()
         except Exception as e:
@@ -258,12 +316,28 @@ def create_visibility_ghost_section(
             log_error(f"Toggle isolate ghost failed: {e}")
 
     ghost_special_grid = ButtonGrid(columns=2)
-    ghost_special_grid.add_button("🔄 Invert", invert_ghost, "Invert ghost states")
-    ghost_special_grid.add_button("Toggle Isolate", toggle_isolate_ghost,
-                                  "Toggle ghost isolation (unghost all / isolate)")
+    ghost_special_grid.add_button(
+        "Invert",
+        invert_ghost,
+        action_menu_tooltip(
+            "Invert ghost states",
+            "SculptObject_Ghost_Invert_All.py",
+        ),
+        icon=_INVERT_ICON,
+    )
+    ghost_special_grid.add_button(
+        "Toggle Isolate",
+        toggle_isolate_ghost,
+        action_menu_tooltip(
+            "Toggle ghost isolation (unghost all / isolate)",
+            "SculptObject_ToggleIsolateGhost_Selected.py",
+        ),
+        icon=_GHOST_ICON,
+    )
     right_layout.addWidget(ghost_special_grid)
 
     columns_layout.addWidget(right_column)
+    columns_layout.addStretch()
 
     # Add columns to section
     columns_container = QWidget()

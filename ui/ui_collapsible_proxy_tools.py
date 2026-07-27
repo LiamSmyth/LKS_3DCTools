@@ -2,11 +2,9 @@
 LKS UI - Proxy/Cache Tools Collapsible Section.
 
 A collapsible section containing proxy/cache operations with:
-- Two rows of proxy mode radio buttons: Decimate (16x/8x/4x) and Reduce (8x/4x/2x)
-- Toggle proxy scope buttons (Sel/Tree/All)
-- Native cache operations (Cache Visible, Uncache, Clear)
-
-Only one radio button can be selected across both rows (global mode).
+- "Proxy mode:" label + dial-enum picker for selecting the reduction mode
+- Set Proxied / Set Unproxied / Toggle Proxied scope rows (inline)
+- Native cache operations (Cache Visible, Uncache, Clear All)
 
 Usage:
     from ui.ui_collapsible_proxy_tools import create_proxy_section
@@ -21,11 +19,17 @@ if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
 try:
-    from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QRadioButton, QButtonGroup
-    from utils.ui.widgets import CollapsibleSection, ButtonGrid
+    from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
+    from utils.ui.widgets import CollapsibleSection, ScopeButtonRow
+    from utils.ui.widgets.badge_button import make_badge_button
+    from utils.ui.widgets.markdown_file_resource import MarkdownFileResource
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
+
+
+# Text resources for tooltips (module-local directory)
+_HELP = MarkdownFileResource("data/tooltips/help_proxy.md", base_dir=__file__)
 
 
 # =============================================================================
@@ -36,6 +40,7 @@ def create_proxy_section(
     log_success: Callable[[str], None],
     log_error: Callable[[str], None],
     refresh_tree: Callable[[], None],
+    log_info: Callable[[str], None] | None = None,
 ) -> "QWidget":
     """
     Create a collapsible proxy/cache tools section.
@@ -44,126 +49,166 @@ def create_proxy_section(
         log_success: Callback for success messages
         log_error: Callback for error messages
         refresh_tree: Callback to refresh scene tree
+        log_info: Callback for info/progress messages (falls back to log_success)
 
     Returns:
         CollapsibleSection widget with proxy tools
     """
     import coat
+    from utils.Volume_proxy_utils import ProxyMode
+    from lks_utils.gui_qt.widgets.q_dial_enum_picker import QDialEnumPicker
+    from lks_utils.gui_qt.widgets.dial_enum_option import DialEnumOption
+
+    # Resolve the info logger (falls back to success if not provided)
+    _log_info: Callable[[str], None] = log_info if log_info is not None else log_success
+
+    from utils.ui.progress import make_iteration_context
 
     section = CollapsibleSection(
-        title="📦 Proxy / Cache", collapsed=True, state_key="section_proxy")
-    layout = section.content_layout
-
-    # --- Proxy Mode Radio Buttons (shared button group for mutual exclusivity) ---
-    proxy_mode_group = QButtonGroup()
-
-    # Map button IDs to ProxyMode enum values
-    # IDs: 0=Dec16x, 1=Dec8x, 2=Dec4x, 3=Red8x, 4=Red4x, 5=Red2x
-    proxy_mode_ids: dict[int, str] = {
-        0: "DECIMATE_16X",
-        1: "DECIMATE_8X",
-        2: "DECIMATE_4X",
-        3: "REDUCE_8X",
-        4: "REDUCE_4X",
-        5: "REDUCE_2X",
+        title="Proxy / Cache", icon_name="proxy", collapsed=True, state_key="section_proxy",
+        help_text=_HELP.text,
+    )
+    # ── Nice display names for proxy modes ─────────────────────────────
+    _PROXY_MODE_LABELS: dict[ProxyMode, str] = {
+        ProxyMode.DECIMATE_16X: "Decimate 16x",
+        ProxyMode.DECIMATE_8X: "Decimate 8x",
+        ProxyMode.DECIMATE_4X: "Decimate 4x",
+        ProxyMode.DECIMATE_2X: "Decimate 2x",
+        ProxyMode.REDUCE_8X: "Reduce 8x",
+        ProxyMode.REDUCE_4X: "Reduce 4x",
+        ProxyMode.REDUCE_2X: "Reduce 2x",
     }
 
-    # Row 1: "Decimate:" [16x] [8x] [4x]
-    dec_row = QHBoxLayout()
-    dec_row.setContentsMargins(0, 0, 0, 0)
-    dec_row.setSpacing(4)
+    # ── Dial enum picker for proxy mode ────────────────────────────────
+    picker = QDialEnumPicker(
+        options=[
+            DialEnumOption(value=mode, label=_PROXY_MODE_LABELS[mode])
+            for mode in ProxyMode
+        ],
+        current_index=0,
+        width=150,
+        height=22,
+    )
+    picker.setToolTip("Proxy reduction multiplier — scroll or click arrow to change")
 
-    dec_label = QLabel("Decimate:")
-    dec_label.setMinimumWidth(60)
-    dec_row.addWidget(dec_label)
+    # ── Row 1: Proxy mode label + picker ───────────────────────────────
+    mode_row = QWidget()
+    mode_row_layout = QHBoxLayout(mode_row)
+    mode_row_layout.setContentsMargins(0, 0, 0, 0)
+    mode_row_layout.setSpacing(4)
+    mode_label = QLabel("Proxy mode:")
+    mode_label.setStyleSheet("color: #ddd; font-size: 11px;")
+    mode_row_layout.addWidget(mode_label)
+    mode_row_layout.addWidget(picker)
+    mode_row_layout.addStretch()
+    section.content_layout.addWidget(mode_row)
 
-    radio_16x = QRadioButton("16x")
-    radio_16x.setChecked(True)
-    proxy_mode_group.addButton(radio_16x, 0)
-    dec_row.addWidget(radio_16x)
+    # ── Proxy operation helpers ────────────────────────────────────────
+    def _proxy_op(scope_name: str, action: str) -> None:
+        """Apply a proxy action to objects in the given scope.
 
-    radio_8x = QRadioButton("8x")
-    proxy_mode_group.addButton(radio_8x, 1)
-    dec_row.addWidget(radio_8x)
-
-    radio_4x = QRadioButton("4x")
-    proxy_mode_group.addButton(radio_4x, 2)
-    dec_row.addWidget(radio_4x)
-
-    dec_row.addStretch()
-
-    dec_container = QWidget()
-    dec_container.setLayout(dec_row)
-    dec_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(dec_container)
-
-    # Row 2: "Reduce:" [8x] [4x] [2x]
-    red_row = QHBoxLayout()
-    red_row.setContentsMargins(0, 0, 0, 0)
-    red_row.setSpacing(4)
-
-    red_label = QLabel("Reduce:")
-    red_label.setMinimumWidth(60)
-    red_row.addWidget(red_label)
-
-    red_radio_8x = QRadioButton("8x")
-    proxy_mode_group.addButton(red_radio_8x, 3)
-    red_row.addWidget(red_radio_8x)
-
-    red_radio_4x = QRadioButton("4x")
-    proxy_mode_group.addButton(red_radio_4x, 4)
-    red_row.addWidget(red_radio_4x)
-
-    red_radio_2x = QRadioButton("2x")
-    proxy_mode_group.addButton(red_radio_2x, 5)
-    red_row.addWidget(red_radio_2x)
-
-    red_row.addStretch()
-
-    red_container = QWidget()
-    red_container.setLayout(red_row)
-    red_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(red_container)
-
-    # --- Toggle Proxy Scope Buttons ---
-    def toggle_proxy(scope_name: str) -> None:
+        action:  "set_proxied" | "set_unproxied" | "toggle"
+        """
         try:
-            mode_id: int = proxy_mode_group.checkedId()
+            from utils.scope_utils import Scope, resolve_scope
+            from utils.Volume_proxy_utils import set_proxy_mode, toggle_caching
 
-            from ops.SculptObject_Proxy import main as proxy_op
-            from utils.Volume_proxy_utils import ProxyMode
-            from utils.scope_utils import Scope
-
+            proxy_mode: ProxyMode = picker.current_value()
             scope = getattr(Scope, scope_name)
-            mode_name: str = proxy_mode_ids.get(mode_id, "DECIMATE_16X")
-            proxy_mode = getattr(ProxyMode, mode_name)
-            count: int = proxy_op(scope=scope, proxy_mode=proxy_mode)
-            display_name: str = mode_name.replace("_", " ").title()
-            log_success(f"Toggled {display_name} proxy on {count} objects")
+            elements = resolve_scope(scope)
+
+            if not elements:
+                log_error("No objects in scope")
+                return
+
+            count: int = 0
+            total: int = len(elements)
+            action_verb: str = {
+                "set_proxied": "Proxying", "set_unproxied": "Unproxying", "toggle": "Toggling",
+            }[action]
+            progress = make_iteration_context(action_verb, _log_info)
+            for i, el in enumerate(elements):
+                if not el.isSculptObject():
+                    continue
+                if progress.on_progress:
+                    progress.on_progress(i, total, el.name())
+                el.selectOne()
+                set_proxy_mode(proxy_mode)
+
+                if action == "toggle":
+                    toggle_caching()
+                    count += 1
+                else:
+                    currently_cached: bool = coat.is_proxy()
+                    if action == "set_proxied" and not currently_cached:
+                        toggle_caching()
+                        count += 1
+                    elif action == "set_unproxied" and currently_cached:
+                        toggle_caching()
+                        count += 1
+
+            display_name: str = _PROXY_MODE_LABELS.get(proxy_mode, proxy_mode.name)
+            action_verb: str = {
+                "set_proxied": "Proxied",
+                "set_unproxied": "Unproxied",
+                "toggle": "Toggled",
+            }[action]
+            log_success(f"{action_verb} {display_name} on {count} objects")
             refresh_tree()
         except Exception as e:
-            log_error(f"Proxy toggle failed: {e}")
+            log_error(f"Proxy operation failed: {e}")
 
-    toggle_row = QHBoxLayout()
-    toggle_row.setContentsMargins(0, 0, 0, 0)
-    toggle_label = QLabel("Toggle:")
-    toggle_label.setMinimumWidth(60)
-    toggle_row.addWidget(toggle_label)
+    # ── Row 2: Set Proxied / Set Unproxied / Toggle scope rows ────────
+    _SCOPE_KEY_MAP: dict[str, str] = {
+        "sel": "CURRENT", "tree": "TREE", "all": "ALL",
+    }
 
-    toggle_grid = ButtonGrid(columns=3)
-    toggle_grid.add_button("☝️", lambda: toggle_proxy(
-        "CURRENT"), "Toggle proxy on selection")
-    toggle_grid.add_button("🌳", lambda: toggle_proxy(
-        "TREE"), "Toggle proxy on subtree")
-    toggle_grid.add_button("🌎", lambda: toggle_proxy(
-        "ALL"), "Toggle proxy on all")
-    toggle_row.addWidget(toggle_grid)
+    def _make_scope_row(action: str, verb: str) -> ScopeButtonRow:
+        """Create a ScopeButtonRow for a proxy action."""
+        row = ScopeButtonRow()
+        for key in ("sel", "tree", "all"):
+            scope_enum = _SCOPE_KEY_MAP[key]
+            row.set_callback(key, lambda *, k=scope_enum: _proxy_op(k, action))
+        row.set_tooltips(
+            sel=f"{verb} proxy on selected",
+            tree=f"{verb} proxy on subtree",
+            all=f"{verb} proxy on all objects",
+        )
+        return row
 
-    toggle_container = QWidget()
-    toggle_container.setLayout(toggle_row)
-    toggle_container.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(toggle_container)
+    action_row = QWidget()
+    action_row_layout = QHBoxLayout(action_row)
+    action_row_layout.setContentsMargins(0, 0, 0, 0)
+    action_row_layout.setSpacing(2)
 
+    # Set Proxied
+    p_label = QLabel("Set Proxied")
+    p_label.setStyleSheet("color: #888; font-size: 11px; padding: 0 3px 0 0;")
+    action_row_layout.addWidget(p_label)
+    action_row_layout.addWidget(_make_scope_row("set_proxied", "Set proxied"))
+
+    # Spacer between groups
+    action_row_layout.addSpacing(6)
+
+    # Set Unproxied
+    u_label = QLabel("Set Unproxied")
+    u_label.setStyleSheet("color: #888; font-size: 11px; padding: 0 3px 0 0;")
+    action_row_layout.addWidget(u_label)
+    action_row_layout.addWidget(_make_scope_row("set_unproxied", "Set unproxied"))
+
+    # Spacer between groups
+    action_row_layout.addSpacing(6)
+
+    # Toggle
+    t_label = QLabel("Toggle")
+    t_label.setStyleSheet("color: #888; font-size: 11px; padding: 0 3px 0 0;")
+    action_row_layout.addWidget(t_label)
+    action_row_layout.addWidget(_make_scope_row("toggle", "Toggle"))
+
+    action_row_layout.addStretch()
+    section.content_layout.addWidget(action_row)
+
+    # ── Cache buttons ──────────────────────────────────────────────────
     def on_cache_visible() -> None:
         try:
             coat.ui.cmd("$CacheVisible")
@@ -188,17 +233,27 @@ def create_proxy_section(
         except Exception as e:
             log_error(f"Clear caches failed: {e}")
 
-    batch_grid = ButtonGrid(columns=2)
-    batch_grid.add_button("Cache Visible", on_cache_visible,
-                          "Cache all visible objects (native)")
-    batch_grid.add_button(
-        "Uncache Visible", on_uncache_visible, "Uncache all visible objects")
-    layout.addWidget(batch_grid)
+    cache_row = QWidget()
+    cache_row_layout = QHBoxLayout(cache_row)
+    cache_row_layout.setContentsMargins(0, 0, 0, 0)
+    cache_row_layout.setSpacing(4)
 
-    clear_grid = ButtonGrid(columns=1)
-    clear_grid.add_button("Clear All Caches",
-                          on_clear_caches, "Clear all cached objects")
-    layout.addWidget(clear_grid)
+    btn_cache = make_badge_button("proxy", "Cache Visible", "Cache all visible objects (native)")
+    btn_cache.clicked.connect(on_cache_visible)
+    cache_row_layout.addWidget(btn_cache)
+
+    btn_uncache = make_badge_button("proxy", "Uncache Visible", "Uncache all visible objects")
+    btn_uncache.clicked.connect(on_uncache_visible)
+    cache_row_layout.addWidget(btn_uncache)
+
+    btn_clear = make_badge_button("clear", "Clear All Caches", "Clear all cached objects")
+    btn_clear.clicked.connect(on_clear_caches)
+    cache_row_layout.addWidget(btn_clear)
+
+    cache_row_layout.addStretch()
+    section.content_layout.addWidget(cache_row)
+
+    section.content_layout.addStretch()
 
     return section
 

@@ -12,8 +12,10 @@ Design Principles:
 - Pure functions that take elements as arguments
 - Selection preservation is handled at the caller level
 """
+from __future__ import annotations
+from dataclasses import dataclass
 import coat
-from typing import Callable
+from typing import Callable, Iterator
 from enum import Enum
 
 from utils.scene_api import (
@@ -22,6 +24,36 @@ from utils.scene_api import (
     deduplicate_elements,
     get_element_path,
 )
+
+
+# =============================================================================
+# PROGRESS CALLBACK TYPES
+# =============================================================================
+
+ProgressCallback = Callable[[int, int, str], None]
+"""Progress callback: (index: int, total: int, name: str) -> None"""
+
+
+@dataclass
+class IterationContext:
+    """Carries progress context through scope resolution and iteration.
+    
+    Pass this to `apply_to_scope()` or `resolve_scope()` and progress
+    callbacks will fire automatically during element iteration.
+    """
+    # Action verb for per-element messages: "Decimating", "Voxelizing", etc.
+    # Produces: "  Decimating 'Cube' (1/5)..."
+    action_verb: str = "Processing"
+    # Fired for each element: (index, total, element_name)
+    on_progress: ProgressCallback | None = None
+    # Fired once at start: message like "Decimating subtree (5 objects)..."
+    on_start: Callable[[str], None] | None = None
+    # Fired once on completion: message like "Decimated 5/5 objects"
+    on_complete: Callable[[str], None] | None = None
+
+
+# Default action verb constant
+DEFAULT_ACTION_VERB: str = "Processing"
 
 
 class Scope(Enum):
@@ -181,7 +213,8 @@ def _resolve_all_scope(
 def apply_to_scope(
     scope: Scope,
     operation: Callable[[coat.SceneElement], None],
-    preserve_selection: bool = True
+    preserve_selection: bool = True,
+    ctx: IterationContext | None = None,
 ) -> int:
     """
     Apply an operation to all elements matching the scope.
@@ -190,6 +223,7 @@ def apply_to_scope(
         scope: The operation scope
         operation: Function to apply to each element
         preserve_selection: Whether to restore selection after operation
+        ctx: Optional iteration context for progress callbacks
 
     Returns:
         Number of elements processed
@@ -202,18 +236,129 @@ def apply_to_scope(
     # Resolve scope to elements
     elements: list[coat.SceneElement] = resolve_scope(
         scope, original_selection)
+    total: int = len(elements)
+
+    # Start message
+    if ctx and ctx.on_start and total > 0:
+        scope_name: str = scope.name.lower() if hasattr(scope, 'name') else str(scope)
+        ctx.on_start(f"{ctx.action_verb} {scope_name} ({total} objects)...")
 
     # Apply operation
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
+        if ctx and ctx.on_progress:
+            ctx.on_progress(i, total, el.name())
         operation(el)
         count += 1
+
+    # Completion message
+    if ctx and ctx.on_complete and total > 0:
+        ctx.on_complete(f"{ctx.action_verb} {total}/{total} objects")
 
     # Restore selection
     if preserve_selection and original_selection:
         SelectionAPI.restore_selection(original_selection)
 
     return count
+
+
+# =============================================================================
+# INSTANCE-SKIP ITERATORS
+# =============================================================================
+
+class SkippedCounter:
+    """Mutable counter for tracking instance-skipped elements during iteration."""
+    __slots__ = ('value',)
+
+    def __init__(self) -> None:
+        self.value: int = 0
+
+
+def skip_instances(
+    elements: list[coat.SceneElement],
+) -> tuple[list[coat.SceneElement], SkippedCounter]:
+    """
+    Filter out instance-duplicate elements from a batch.
+
+    Snapshots each element's polycount before any operations. Returns
+    a lazily-evaluated iterable: each element's polycount is re-checked
+    against the snapshot at iteration time. When a prior element's
+    modification changes a sibling's polycount (shared mesh data =
+    instance), that sibling is skipped.
+
+    Returns:
+        (non_instance_elements, skipped_counter)
+        non_instance_elements is iterable — instance detection happens
+        during iteration, not at construction time.
+        Access skipped_counter.value after iteration for the count.
+    """
+    _snapshots: dict[str, int] = {}
+    for el in elements:
+        if el.isSculptObject():
+            pc: int = el.Volume().getPolycount()
+            if pc > 0:
+                _snapshots[el.name()] = pc
+
+    counter: SkippedCounter = SkippedCounter()
+
+    def _generate() -> Iterator[coat.SceneElement]:
+        for el in elements:
+            if el.isSculptObject() and el.name() in _snapshots:
+                current_pc: int = el.Volume().getPolycount()
+                snapshot_pc: int = _snapshots[el.name()]
+                if current_pc != snapshot_pc:
+                    print(
+                        f"[skip_instances] SKIP '{el.name()}': instance — "
+                        f"polycount changed from {snapshot_pc:,} to "
+                        f"{current_pc:,} (shared mesh)"
+                    )
+                    counter.value += 1
+                    continue
+            yield el
+
+    class _LazyFiltered:
+        __slots__ = ('_list',)
+
+        def _materialize(self) -> list[coat.SceneElement]:
+            if not hasattr(self, '_list'):
+                self._list = list(_generate())
+            return self._list
+
+        def __iter__(self) -> Iterator[coat.SceneElement]:
+            return iter(self._materialize())
+
+        def __len__(self) -> int:
+            return len(self._materialize())
+
+        def __bool__(self) -> bool:
+            return len(self._materialize()) > 0
+
+    return _LazyFiltered(), counter
+
+
+def resolve_scope_skip_instances(
+    scope: Scope,
+    selected: list[coat.SceneElement] | None = None,
+    include_hidden: bool = False,
+) -> tuple[list[coat.SceneElement], SkippedCounter]:
+    """
+    Convenience: resolve scope then filter out instance-duplicates.
+
+    Equivalent to calling resolve_scope() then skip_instances().
+
+    Args:
+        scope: The operation scope
+        selected: Optional pre-fetched selection
+        include_hidden: If True, include hidden elements
+
+    Returns:
+        (non_instance_elements, skipped_counter)
+        Access skipped_counter.value after iteration for the count.
+    """
+    resolved: list[coat.SceneElement] = resolve_scope(
+        scope, selected=selected, include_hidden=include_hidden
+    )
+    return skip_instances(resolved)
 
 
 # =============================================================================

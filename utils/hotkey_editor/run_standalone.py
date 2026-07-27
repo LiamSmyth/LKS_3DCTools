@@ -17,33 +17,37 @@ _SCRIPT_DIR = Path(__file__).parent
 _UTILS_DIR = _SCRIPT_DIR.parent
 _LKS_ROOT = _UTILS_DIR.parent
 
-# Insert LKS root AFTER hotkey_editor package so relative imports work
-# But we need to make utils.hotkey_editor and utils.hotkey_utils importable
-# without triggering utils/__init__.py
-
-# Monkey-patch: create a fake utils module that only contains what we need
+# Monkey-patch: create a fake utils module so that importing
+# utils.hotkey_editor / utils.hotkey_utils / utils.keycode_map
+# does NOT trigger utils/__init__.py (which requires coat).
 fake_utils = types.ModuleType("utils")
 fake_utils.__path__ = [str(_UTILS_DIR)]
 sys.modules["utils"] = fake_utils
 
-# Now we can import the hotkey_editor package using relative paths
-# since we've set up utils without its __init__.py side effects
+# Ensure LKS root is on sys.path so that hotkey_editor's relative
+# imports within utils/ can resolve.
+sys.path.insert(0, str(_LKS_ROOT))
 
 
-def main():
+def main() -> int:
     """Run the hotkey editor standalone."""
-    # Import after path setup
+    # CRITICAL: QApplication MUST be created before importing any
+    # hotkey_editor module.  qt_imports.py imports QPixmap from
+    # PySide6.QtGui, and QPixmap requires an existing QApplication
+    # on this platform — without it the process crashes with
+    # STATUS_STACK_BUFFER_OVERRUN (0xC0000409).
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+
     from utils.hotkey_editor.qt_imports import HAS_QT
 
     if not HAS_QT:
         print("ERROR: PySide6 is required. Install with: pip install PySide6")
         return 1
 
-    from PySide6.QtWidgets import QApplication
     from utils.hotkey_editor.main_window import HotkeyEditorWindow
     from utils.hotkey_editor.hotkey_imports import discover_hotkeys_path
-
-    app = QApplication(sys.argv)
 
     # Parse path argument
     hotkeys_path: Path | None = None

@@ -9,6 +9,7 @@ then merges them together while preserving their separate part identities.
 Uses scope resolution to determine merge root.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.coat_ui_utils import show_message, show_error
@@ -21,6 +22,7 @@ from utils.coat_ui_utils import show_message, show_error
 def main(
     scope: Scope = Scope.TREE,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Merge subtree while preserving parts.
@@ -28,6 +30,7 @@ def main(
     Args:
         scope: Which objects to merge (typically TREE)
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects merged
@@ -57,10 +60,13 @@ def main(
 
     # Get subtree and convert all to surface
     subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+    total: int = len(subtree)
     count: int = 0
 
-    for el in subtree:
+    for i, el in enumerate(subtree):
         if el.isSculptObject():
+            if progress_callback is not None:
+                progress_callback(i, total, el.name())
             _prepare_for_merge(el)
             count += 1
 

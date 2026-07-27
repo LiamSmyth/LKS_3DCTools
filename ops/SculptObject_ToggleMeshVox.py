@@ -13,8 +13,9 @@ Uses scope resolution to determine which elements to process.
 from __future__ import annotations
 
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.object_utils import ObjectUtils
 from utils.Volume_mode_utils import convert_to_surface, convert_to_voxels_safe
 from utils.coat_ui_utils import show_message, show_error, wait_frames
@@ -24,33 +25,49 @@ from utils.coat_ui_utils import show_message, show_error, wait_frames
 # MAIN OPERATOR
 # =============================================================================
 
-def main(scope: Scope = Scope.CURRENT) -> int:
+def main(
+    scope: Scope = Scope.CURRENT,
+    progress_callback: Callable[[int, int, str], None] | None = None,
+) -> int:
     """
     Toggle sculpt objects between mesh and voxel modes.
 
     Args:
         scope: Which objects to operate on
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects processed
     """
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
 
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
+    total: int = len(elements)
     count: int = 0
 
-    for element in elements:
+    for i, element in enumerate(elements):
         if not element.isSculptObject():
             continue
+
+        if progress_callback is not None:
+            progress_callback(i, total, element.name())
 
         element.selectOne()
         coat.io.step(1)  # Let 3DCoat register the new active selection
         vol: coat.Volume = element.Volume()
         initial_polycount: int = vol.getPolycount()
         object_name: str = element.name()
+
+        # Skip empty voxel layers and other zero-polycount elements
+        if initial_polycount <= 0:
+            print(
+                f"[ToggleMeshVox] SKIP '{object_name}': "
+                f"zero polycount (empty voxel layer)"
+            )
+            continue
 
         if vol.isSurface():
             # Surface → Voxels: native API (no UI command exists for this).

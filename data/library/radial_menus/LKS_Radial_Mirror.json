@@ -1,0 +1,91 @@
+{
+    "version": 3,
+    "name": "LKS_Radial_Mirror",
+    "radius": 128,
+    "items": [
+        {
+            "label": "Mirror X",
+            "type": "action",
+            "icon": "↔️",
+            "action": "$LKS_SculptObject_Mirror_X",
+            "description": "Toggle X-axis mirror on/off",
+            "angle": 90.0
+        },
+        {
+            "label": "Mirror Y",
+            "type": "action",
+            "icon": "↕️",
+            "action": "$LKS_SculptObject_Mirror_Y",
+            "description": "Toggle Y-axis mirror on/off",
+            "angle": 1.0
+        },
+        {
+            "label": "Mirror Z",
+            "type": "action",
+            "icon": "↗️",
+            "action": "$LKS_SculptObject_Mirror_Z",
+            "description": "Toggle Z-axis mirror on/off",
+            "angle": 180.0
+        },
+        {
+            "label": "Symmetry Tools",
+            "type": "list",
+            "side": "right",
+            "icon": "settings.svg",
+            "angle": 270.0,
+            "children": [
+                {
+                    "label": "Toggle Symm",
+                    "type": "action",
+                    "icon": "refresh.svg",
+                    "action": "$LKS_SculptObject_Symmetry_Toggle",
+                    "description": "Toggle symmetry on/off"
+                },
+                {
+                    "label": "Show Plane",
+                    "type": "action",
+                    "icon": "visibility.svg",
+                    "action": "$LKS_SculptObject_Symmetry_ShowPlane",
+                    "description": "Toggle symmetry plane visibility"
+                },
+                {
+                    "label": "Safe Resymm",
+                    "type": "action",
+                    "icon": "check.svg",
+                    "action": "$LKS_SculptObject_RemeshResymm_Safe_Selected",
+                    "description": "Safe symmetrize (preserves polycount)"
+                },
+                {
+                    "label": "Apply Symm",
+                    "type": "action",
+                    "icon": "apply.svg",
+                    "action": "$MakeSymm",
+                    "description": "Raw symmetrize (may crash 3DCoat)"
+                }
+            ]
+        },
+        {
+            "label": "Symmetry Origin",
+            "type": "list",
+            "side": "left",
+            "icon": "target.svg",
+            "angle": 270.0,
+            "children": [
+                {
+                    "label": "Pivot to Object",
+                    "type": "action",
+                    "icon": "📐",
+                    "action": "$LKS_SculptObject_Symmetry_PickFromBB",
+                    "description": "Set symmetry origin to selected object BB"
+                },
+                {
+                    "label": "Pivot to World",
+                    "type": "action",
+                    "icon": "target.svg",
+                    "action": "$LKS_SculptObject_Symmetry_ResetOrigin",
+                    "description": "Reset symmetry origin to world center"
+                }
+            ]
+        }
+    ]
+}

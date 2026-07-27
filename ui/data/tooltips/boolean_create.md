@@ -1,0 +1,1 @@
+<p><b>Create Boolean Child</b> — Clone the selected object and parent it underneath as a new boolean child for <span style='color:#90caf9;'>Union</span>, <span style='color:#90caf9;'>Subtract</span>, or <span style='color:#90caf9;'>Intersect</span> operations. The original object becomes the parent with a boolean mode suffix.</p>

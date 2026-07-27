@@ -1,0 +1,1 @@
+<p><b>Polycount Slider</b> — Decimate to an exact target polygon count from <span style='color:#90caf9;'>100</span> to <span style='color:#90caf9;'>10M</span> (logarithmic). Press an <b>Apply</b> scope button on the right to execute.</p>

@@ -8,6 +8,7 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope, resolve_scope
 from utils.SceneElement_visibility_utils import (
@@ -36,6 +37,7 @@ def main(
     visible: bool = True,
     mode: VisibilityMode = VisibilityMode.SET,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Apply visibility operation to objects.
@@ -45,6 +47,7 @@ def main(
         visible: For SET mode, True = show, False = hide
         mode: Operation mode (SET, INVERT, ISOLATE)
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects affected
@@ -73,6 +76,10 @@ def main(
 
     if mode == VisibilityMode.INVERT:
         # Invert visibility on scope elements
+        total: int = len(elements)
+        if progress_callback is not None:
+            for i, el in enumerate(elements):
+                progress_callback(i, total, el.name())
         count = invert_visibility_on_elements(elements)
         status: str = f"Inverted visibility on {count}"
 
@@ -85,9 +92,17 @@ def main(
 
     else:  # SET mode
         if visible:
+            total = len(elements)
+            if progress_callback is not None:
+                for i, el in enumerate(elements):
+                    progress_callback(i, total, el.name())
             count = show_elements(elements)
             status = f"Showed {count}"
         else:
+            total = len(elements)
+            if progress_callback is not None:
+                for i, el in enumerate(elements):
+                    progress_callback(i, total, el.name())
             count = hide_elements(elements)
             status = f"Hid {count}"
 

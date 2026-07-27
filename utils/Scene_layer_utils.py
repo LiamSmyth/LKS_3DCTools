@@ -5,7 +5,7 @@ Provides utilities for managing sculpt layers in 3DCoat.
 
 Standard Layer Contract (from design):
 - Layer 0: Sculpt detail (100% Depth, 0% Color)
-- Layer 1: Color/material (0% Depth, 100% Color)
+- Layer1: Color/material (0% Depth, 100% Color; 3DCoat paint default name)
 
 Known Gotchas:
 - Decimate and other operations auto-create layers
@@ -50,9 +50,11 @@ import coat
 # CONSTANTS
 # =============================================================================
 
-# Standard layer names (use 3DCoat's default names to avoid duplicates)
+# Standard layer names — match 3DCoat paint-tool defaults (no space).
+# Paint tools auto-create "Layer1"; using "Layer 1" caused a duplicate.
 LAYER_SCULPT: str = "Layer 0"  # Layer 0 - depth only
-LAYER_COLOR: str = "Layer 1"   # Layer 1 - color only
+LAYER_COLOR: str = "Layer1"    # Color layer (3DCoat default name)
+LAYER_COLOR_LEGACY: str = "Layer 1"  # Pre-alignment name; renamed on setup
 
 # Opacity values
 OPACITY_FULL: float = 1.0
@@ -96,6 +98,25 @@ CMD_FILL_LAYER: str = "$FILLLAYER1"  # Fill visible/unghosted with brush
 # SIMPLE LAYER SETUP (uses API - may create extra layers if state is unknown)
 # =============================================================================
 
+def _ensure_color_layer() -> int:
+    """
+    Return the standard color layer ID, creating or renaming as needed.
+
+    Prefers existing "Layer1". If only legacy "Layer 1" exists, renames it.
+    Otherwise creates "Layer1".
+    """
+    color_layer: int = coat.Scene.getLayer(LAYER_COLOR, False)
+    if color_layer >= 0:
+        return color_layer
+
+    legacy_layer: int = coat.Scene.getLayer(LAYER_COLOR_LEGACY, False)
+    if legacy_layer >= 0:
+        coat.Scene.setLayerName(legacy_layer, LAYER_COLOR)
+        return legacy_layer
+
+    return coat.Scene.getLayer(LAYER_COLOR, True)
+
+
 def ensure_standard_layers_simple() -> None:
     """
     Simple layer setup using API calls.
@@ -116,11 +137,10 @@ def ensure_standard_layers_simple() -> None:
     coat.Scene.setLayerGlossOpacity(0, OPACITY_NONE)
     coat.Scene.setLayerMetalnessOpacity(0, OPACITY_NONE)
 
-    # Get or create the Color layer
-    # Use addIfNotExists=True to create if needed (safe - we WANT to create it)
-    color_layer: int = coat.Scene.getLayer(LAYER_COLOR, True)
+    # Get or create the Color layer (reuse legacy "Layer 1" if present)
+    color_layer: int = _ensure_color_layer()
 
-    # Configure Layer 1 (Color) - color only
+    # Configure color layer - color only
     coat.Scene.setLayerDepthOpacity(color_layer, OPACITY_NONE)
     coat.Scene.setLayerColorOpacity(color_layer, OPACITY_FULL)
     coat.Scene.setLayerGlossOpacity(color_layer, OPACITY_FULL)
@@ -143,7 +163,7 @@ def activate_sculpt_layer() -> None:
 
 
 def activate_color_layer() -> None:
-    """Activate Layer 1 (Color layer) for painting."""
+    """Activate Layer1 (Color layer) for painting."""
     color_layer: int = coat.Scene.getLayer(LAYER_COLOR, True)
     coat.Scene.setActiveLayer(color_layer)
     coat.Scene.setCurrentLayer(color_layer)
@@ -305,7 +325,7 @@ def consolidate_layers() -> None:
     """
     Consolidate all layers into a standard 2-layer setup:
     - Layer 0 (Sculpt): 100% Depth, 0% Color
-    - Layer 1 (Color): 0% Depth, 100% Color
+    - Layer1 (Color): 0% Depth, 100% Color
 
     ALGORITHM RATIONALE:
     ---------------------
@@ -330,7 +350,7 @@ def consolidate_layers() -> None:
     3. Merge UP repeatedly to gather all layers above into accumulator
     4. Duplicate accumulator (preserves color data)
     5. Merge accumulator down into Layer 0 (depth only - color lost)
-    6. Rename the copy to "Layer 1" and configure opacities
+    6. Rename the copy to "Layer1" and configure opacities
     7. Clean up any leftover layers
     8. Restore original tool if we switched
     """

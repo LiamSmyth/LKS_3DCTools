@@ -1,16 +1,29 @@
 {
-    "_comment": "Default radial menu configuration - copy to data/state/radial_menu_config.json to use",
-    "root": {
-        "label": "LKS Tools",
-        "children": [
-            {
-                "label": "Decimate",
-                "action": "$Decimate"
-            },
-            {
-                "label": "Ghost",
-                "action": "$Toggle_ghosting"
-            }
-        ]
-    }
+    "version": 3,
+    "name": "default_example",
+    "radius": 128,
+    "_comment": "Default radial menu configuration example (schema version 3). Copy or save via the Radial Menu editor to use.",
+    "items": [
+        {
+            "type": "branch",
+            "label": "LKS Tools",
+            "icon": "🛠️",
+            "children": [
+                {
+                    "type": "action",
+                    "label": "Decimate",
+                    "icon": "🔻",
+                    "action": "$Decimate",
+                    "description": "Open decimate dialog"
+                },
+                {
+                    "type": "action",
+                    "label": "Ghost",
+                    "icon": "👻",
+                    "action": "$Toggle_ghosting",
+                    "description": "Toggle ghosting"
+                }
+            ]
+        }
+    ]
 }

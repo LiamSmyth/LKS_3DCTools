@@ -1,0 +1,1 @@
+<p><b>Reduction Slider</b> — Reduce polygon count from <span style='color:#90caf9;'>5%</span> (heavy decimation) to <span style='color:#90caf9;'>95%</span> (subtle reduction). Press a <b>scope icon</b> on the right (Selected / Subtree / All) to execute.</p>

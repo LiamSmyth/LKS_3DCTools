@@ -17,11 +17,11 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
+from typing import Callable
 
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances, SkippedCounter
 from utils.Volume_resample_utils import execute_resample_scale_only
-from utils.Volume_mode_utils import ensure_surface_mode
 from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
 from utils.coat_ui_utils import show_message, show_error, wait_frames
 
@@ -104,7 +104,6 @@ def _resample_to_polycount(
         return False
 
     vol: coat.Volume = element.Volume()
-    ensure_surface_mode(vol)
 
     element.selectOne()
 
@@ -171,7 +170,6 @@ def _resample_to_density(
         return False
 
     vol: coat.Volume = element.Volume()
-    ensure_surface_mode(vol)
 
     element.selectOne()
 
@@ -242,6 +240,7 @@ def main(
     target_density: float = DEFAULT_DENSITY,
     mode: ResampleTargetMode = ResampleTargetMode.TARGET_POLYCOUNT,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Resample objects to a target polycount or uniform density.
@@ -255,6 +254,7 @@ def main(
             this many polygons; larger objects scale accordingly.
         mode: Resampling strategy
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects resampled
@@ -280,48 +280,21 @@ def main(
         show_error("No object selected", 2000)
         return 0
 
-    # Resolve elements
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    # Resolve elements with instance-skip filtering
+    elements: list[coat.SceneElement]
+    elements, skipped_counter = resolve_scope_skip_instances(scope)
 
-    print(f"[ResampleTarget] Resolved {len(elements)} element(s) for scope={scope.name}")
-    for el in elements:
-        kind: str = _element_kind(el)
-        print(f"  - '{el.name()}' ({kind})")
+    print(f"[ResampleTarget] Resolved elements for scope={scope.name} (via skip_instances)")
 
-    if not elements:
-        show_error("No objects to process", 2000)
-        return 0
-
-    # Snapshot current polycounts BEFORE any resampling.
-    # If an element's polycount changes between its snapshot and its
-    # turn in the loop, it shares mesh data with an earlier element
-    # (instance) and should be skipped.
-    _snapshots: dict[str, int] = {}
-    for el in elements:
-        if el.isSculptObject():
-            pc: int = el.Volume().getPolycount()
-            if pc > 0:
-                _snapshots[el.name()] = pc
+    total: int = len(elements)
 
     # Resample each element
     count: int = 0
     skipped: int = 0
-    instance_skipped: int = 0
-    for el in elements:
-        # Instance check: if this element's polycount no longer matches
-        # its snapshot, a prior element's resample already affected it
-        # via shared mesh data. Skip to avoid double-processing.
-        if el.isSculptObject() and el.name() in _snapshots:
-            current_pc: int = el.Volume().getPolycount()
-            snapshot_pc: int = _snapshots[el.name()]
-            if current_pc != snapshot_pc:
-                print(
-                    f"[ResampleTarget] SKIP '{el.name()}': instance — "
-                    f"polycount changed from {snapshot_pc:,} to "
-                    f"{current_pc:,} (shared mesh)"
-                )
-                instance_skipped += 1
-                continue
+    for i, el in enumerate(elements):
+
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
 
         ok: bool = False
         if mode == ResampleTargetMode.TARGET_POLYCOUNT:
@@ -344,8 +317,8 @@ def main(
     # ── Final summary ──
     print(
         f"[ResampleTarget] DONE: {count} processed, "
-        f"{instance_skipped} instance, {skipped} skipped, "
-        f"{len(elements)} total"
+        f"{skipped_counter.value} instance, {skipped} skipped, "
+        f"scope={scope.name}"
     )
     print("=" * 60)
 

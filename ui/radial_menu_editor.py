@@ -16,19 +16,56 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from utils.radial_menu_migrations import CURRENT_VERSION, migrate_file
+from utils.ui.widgets import add_tooltip
+from utils.ui.widgets.markdown_file_resource import MarkdownFileResource
+
 try:
     from PySide6.QtCore import Qt, Signal, QMimeData, QPoint
     from PySide6.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
-        QPushButton, QLineEdit, QLabel, QComboBox, QSpinBox, QDoubleSpinBox,
+        QPushButton, QLineEdit, QLabel, QSpinBox, QDoubleSpinBox,
         QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QSplitter,
         QListWidget, QListWidgetItem, QMessageBox, QFileDialog, QApplication,
         QMenu, QInputDialog, QTabWidget, QTextEdit
     )
-    from PySide6.QtGui import QAction, QIcon, QDrag
+    from PySide6.QtGui import QAction, QIcon, QDrag, QHideEvent
+    from lks_utils.gui_qt.widgets.q_dial_enum_picker import QDialEnumPicker
+    from lks_utils.gui_qt.widgets.dial_enum_option import DialEnumOption
+    from lks_utils.gui_qt.widgets.svg_icon_picker import QSvgIconPicker
+    from utils.ui.widgets.badge_button import _make_icon_from_svg
+
+    try:
+        from utils.ui.styles import COLOR_ACCENT
+    except ImportError:
+        COLOR_ACCENT = "#90caf9"
+
+    def _make_colored_icon(name: str, color: str, size: int = 16) -> QIcon:
+        """Render an SVG asset to a coloured QIcon (toolbar / tree decoration)."""
+        return _make_icon_from_svg(name, color=color, size=size)
+
+    from ui.radial_menu_theme import TREE_ICON_SIZE
+
+    _ICON_SAVE_RADIAL = _make_colored_icon('save', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_SAVE_AS_RADIAL = _make_colored_icon('save_as', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_NEW_FILE = _make_colored_icon('new_file', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_LOAD = _make_colored_icon('folder_open', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_PREVIEW = _make_colored_icon('visibility', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_ADD = _make_colored_icon('add', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_ADD_CHILD = _make_colored_icon('add_child', COLOR_ACCENT, TREE_ICON_SIZE)
+    _ICON_DELETE = _make_colored_icon('delete', COLOR_ACCENT, TREE_ICON_SIZE)
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False
+    COLOR_ACCENT = "#90caf9"
+    TREE_ICON_SIZE = 24
+    QHideEvent = object  # type: ignore[misc,assignment]
+
+    def _make_colored_icon(name: str, color: str, size: int = 16) -> QIcon:  # type: ignore[misc]
+        raise RuntimeError("Qt not available")
+
+    _ICON_ADD_CHILD = None  # type: ignore[assignment]
 
 # Try to import styles
 try:
@@ -36,6 +73,140 @@ try:
 except ImportError:
     DARK_STYLESHEET = ""
 
+try:
+    from ui.radial_menu_theme import (
+        TREE_ICON_SIZE,
+        apply_action_list_theme,
+        apply_tree_item_row_hint,
+        apply_tree_list_theme,
+        emoji_to_icon,
+        transparent_placeholder_icon,
+    )
+except ImportError:
+    apply_action_list_theme = None  # type: ignore[assignment]
+    apply_tree_item_row_hint = None  # type: ignore[assignment]
+    apply_tree_list_theme = None  # type: ignore[assignment]
+
+    def emoji_to_icon(emoji: str, size: int | None = None) -> QIcon:  # type: ignore[misc]
+        return QIcon()
+
+    def transparent_placeholder_icon(size: int | None = None) -> QIcon:  # type: ignore[misc]
+        return QIcon()
+
+
+# =============================================================================
+# LAYOUT CONSTANTS
+# =============================================================================
+
+_BRANCH_ARROW_SCALE: float = 0.5
+_WIN_MIN_W: int = 800
+_WIN_MIN_H: int = 600
+_TREE_COL_ITEM_W: int = 200
+_SPLITTER_LEFT: int = 400
+_SPLITTER_RIGHT: int = 400
+_PICKER_MIN_W: int = 500
+_PICKER_MIN_H: int = 400
+_PICK_BTN_W: int = 30
+_ENUM_PICKER_W: int = 150
+_ENUM_PICKER_H: int = 22
+
+# Tooltip resources (ui/data/tooltips/)
+_TT_ITEM_LABEL = MarkdownFileResource(
+    "data/tooltips/radial_item_label.md", base_dir=__file__
+)
+_TT_ITEM_ICON = MarkdownFileResource(
+    "data/tooltips/radial_item_icon.md", base_dir=__file__
+)
+_TT_ITEM_TYPE = MarkdownFileResource(
+    "data/tooltips/radial_item_type.md", base_dir=__file__
+)
+_TT_ITEM_ACTION = MarkdownFileResource(
+    "data/tooltips/radial_item_action.md", base_dir=__file__
+)
+_TT_ITEM_ANGLE = MarkdownFileResource(
+    "data/tooltips/radial_item_angle.md", base_dir=__file__
+)
+_TT_ITEM_SIDE = MarkdownFileResource(
+    "data/tooltips/radial_item_side.md", base_dir=__file__
+)
+_TT_ITEM_DESC = MarkdownFileResource(
+    "data/tooltips/radial_item_description.md", base_dir=__file__
+)
+_TT_TOOLBAR_NEW = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_new.md", base_dir=__file__
+)
+_TT_TOOLBAR_LOAD = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_load.md", base_dir=__file__
+)
+_TT_TOOLBAR_SAVE = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_save.md", base_dir=__file__
+)
+_TT_TOOLBAR_SAVE_AS = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_save_as.md", base_dir=__file__
+)
+_TT_TOOLBAR_PREVIEW = MarkdownFileResource(
+    "data/tooltips/radial_menu_preview.md", base_dir=__file__
+)
+_TT_TOOLBAR_ADD_ITEM = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_add_item.md", base_dir=__file__
+)
+_TT_TOOLBAR_ADD_CHILD = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_add_child.md", base_dir=__file__
+)
+_TT_TOOLBAR_DELETE = MarkdownFileResource(
+    "data/tooltips/radial_toolbar_delete.md", base_dir=__file__
+)
+_TT_TREE = MarkdownFileResource(
+    "data/tooltips/radial_tree.md", base_dir=__file__
+)
+
+
+# =============================================================================
+# HELPERS
+# =============================================================================
+
+def _is_svg_icon(icon_str: str) -> bool:
+    """Return True if *icon_str* is an SVG filename or path (case-insensitive)."""
+    return bool(icon_str and Path(icon_str).suffix.lower() == ".svg")
+
+
+def _svg_basename(icon_str: str) -> str:
+    """Return SVG stem (``visibility.svg`` / full path → ``visibility``)."""
+    return Path(icon_str).stem
+
+
+def tree_display_text(data: MenuItemData) -> str:
+    """Label-only tree text — icons always go in the decoration column."""
+    return data.label
+
+
+def render_tree_item_icon(icon_str: str) -> QIcon:
+    """Return a fixed-size decoration icon for a tree row.
+
+    Always returns a ``TREE_ICON_SIZE`` pixmap (SVG, emoji, or transparent
+    placeholder) so siblings share the same text column.
+    """
+    if not icon_str:
+        return transparent_placeholder_icon(TREE_ICON_SIZE)
+    if _is_svg_icon(icon_str):
+        try:
+            icon: QIcon = _make_colored_icon(
+                _svg_basename(icon_str), COLOR_ACCENT, TREE_ICON_SIZE)
+            if not icon.isNull():
+                return icon
+        except Exception:
+            pass
+        return transparent_placeholder_icon(TREE_ICON_SIZE)
+    return emoji_to_icon(icon_str, TREE_ICON_SIZE)
+
+
+def apply_tree_item_visuals(item: QTreeWidgetItem, data: MenuItemData) -> None:
+    """Set label text, decoration icon, and row height for a tree item."""
+    item.setText(0, tree_display_text(data))
+    item.setText(1, data.action)
+    item.setIcon(0, render_tree_item_icon(data.icon))
+    if apply_tree_item_row_hint is not None:
+        apply_tree_item_row_hint(item)
 
 # =============================================================================
 # CONSTANTS
@@ -91,19 +262,35 @@ COMMON_ICONS: list[str] = [
 # DATA STRUCTURES
 # =============================================================================
 
+# Valid node types for serialization
+_NODE_TYPES: tuple[str, str, str] = ("action", "branch", "list")
+
+
 @dataclass
 class MenuItemData:
-    """Data for a single menu item."""
+    """Data for a single menu item.
+
+    Node types:
+        ``action`` — ring item that invokes a 3DCoat command (has action, no children).
+        ``branch`` — ring item that opens a submenu (has children, no direct action).
+        ``list``   — list panel displayed beside the ring (has children, no direct action).
+    """
     label: str
     icon: str = ""
-    action: str = ""  # 3DCoat command like "$CommandName"
+    action: str = ""  # 3DCoat command like "$CommandName" (only for 'action' type)
     description: str = ""
     angle: float | None = None
     children: list[MenuItemData] | None = None
+    node_type: str = "action"  # "action", "branch", or "list"
+    list_side: str = "right"   # "left" or "right" (only meaningful for list nodes)
 
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dict."""
         data = {"label": self.label}
+        # Always serialise the type so the config is self-describing.
+        data["type"] = self.node_type
+        if self.node_type == "list":
+            data["side"] = self.list_side
         if self.icon:
             data["icon"] = self.icon
         if self.action:
@@ -117,11 +304,28 @@ class MenuItemData:
         return data
 
     @classmethod
+    def _infer_node_type(cls, raw_type: str, data: dict) -> str:
+        """Resolve the canonical node type with backward compatibility.
+
+        Old formats: ``"list"`` and ``"leaf"`` → ``"list"``, absent/empty → inferred.
+        """
+        if raw_type in ("list", "leaf"):
+            return "list"
+        if raw_type in _NODE_TYPES:
+            return raw_type
+        # Legacy config with no explicit type — infer from structure.
+        if data.get("children"):
+            return "branch"
+        return "action"
+
+    @classmethod
     def from_dict(cls, data: dict) -> MenuItemData:
         """Create from dict (parsed JSON)."""
         children = None
         if "children" in data:
             children = [cls.from_dict(c) for c in data["children"]]
+        raw_type: str = data.get("type", "")
+        node_type: str = cls._infer_node_type(raw_type, data)
         return cls(
             label=data["label"],
             icon=data.get("icon", ""),
@@ -129,6 +333,8 @@ class MenuItemData:
             description=data.get("description", ""),
             angle=data.get("angle"),
             children=children,
+            node_type=node_type,
+            list_side=data.get("side", "right"),
         )
 
 
@@ -142,7 +348,7 @@ class ActionPickerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Pick Action")
-        self.setMinimumSize(500, 400)
+        self.setMinimumSize(_PICKER_MIN_W, _PICKER_MIN_H)
         self._selected_action: str = ""
         self._setup_ui()
         self._load_actions()
@@ -165,11 +371,15 @@ class ActionPickerDialog(QDialog):
         # Tab 1: LKS Registered Actions
         self._lks_list = QListWidget()
         self._lks_list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        if apply_action_list_theme is not None:
+            apply_action_list_theme(self._lks_list)
         self._tabs.addTab(self._lks_list, "LKS Actions")
 
         # Tab 2: Common 3DCoat Commands
         self._coat_list = QListWidget()
         self._coat_list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        if apply_action_list_theme is not None:
+            apply_action_list_theme(self._coat_list)
         self._tabs.addTab(self._coat_list, "3DCoat Commands")
 
         # Tab 3: Custom Command
@@ -275,27 +485,50 @@ class MenuItemEditorPanel(QGroupBox):
         # Label
         self._label_edit = QLineEdit()
         self._label_edit.textChanged.connect(self._on_property_changed)
+        add_tooltip(self._label_edit, _TT_ITEM_LABEL)
         layout.addRow("Label:", self._label_edit)
 
-        # Icon picker
+        # Icon picker (SVG-based with visual preview)
         icon_layout = QHBoxLayout()
-        self._icon_combo = QComboBox()
-        self._icon_combo.setEditable(True)
-        self._icon_combo.addItems([""] + COMMON_ICONS)
-        self._icon_combo.currentTextChanged.connect(self._on_property_changed)
+        _svg_dir = Path(__file__).resolve().parent.parent / "utils" / "ui" / "data"
+        self._icon_combo = QSvgIconPicker(
+            svg_directory=str(_svg_dir),
+            parent=self,
+        )
+        self._icon_combo.currentValueChanged.connect(self._on_icon_changed)
+        add_tooltip(self._icon_combo, _TT_ITEM_ICON)
         icon_layout.addWidget(self._icon_combo)
         layout.addRow("Icon:", icon_layout)
+
+        # Node type: Action / Branch / List
+        self._type_values: list[str] = ["action", "branch", "list"]
+        self._type_combo = QDialEnumPicker(
+            options=[
+                DialEnumOption(value="action", label="Action"),
+                DialEnumOption(value="branch", label="Branch"),
+                DialEnumOption(value="list", label="List"),
+            ],
+            current_index=0,
+            width=_ENUM_PICKER_W,
+            height=_ENUM_PICKER_H,
+        )
+        self._type_combo.current_index_changed.connect(lambda idx: self._on_type_changed(idx))
+        add_tooltip(self._type_combo, _TT_ITEM_TYPE)
+        layout.addRow("Type:", self._type_combo)
 
         # Action (3DCoat command)
         action_layout = QHBoxLayout()
         self._action_edit = QLineEdit()
         self._action_edit.setPlaceholderText("$CommandName")
         self._action_edit.textChanged.connect(self._on_property_changed)
+        add_tooltip(self._action_edit, _TT_ITEM_ACTION)
         action_layout.addWidget(self._action_edit)
         self._pick_action_btn = QPushButton("...")
-        self._pick_action_btn.setFixedWidth(30)
+        self._pick_action_btn.setFixedWidth(_PICK_BTN_W)
         self._pick_action_btn.clicked.connect(self._pick_action)
+        add_tooltip(self._pick_action_btn, _TT_ITEM_ACTION)
         action_layout.addWidget(self._pick_action_btn)
+        self._action_label_row: int = layout.rowCount()  # track for label lookup
         layout.addRow("Action:", action_layout)
 
         # Angle (optional, for root items)
@@ -304,16 +537,68 @@ class MenuItemEditorPanel(QGroupBox):
         self._angle_spin.setDecimals(0)
         self._angle_spin.setSpecialValueText("Auto")
         self._angle_spin.valueChanged.connect(self._on_property_changed)
+        add_tooltip(self._angle_spin, _TT_ITEM_ANGLE)
+        self._angle_label_row: int = layout.rowCount()
         layout.addRow("Angle:", self._angle_spin)
+
+        # Side (only for list type)
+        self._side_combo = QDialEnumPicker(
+            options=[
+                DialEnumOption(value="right", label="Right"),
+                DialEnumOption(value="left", label="Left"),
+            ],
+            current_index=0,
+            width=_ENUM_PICKER_W,
+            height=_ENUM_PICKER_H,
+        )
+        self._side_combo.current_index_changed.connect(lambda idx: self._on_property_changed())
+        add_tooltip(self._side_combo, _TT_ITEM_SIDE)
+        self._side_label_row: int = layout.rowCount()
+        layout.addRow("Side:", self._side_combo)
 
         # Description
         self._desc_edit = QLineEdit()
         self._desc_edit.setPlaceholderText("Optional description...")
         self._desc_edit.textChanged.connect(self._on_property_changed)
+        add_tooltip(self._desc_edit, _TT_ITEM_DESC)
         layout.addRow("Description:", self._desc_edit)
 
         # Start disabled
         self.setEnabled(False)
+
+        # Initial state: default "Action" type — side hidden
+        self._side_combo.setVisible(False)
+        self._set_row_visible(layout, self._side_label_row, False)
+
+    def _on_type_changed(self, index: int) -> None:
+        """Handle type combo change.
+
+        ``action`` → action + angle enabled, side hidden.
+        ``branch`` → action disabled (branches don't invoke commands),
+                      angle enabled, side hidden.
+        ``list``   → action + angle disabled, side visible.
+        """
+        node_type: str = self._type_combo.current_value()
+        is_action: bool = (node_type == "action")
+        is_list: bool = (node_type == "list")
+
+        self._action_edit.setEnabled(is_action)
+        self._pick_action_btn.setEnabled(is_action)
+        self._angle_spin.setEnabled(not is_list)
+        self._side_combo.setVisible(is_list)
+        self._set_row_visible(self.layout(), self._side_label_row, is_list)
+        self._on_property_changed()
+
+    @staticmethod
+    def _set_row_visible(layout: QFormLayout, row: int, visible: bool) -> None:
+        """Show/hide a form row by its row index."""
+        if 0 <= row < layout.rowCount():
+            label_item = layout.itemAt(row, QFormLayout.LabelRole)
+            field_item = layout.itemAt(row, QFormLayout.FieldRole)
+            if label_item and label_item.widget():
+                label_item.widget().setVisible(visible)
+            if field_item and field_item.widget():
+                field_item.widget().setVisible(visible)
 
     def _pick_action(self):
         """Open action picker dialog."""
@@ -321,6 +606,16 @@ class MenuItemEditorPanel(QGroupBox):
         if dialog.exec() == QDialog.Accepted:
             action = dialog.get_selected_action()
             self._action_edit.setText(action)
+
+    def _on_icon_changed(self, path: str) -> None:
+        """Handle icon selection change.
+        
+        Clear the QSvgIconPicker button text for SVG icons so only the
+        rendered pixmap shows — the filename text is redundant visual noise.
+        """
+        if _is_svg_icon(path):
+            self._icon_combo._button.setText("")
+        self._on_property_changed()
 
     def _on_property_changed(self):
         """Handle property change."""
@@ -334,12 +629,34 @@ class MenuItemEditorPanel(QGroupBox):
 
         if item:
             data: MenuItemData = item.data(0, Qt.UserRole)
+
+            # Type value → index lookup
+            type_idx: int = self._type_values.index(data.node_type) if data.node_type in self._type_values else 0
+
+            # Side value → index lookup
+            side_values: list[str] = ["right", "left"]
+            side: str = data.list_side or "right"
+            side_idx: int = side_values.index(side) if side in side_values else 0
+
             self._label_edit.setText(data.label)
-            self._icon_combo.setCurrentText(data.icon)
+            self._icon_combo.setCurrentSvgPath(data.icon)
+            # Clear button text for SVG icons — icon renders as pixmap
+            if _is_svg_icon(data.icon):
+                self._icon_combo._button.setText("")
             self._action_edit.setText(data.action)
             self._angle_spin.setValue(
                 data.angle if data.angle is not None else 0)
             self._desc_edit.setText(data.description)
+
+            self._type_combo.set_current_index(type_idx)
+            is_action: bool = (data.node_type == "action")
+            is_list: bool = (data.node_type == "list")
+            self._side_combo.setVisible(is_list)
+            self._set_row_visible(self.layout(), self._side_label_row, is_list)
+            self._side_combo.set_current_index(side_idx)
+            self._action_edit.setEnabled(is_action)
+            self._pick_action_btn.setEnabled(is_action)
+            self._angle_spin.setEnabled(not is_list)
 
     def get_data(self) -> MenuItemData | None:
         """Get current data from form."""
@@ -347,12 +664,16 @@ class MenuItemEditorPanel(QGroupBox):
             return None
 
         angle = self._angle_spin.value()
+        node_type: str = self._type_combo.current_value()
+        list_side: str = self._side_combo.current_value()
         return MenuItemData(
             label=self._label_edit.text(),
-            icon=self._icon_combo.currentText(),
+            icon=self._icon_combo.currentSvgPath(),
             action=self._action_edit.text(),
             description=self._desc_edit.text(),
             angle=angle if angle > 0 else None,
+            node_type=node_type,
+            list_side=list_side,
         )
 
 
@@ -366,16 +687,19 @@ class RadialMenuEditorWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Radial Menu Editor")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(_WIN_MIN_W, _WIN_MIN_H)
 
         self._config_path: Path = DEFAULT_CONFIG_PATH
         self._modified: bool = False
+        self._preview_active: bool = False
+
+        # Apply dark stylesheet BEFORE building UI so child tree widgets
+        # inherit the (stripped) branch rules from the cascade.
+        if DARK_STYLESHEET:
+            self.setStyleSheet(DARK_STYLESHEET)
 
         self._setup_ui()
         self._load_config()
-
-        if DARK_STYLESHEET:
-            self.setStyleSheet(DARK_STYLESHEET)
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -383,26 +707,37 @@ class RadialMenuEditorWindow(QWidget):
         # Toolbar
         toolbar = QHBoxLayout()
 
-        self._new_btn = QPushButton("📄 New")
+        self._new_btn = QPushButton("New")
+        self._new_btn.setIcon(_ICON_NEW_FILE)
+        add_tooltip(self._new_btn, _TT_TOOLBAR_NEW)
         self._new_btn.clicked.connect(self._new_config)
         toolbar.addWidget(self._new_btn)
 
-        self._load_btn = QPushButton("📂 Load")
+        self._load_btn = QPushButton("Load")
+        self._load_btn.setIcon(_ICON_LOAD)
+        add_tooltip(self._load_btn, _TT_TOOLBAR_LOAD)
         self._load_btn.clicked.connect(self._load_config_dialog)
         toolbar.addWidget(self._load_btn)
 
-        self._save_btn = QPushButton("💾 Save")
+        self._save_btn = QPushButton("Save")
+        self._save_btn.setIcon(_ICON_SAVE_RADIAL)
+        add_tooltip(self._save_btn, _TT_TOOLBAR_SAVE)
         self._save_btn.clicked.connect(self._save_config)
         toolbar.addWidget(self._save_btn)
 
-        self._save_as_btn = QPushButton("💾 Save As...")
+        self._save_as_btn = QPushButton("Save As...")
+        self._save_as_btn.setIcon(_ICON_SAVE_AS_RADIAL)
+        add_tooltip(self._save_as_btn, _TT_TOOLBAR_SAVE_AS)
         self._save_as_btn.clicked.connect(self._save_config_as)
         toolbar.addWidget(self._save_as_btn)
 
         toolbar.addStretch()
 
-        self._preview_btn = QPushButton("👁️ Preview")
-        self._preview_btn.clicked.connect(self._preview_menu)
+        self._preview_btn = QPushButton("Preview Radial (Hold)")
+        self._preview_btn.setIcon(_ICON_PREVIEW)
+        add_tooltip(self._preview_btn, _TT_TOOLBAR_PREVIEW)
+        self._preview_btn.pressed.connect(self._on_preview_pressed)
+        self._preview_btn.released.connect(self._on_preview_released)
         toolbar.addWidget(self._preview_btn)
 
         main_layout.addLayout(toolbar)
@@ -420,25 +755,41 @@ class RadialMenuEditorWindow(QWidget):
 
         self._tree = QTreeWidget()
         self._tree.setHeaderLabels(["Item", "Action"])
-        self._tree.setColumnWidth(0, 200)
+        self._tree.setColumnWidth(0, _TREE_COL_ITEM_W)
         self._tree.setDragDropMode(QTreeWidget.InternalMove)
         self._tree.setSelectionMode(QTreeWidget.SingleSelection)
         self._tree.itemSelectionChanged.connect(self._on_selection_changed)
         self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
+        add_tooltip(self._tree, _TT_TREE)
+
+        # Force light branch arrows on dark background
+        from lks_utils.gui_qt.theme import darken_treeview
+        darken_treeview(self._tree, branch_scale=_BRANCH_ARROW_SCALE)
+        # Theme after darken_treeview (API sizing only — no tree QSS).
+        if apply_tree_list_theme is not None:
+            apply_tree_list_theme(self._tree)
+
         left_layout.addWidget(self._tree)
 
         # Tree buttons
         tree_buttons = QHBoxLayout()
-        self._add_item_btn = QPushButton("➕ Add Item")
+        self._add_item_btn = QPushButton("Add Item")
+        self._add_item_btn.setIcon(_ICON_ADD)
+        add_tooltip(self._add_item_btn, _TT_TOOLBAR_ADD_ITEM)
         self._add_item_btn.clicked.connect(self._add_item)
         tree_buttons.addWidget(self._add_item_btn)
 
-        self._add_child_btn = QPushButton("➕ Add Child")
+        self._add_child_btn = QPushButton("Add Child")
+        add_child_icon: QIcon = _ICON_ADD_CHILD if _ICON_ADD_CHILD is not None else _ICON_ADD
+        self._add_child_btn.setIcon(add_child_icon)
+        add_tooltip(self._add_child_btn, _TT_TOOLBAR_ADD_CHILD)
         self._add_child_btn.clicked.connect(self._add_child)
         tree_buttons.addWidget(self._add_child_btn)
 
-        self._delete_btn = QPushButton("🗑️ Delete")
+        self._delete_btn = QPushButton("Delete")
+        self._delete_btn.setIcon(_ICON_DELETE)
+        add_tooltip(self._delete_btn, _TT_TOOLBAR_DELETE)
         self._delete_btn.clicked.connect(self._delete_item)
         tree_buttons.addWidget(self._delete_btn)
 
@@ -451,7 +802,7 @@ class RadialMenuEditorWindow(QWidget):
         self._editor_panel.itemChanged.connect(self._on_item_edited)
         splitter.addWidget(self._editor_panel)
 
-        splitter.setSizes([400, 400])
+        splitter.setSizes([_SPLITTER_LEFT, _SPLITTER_RIGHT])
         main_layout.addWidget(splitter)
 
         # Status bar
@@ -470,8 +821,7 @@ class RadialMenuEditorWindow(QWidget):
             return
 
         try:
-            with open(path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            config, _migrated = migrate_file(path, write=True)
 
             items = config.get("items", [])
             for item_data in items:
@@ -485,9 +835,10 @@ class RadialMenuEditorWindow(QWidget):
 
     def _add_tree_item(self, data: MenuItemData, parent: QTreeWidgetItem | None = None) -> QTreeWidgetItem:
         """Add a tree item from MenuItemData."""
-        display = f"{data.icon} {data.label}" if data.icon else data.label
-        item = QTreeWidgetItem([display, data.action])
+        item = QTreeWidgetItem(["", data.action])
         item.setData(0, Qt.UserRole, data)
+        apply_tree_item_visuals(item, data)
+
         item.setFlags(item.flags() | Qt.ItemIsDragEnabled |
                       Qt.ItemIsDropEnabled)
 
@@ -526,7 +877,9 @@ class RadialMenuEditorWindow(QWidget):
                     self._tree.topLevelItem(i)))
 
             config = {
-                "version": "1.0",
+                "version": CURRENT_VERSION,
+                "name": path.stem,
+                "radius": 128,
                 "items": [item.to_dict() for item in items]
             }
 
@@ -555,6 +908,8 @@ class RadialMenuEditorWindow(QWidget):
             description=data.description,
             angle=data.angle,
             children=children if children else None,
+            node_type=data.node_type,
+            list_side=data.list_side,
         )
 
     def _new_config(self):
@@ -599,11 +954,8 @@ class RadialMenuEditorWindow(QWidget):
         item = items[0]
         data = self._editor_panel.get_data()
         if data:
-            # Update tree item
-            display = f"{data.icon} {data.label}" if data.icon else data.label
-            item.setText(0, display)
-            item.setText(1, data.action)
             item.setData(0, Qt.UserRole, data)
+            apply_tree_item_visuals(item, data)
             self._modified = True
 
     def _add_item(self):
@@ -652,68 +1004,104 @@ class RadialMenuEditorWindow(QWidget):
     def _show_context_menu(self, pos: QPoint):
         """Show context menu for tree."""
         menu = QMenu(self)
-        menu.addAction("➕ Add Item", self._add_item)
-        menu.addAction("➕ Add Child", self._add_child)
+        add_child_icon: QIcon = _ICON_ADD_CHILD if _ICON_ADD_CHILD is not None else _ICON_ADD
+        menu.addAction(_ICON_ADD, "Add Item", self._add_item)
+        menu.addAction(add_child_icon, "Add Child", self._add_child)
         menu.addSeparator()
-        menu.addAction("🗑️ Delete", self._delete_item)
+        menu.addAction(_ICON_DELETE, "Delete", self._delete_item)
         menu.exec(self._tree.mapToGlobal(pos))
 
-    def _preview_menu(self):
-        """Preview the current menu configuration."""
+    def _build_preview_menu_items(
+        self,
+        parent: QTreeWidgetItem | None = None,
+    ) -> list:
+        """Build RadialMenuItem tree from the live editor tree (actions stubbed)."""
+        from utils.ui.widgets.radial_menu import RadialMenuItem
+
+        items: list[RadialMenuItem] = []
+        count: int = (
+            parent.childCount() if parent is not None
+            else self._tree.topLevelItemCount()
+        )
+
+        for i in range(count):
+            tree_item: QTreeWidgetItem | None = (
+                parent.child(i) if parent is not None
+                else self._tree.topLevelItem(i)
+            )
+            if tree_item is None:
+                continue
+            data: MenuItemData | None = tree_item.data(0, Qt.UserRole)
+            if data is None:
+                continue
+
+            children: list[RadialMenuItem] | None = None
+            if tree_item.childCount() > 0:
+                children = self._build_preview_menu_items(tree_item)
+
+            menu_item: RadialMenuItem = RadialMenuItem(
+                label=data.label,
+                action=lambda: None,
+                icon=data.icon or None,
+                children=children,
+                angle=data.angle,
+                is_list=(data.node_type == "list"),
+                list_side=data.list_side,
+            )
+            items.append(menu_item)
+
+        return items
+
+    def _on_preview_pressed(self) -> None:
+        """Show a live-tree radial preview while the Preview button is held."""
         try:
-            # Build menu items from tree
-            from utils.ui.widgets.radial_menu import RadialMenuItem
+            from utils.ui.widgets.radial_menu_manager import get_manager
 
-            def tree_to_menu_items(parent: QTreeWidgetItem | None = None) -> list[RadialMenuItem]:
-                items = []
-                count = parent.childCount() if parent else self._tree.topLevelItemCount()
-
-                for i in range(count):
-                    tree_item = parent.child(
-                        i) if parent else self._tree.topLevelItem(i)
-                    data: MenuItemData = tree_item.data(0, Qt.UserRole)
-
-                    # Build children recursively
-                    children = None
-                    if tree_item.childCount() > 0:
-                        children = tree_to_menu_items(tree_item)
-
-                    # Create action wrapper
-                    action_cmd = data.action
-
-                    def make_action(cmd: str):
-                        def action():
-                            print(f"[Preview] Would execute: {cmd}")
-                        return action
-
-                    menu_item = RadialMenuItem(
-                        label=data.label,
-                        action=make_action(action_cmd),
-                        icon=data.icon or None,
-                        children=children,
-                        angle=data.angle,
-                    )
-                    items.append(menu_item)
-
-                return items
-
-            menu_items = tree_to_menu_items()
-
+            menu_items = self._build_preview_menu_items()
             if not menu_items:
                 QMessageBox.information(
                     self, "No Items", "Add some menu items first.")
                 return
 
-            # Show preview
-            from utils.ui.widgets.radial_menu_manager import get_manager
-            manager = get_manager()
-            manager.show_menu(menu_items)
-
+            get_manager().show_menu(
+                menu_items,
+                menu_name=self._config_path.stem if self._config_path else "Preview",
+            )
+            self._preview_active = True
+            self._status_label.setText("Preview active (release to close)")
         except Exception as e:
+            self._preview_active = False
             import traceback
             QMessageBox.critical(
-                self, "Preview Error", f"Failed to preview: {e}\n\n{traceback.format_exc()}")
+                self,
+                "Preview Error",
+                f"Failed to preview: {e}\n\n{traceback.format_exc()}",
+            )
 
+    def _on_preview_released(self) -> None:
+        """Close the preview radial without invoking an action."""
+        self._hide_preview_menu()
+
+    def _hide_preview_menu(self) -> None:
+        """Hide an active preview overlay, if any."""
+        if not self._preview_active:
+            return
+        self._preview_active = False
+        try:
+            from utils.ui.widgets.radial_menu_manager import get_manager
+
+            get_manager().hide_menu()
+        except Exception as e:
+            self._status_label.setText(f"Preview hide failed: {e}")
+            return
+        self.raise_()
+        self.activateWindow()
+        self._status_label.setText("Ready")
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """Ensure a held preview cannot stick open if the window is hidden."""
+        self._hide_preview_menu()
+        super().hideEvent(event)
 
 # =============================================================================
 # LAUNCH FUNCTION

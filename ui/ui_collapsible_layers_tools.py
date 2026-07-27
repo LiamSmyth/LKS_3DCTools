@@ -3,7 +3,7 @@ LKS UI - Layers Tools Collapsible Section.
 
 A collapsible section containing layer management:
 - Setup standard layers (Sculpt/Color)
-- Clean empty layers
+- Cleanup empty layers (then select Layer 0)
 - Consolidate all layers
 
 Usage:
@@ -19,47 +19,26 @@ if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
 try:
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QSizePolicy
     from utils.ui.widgets import CollapsibleSection, ButtonGrid, add_tooltip
+    from utils.ui.widgets.markdown_file_resource import MarkdownFileResource
+    from utils.ui.widgets.badge_button import _make_icon_from_svg
+
+    _LAYERS_ICON: QIcon = _make_icon_from_svg("layers")
+    _CLEANUP_ICON: QIcon = _make_icon_from_svg("cleanup")
+
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
 
 
-# =============================================================================
-# TOOLTIPS FOR LAYER OPERATIONS
-# =============================================================================
+# Tooltip resources (module-local directory)
+_TT_SETUP = MarkdownFileResource("data/tooltips/layers_setup.md", base_dir=__file__)
+_TT_CLEAN = MarkdownFileResource("data/tooltips/layers_clean.md", base_dir=__file__)
+_TT_CONSOLIDATE = MarkdownFileResource("data/tooltips/layers_consolidate.md", base_dir=__file__)
+_HELP = MarkdownFileResource("data/tooltips/help_layers.md", base_dir=__file__)
 
-TOOLTIP_SETUP_LAYERS: str = """
-<b>Setup Standard Layers</b><br><br>
-Creates the standard 2-layer setup for sculpting:<br>
-• <b>Layer 0</b> - "Sculpt" (Depth layer, 100% opacity)<br>
-• <b>Layer 1</b> - "Color" (Vertex colors, 100% opacity)<br><br>
-<i>Non-destructive: existing layers are preserved.</i>
-"""
-
-TOOLTIP_CLEAN_LAYERS: str = """
-<b>Clean Empty Layers</b><br><br>
-Removes layers created by mesh operations that<br>
-are empty or no longer needed.<br><br>
-Use after decimate, resample, or boolean operations<br>
-to clean up unwanted layer clutter.<br><br>
-<i>Non-destructive: only removes empty layers.</i>
-"""
-
-TOOLTIP_CONSOLIDATE_LAYERS: str = """
-<b>Consolidate All Layers</b><br><br>
-Merges ALL layers down into the standard 2-layer setup:<br>
-• Flattens all sculpt depth into Layer 0<br>
-• Flattens all vertex colors into Layer 1<br><br>
-<span style="color:#ffb74d"><b>⚠ DESTRUCTIVE:</b></span> This cannot be undone!<br>
-All layer separations will be permanently lost.<br><br>
-<i>Use when you want to simplify a complex layer stack.</i>
-"""
-
-
-# =============================================================================
-# LAYERS SECTION FACTORY
-# =============================================================================
 
 def create_layers_section(
     log_success: Callable[[str], None],
@@ -78,7 +57,9 @@ def create_layers_section(
         CollapsibleSection widget with layer tools
     """
     section = CollapsibleSection(
-        title="📚 Layers", collapsed=True, state_key="section_layers")
+        title="Layers", icon_name="layers", collapsed=True, state_key="section_layers",
+        help_text=_HELP.text,
+    )
     layout = section.content_layout
 
     def setup_layers() -> None:
@@ -93,7 +74,7 @@ def create_layers_section(
         try:
             from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
             cleanup_after_mesh_operation()
-            log_success("Cleaned empty layers")
+            log_success("Cleaned empty layers; Layer 0 selected")
         except Exception as e:
             log_error(f"Layer cleanup failed: {e}")
 
@@ -105,32 +86,26 @@ def create_layers_section(
         except Exception as e:
             log_error(f"Layer consolidation failed: {e}")
 
-    # Create button grid - 3 columns for the 3 layer operations
     grid = ButtonGrid(columns=3)
+    grid.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
-    # Add buttons and capture references for tooltips
-    btn_setup = grid.add_button(
-        "Setup", setup_layers, "Create standard layers")
-    btn_clean = grid.add_button("🧹 Cleanup", clean_layers, "Remove empty layers")
-    btn_consolidate = grid.add_button(
-        "Consolidate", consolidate_layers, "Merge all layers")
+    btn_setup = grid.add_button("Setup", setup_layers, "Create standard layers", icon=_LAYERS_ICON)
+    btn_clean = grid.add_button(
+        "Cleanup Empty", clean_layers, "Remove empty layers; select Layer 0", icon=_CLEANUP_ICON)
+    btn_consolidate = grid.add_button("Consolidate", consolidate_layers, "Merge all layers", icon=_LAYERS_ICON)
 
-    # Add rich tooltips explaining each operation
     if btn_setup:
-        add_tooltip(btn_setup, TOOLTIP_SETUP_LAYERS)
+        add_tooltip(btn_setup, _TT_SETUP)
     if btn_clean:
-        add_tooltip(btn_clean, TOOLTIP_CLEAN_LAYERS)
+        add_tooltip(btn_clean, _TT_CLEAN)
     if btn_consolidate:
-        add_tooltip(btn_consolidate, TOOLTIP_CONSOLIDATE_LAYERS)
+        add_tooltip(btn_consolidate, _TT_CONSOLIDATE)
 
     layout.addWidget(grid)
+    layout.addStretch()
 
     return section
 
-
-# =============================================================================
-# STUB FOR NO QT
-# =============================================================================
 
 if not HAS_QT:
     def create_layers_section(*args, **kwargs):  # type: ignore

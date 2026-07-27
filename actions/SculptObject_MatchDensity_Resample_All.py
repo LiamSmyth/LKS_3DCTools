@@ -1,22 +1,23 @@
 """
-Match polygon density across all sculpt objects using resampling.
+Smart-match all sculpt objects' density using resample for downsampling.
 
-Uses the selected object as the reference and resamples all other objects in the
-entire sculpt tree to match its polygon density.
+Uses the selected object as the reference and adjusts all other sculpt objects
+to match its polygon density. Same behavior as the Resample panel Match Density
+row (SMART_RESAMPLE — not pure resample, not decimate-smart).
 
 Room: Sculpt
-Action: Resample all sculpt objects to match reference density
+Action: Resample-smart density matching on all sculpt objects
 """
 from utils.action_base import action
 
 
 @action
 def main() -> None:
-    """Resample all objects to match selected object's density."""
+    """Match all objects' density via smart-resample against selected reference."""
     from ops.SculptObject_UniformDensity import main as op_main, DensityMode
     from utils.scope_utils import Scope
 
-    op_main(scope=Scope.ALL, mode=DensityMode.RESAMPLE)
+    op_main(scope=Scope.ALL, mode=DensityMode.SMART_RESAMPLE)
 
 
 main()

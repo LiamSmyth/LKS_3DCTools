@@ -1,0 +1,2 @@
+<p><b>Skip Dialog</b> — Skip the density/strokes painting modal that appears after clicking OK in the autopo dialog. When enabled, autopo will execute immediately without prompting for manual density painting.</p>
+<p><span style='color:#81c784;'>&#x2713; Tip:</span> Enable this for faster batch autopo workflows when you don't need per-object density adjustments.</p>

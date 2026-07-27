@@ -1,0 +1,1 @@
+<p><b>Tangent Smoothing</b> — Apply tangent space smoothing to reduce shading artifacts on the resulting mesh. <span style='color:#81c784;'>&#x2713; Recommended</span> for most use cases to get clean shading results.</p>

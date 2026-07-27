@@ -1,0 +1,206 @@
+{
+    "version": 3,
+    "name": "LKS_Radial_AddPrims",
+    "radius": 64,
+    "items": [
+        {
+            "label": "Built-in Prims",
+            "type": "list",
+            "side": "right",
+            "icon": "🧱",
+            "children": [
+                {
+                    "label": "Sphere",
+                    "type": "action",
+                    "icon": "prim_sphere.svg",
+                    "action": "$LKS_Scene_AddPrim_Sphere",
+                    "description": "Add built-in Sphere primitive"
+                },
+                {
+                    "label": "Cube",
+                    "type": "action",
+                    "icon": "prim_cube.svg",
+                    "action": "$LKS_Scene_AddPrim_Cube",
+                    "description": "Add built-in Cube primitive"
+                },
+                {
+                    "label": "Ellipse",
+                    "type": "action",
+                    "icon": "prim_ellipse.svg",
+                    "action": "$LKS_Scene_AddPrim_Ellipse",
+                    "description": "Add built-in Ellipse primitive"
+                },
+                {
+                    "label": "Cylinder",
+                    "type": "action",
+                    "icon": "prim_cylinder.svg",
+                    "action": "$LKS_Scene_AddPrim_Cylinder",
+                    "description": "Add built-in Cylinder primitive"
+                },
+                {
+                    "label": "Cone",
+                    "type": "action",
+                    "icon": "prim_cone.svg",
+                    "action": "$LKS_Scene_AddPrim_Cone",
+                    "description": "Add built-in Cone primitive"
+                },
+                {
+                    "label": "Tube",
+                    "type": "action",
+                    "icon": "prim_tube.svg",
+                    "action": "$LKS_Scene_AddPrim_Tube",
+                    "description": "Add built-in Tube primitive"
+                },
+                {
+                    "label": "Capsule",
+                    "type": "action",
+                    "icon": "prim_capsule.svg",
+                    "action": "$LKS_Scene_AddPrim_Capsule",
+                    "description": "Add built-in Capsule primitive"
+                },
+                {
+                    "label": "NGon",
+                    "type": "action",
+                    "icon": "prim_ngon.svg",
+                    "action": "$LKS_Scene_AddPrim_NGon",
+                    "description": "Add built-in NGon primitive"
+                },
+                {
+                    "label": "Torus",
+                    "type": "action",
+                    "icon": "prim_torus.svg",
+                    "action": "$LKS_Scene_AddPrim_Torus",
+                    "description": "Add built-in Torus primitive"
+                },
+                {
+                    "label": "Lathe",
+                    "type": "action",
+                    "icon": "prim_lathe.svg",
+                    "action": "$LKS_Scene_AddPrim_Lathe",
+                    "description": "Add built-in Lathe primitive"
+                },
+                {
+                    "label": "Text",
+                    "type": "action",
+                    "icon": "prim_text.svg",
+                    "action": "$LKS_Scene_AddPrim_Text",
+                    "description": "Add built-in Text primitive"
+                },
+                {
+                    "label": "Image",
+                    "type": "action",
+                    "icon": "prim_image.svg",
+                    "action": "$LKS_Scene_AddPrim_Image",
+                    "description": "Add built-in Image primitive"
+                }
+            ]
+        },
+        {
+            "label": "Mesh Prims",
+            "type": "list",
+            "side": "right",
+            "icon": "📦",
+            "children": [
+                {
+                    "label": "Cube",
+                    "type": "action",
+                    "icon": "prim_cube.svg",
+                    "action": "$LKS_Scene_AddMeshPrim_Cube",
+                    "description": "Add mesh Cube primitive"
+                },
+                {
+                    "label": "Sphere",
+                    "type": "action",
+                    "icon": "prim_sphere.svg",
+                    "action": "$LKS_Scene_AddMeshPrim_Sphere",
+                    "description": "Add mesh Sphere primitive"
+                },
+                {
+                    "label": "Cylinder",
+                    "type": "action",
+                    "icon": "prim_cylinder.svg",
+                    "action": "$LKS_Scene_AddMeshPrim_Cylinder",
+                    "description": "Add mesh Cylinder primitive"
+                },
+                {
+                    "label": "Capsule",
+                    "type": "action",
+                    "icon": "prim_capsule.svg",
+                    "action": "$LKS_Scene_AddMeshPrim_Capsule",
+                    "description": "Add mesh Capsule primitive"
+                },
+                {
+                    "label": "Cone",
+                    "type": "action",
+                    "icon": "prim_cone.svg",
+                    "action": "$LKS_Scene_AddMeshPrim_Cone",
+                    "description": "Add mesh Cone primitive"
+                }
+            ]
+        },
+        {
+            "label": "FFD Prims",
+            "type": "list",
+            "side": "left",
+            "icon": "🔲",
+            "children": [
+                {
+                    "label": "Blob",
+                    "type": "action",
+                    "icon": "prim_blob.svg",
+                    "action": "$LKS_Scene_AddFFD_Blob",
+                    "description": "Add FFD Blob primitive"
+                },
+                {
+                    "label": "Cube",
+                    "type": "action",
+                    "icon": "prim_cube.svg",
+                    "action": "$LKS_Scene_AddFFD_Cube",
+                    "description": "Add FFD Cube primitive"
+                },
+                {
+                    "label": "Cylinder",
+                    "type": "action",
+                    "icon": "prim_cylinder.svg",
+                    "action": "$LKS_Scene_AddFFD_Cylinder",
+                    "description": "Add FFD Cylinder primitive"
+                },
+                {
+                    "label": "Torus",
+                    "type": "action",
+                    "icon": "prim_torus.svg",
+                    "action": "$LKS_Scene_AddFFD_Torus",
+                    "description": "Add FFD Torus primitive"
+                },
+                {
+                    "label": "Ring",
+                    "type": "action",
+                    "icon": "prim_ring.svg",
+                    "action": "$LKS_Scene_AddFFD_Ring",
+                    "description": "Add FFD Ring primitive"
+                },
+                {
+                    "label": "Disc",
+                    "type": "action",
+                    "icon": "prim_disc.svg",
+                    "action": "$LKS_Scene_AddFFD_Disc",
+                    "description": "Add FFD Disc primitive"
+                },
+                {
+                    "label": "Patch",
+                    "type": "action",
+                    "icon": "prim_patch.svg",
+                    "action": "$LKS_Scene_AddFFD_Patch",
+                    "description": "Add FFD Patch primitive"
+                },
+                {
+                    "label": "Round",
+                    "type": "action",
+                    "icon": "prim_round.svg",
+                    "action": "$LKS_Scene_AddFFD_Round",
+                    "description": "Add FFD Round primitive"
+                }
+            ]
+        }
+    ]
+}

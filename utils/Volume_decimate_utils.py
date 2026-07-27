@@ -48,7 +48,8 @@ def configure_decimate_dialog(
             coat.ui.setEditBoxValue(
                 SETTING_DECIMATE_POLYCOUNT, target_polycount)
         if reduction_percent is not None:
-            coat.ui.setSliderValue(SETTING_DECIMATE_PERCENT, reduction_percent)
+            coat.ui.setSliderValue(
+                SETTING_DECIMATE_PERCENT, reduction_percent)
         coat.ui.cmd(CMD_DIALOG_OK)
     return configurator
 

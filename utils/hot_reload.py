@@ -73,32 +73,55 @@ def invalidate_import_caches() -> None:
     importlib.invalidate_caches()
 
 
-def clear_lks_from_sys_modules(preserve_hot_reload: bool = True) -> int:
+def clear_lks_from_sys_modules(
+    preserve_hot_reload: bool = True,
+    preserve_extension: bool = True,
+) -> tuple[int, list[str]]:
     """
-    Remove all LKS modules from sys.modules.
+    Remove all LKS modules from sys.modules using filesystem-based discovery.
 
     This forces Python to re-import modules from disk on next import.
-    More aggressive than reload - useful when module structure changed.
+    More aggressive than reload — useful when module structure changed.
+    Uses filesystem scanning so newly-added .py files are also cleared.
 
     Args:
         preserve_hot_reload: If True, keep utils.hot_reload loaded
+        preserve_extension: If True, keep the LKS extension module (LKS.py)
+            loaded so the cExtension C++ registration is not duplicated
 
     Returns:
-        Number of modules removed
+        Tuple of (number_of_modules_removed, list_of_removed_names)
     """
-    to_remove: list[str] = []
+    # Modules that must be preserved to avoid breaking the runtime
+    _preserve: set[str] = set()
+    if preserve_hot_reload:
+        _preserve.add("utils.hot_reload")
+    if preserve_extension:
+        _preserve.add("LKS")
+        # Also preserve anything the extension module directly depends on
+        # at module level (coat, cPy) — these are 3DCoat builtins, safe to skip
 
+    # Discover ALL modules from filesystem (not just sys.modules)
+    all_lks_modules: list[str] = discover_all_modules_from_filesystem()
+
+    removed: list[str] = []
+    for name in all_lks_modules:
+        if name in sys.modules and name not in _preserve:
+            del sys.modules[name]
+            removed.append(name)
+
+    # Also clear any modules that matched the old prefixes but weren't
+    # caught by filesystem scan (e.g., modules imported from outside LKS root)
+    extra_prefixes: tuple[str, ...] = (
+        "cExtensions.LKS.",
+        "cModules.LKS.",
+    )
     for name in list(sys.modules.keys()):
-        is_lks = any(name.startswith(prefix) for prefix in _PACKAGE_PRIORITY)
-        if is_lks:
-            if preserve_hot_reload and name == "utils.hot_reload":
-                continue
-            to_remove.append(name)
+        if any(name.startswith(p) for p in extra_prefixes):
+            del sys.modules[name]
+            removed.append(name)
 
-    for name in to_remove:
-        del sys.modules[name]
-
-    return len(to_remove)
+    return len(removed), removed
 
 
 # =============================================================================
@@ -108,15 +131,34 @@ def clear_lks_from_sys_modules(preserve_hot_reload: bool = True) -> int:
 # Package prefixes that belong to LKS (in reload order priority)
 # Lower index = reload first (dependencies before dependents)
 _PACKAGE_PRIORITY: dict[str, int] = {
-    "utils.": 0,  # Utilities first (no LKS dependencies)
-    "ops.": 1,    # Operators depend on utils
-    "ui.": 2,     # UI depends on utils and ops
+    "lks_utils.": 0,   # Vendor lib — zero LKS dependencies
+    "utils.": 1,        # Core utilities (may depend on lks_utils)
+    "generators.": 2,   # Code generators depend on utils
+    "ops.": 3,          # Operators depend on utils
+    "ui.": 4,           # UI depends on utils and ops
+    "actions.": 5,      # Action scripts depend on everything above
+}
+
+# Root-level modules (no dot prefix) that belong to LKS
+_ROOT_MODULES: set[str] = {
+    "LKS", "__init__", "__onstartup",
 }
 
 # Modules to skip during reload (would cause issues)
 _SKIP_MODULES: set[str] = {
     "utils.hot_reload",  # Don't reload ourselves mid-reload!
 }
+
+# Directories to exclude from filesystem scanning
+_SKIP_DIRS: set[str] = {
+    "__pycache__", ".git", ".cursor", ".github",
+    "_docs", ".example_code", "agent-transcripts",
+    "mcps", "terminals", "data",  # data/ is JSON, not Python
+}
+
+# File patterns to exclude
+_SKIP_FILE_PREFIXES: tuple[str, ...] = ("test_", "_test_")
+_SKIP_FILE_SUFFIXES: tuple[str, ...] = ()
 
 
 def _get_module_priority(module_name: str) -> int:
@@ -140,7 +182,6 @@ def discover_lks_modules() -> list[str]:
     lks_modules: list[str] = []
 
     for name in sys.modules:
-        # Check if it's an LKS module
         is_lks = any(name.startswith(prefix) for prefix in _PACKAGE_PRIORITY)
         if is_lks and name not in _SKIP_MODULES:
             lks_modules.append(name)
@@ -149,6 +190,78 @@ def discover_lks_modules() -> list[str]:
     lks_modules.sort(key=lambda m: (_get_module_priority(m), m))
 
     return lks_modules
+
+
+def discover_all_modules_from_filesystem(
+    root: Path | None = None,
+) -> list[str]:
+    """
+    Discover ALL LKS Python modules by scanning the filesystem.
+
+    Unlike discover_lks_modules() which only finds what's already in
+    sys.modules, this scans every .py file under the LKS root directory.
+    This catches newly-added files that haven't been imported yet.
+
+    Args:
+        root: LKS root directory (default: auto-detect)
+
+    Returns:
+        List of module names sorted in dependency order
+    """
+    if root is None:
+        root = get_lks_root()
+
+    modules: list[str] = []
+
+    for py_file in root.rglob("*.py"):
+        # Skip excluded directories
+        parts: tuple[str, ...] = py_file.relative_to(root).parts
+        if any(part in _SKIP_DIRS for part in parts):
+            continue
+
+        # Skip excluded file patterns
+        filename: str = py_file.stem
+        if filename.startswith(_SKIP_FILE_PREFIXES):
+            continue
+        if filename.endswith(_SKIP_FILE_SUFFIXES):
+            continue
+
+        # Convert filesystem path to module name
+        module_name: str = _path_to_module_name(parts)
+
+        # Skip internal Python artifacts
+        if module_name in _SKIP_MODULES:
+            continue
+
+        # Skip root modules that aren't in the known set
+        if "." not in module_name and module_name not in _ROOT_MODULES:
+            # Only include root .py files that are part of the package
+            if module_name in ("coat",):  # coat.pyi is type stubs, skip
+                continue
+
+        modules.append(module_name)
+
+    # Remove duplicates and sort
+    modules = sorted(set(modules), key=lambda m: (_get_module_priority(m), m))
+    return modules
+
+
+def _path_to_module_name(parts: tuple[str, ...]) -> str:
+    """Convert filesystem path parts to a Python module name.
+
+    Example:
+        ('utils', 'ui', 'widgets', 'markdown_display.py') → 'utils.ui.widgets.markdown_display'
+        ('LKS.py',) → 'LKS'
+    """
+    # Strip .py extension from last part
+    cleaned: list[str] = []
+    for i, part in enumerate(parts):
+        if i == len(parts) - 1:
+            # Last part — strip .py
+            if part.endswith(".py"):
+                part = part[:-3]
+        cleaned.append(part)
+    return ".".join(cleaned)
 
 
 # =============================================================================
@@ -251,7 +364,13 @@ def reload_all(
         clear_pycache(silent=silent)
         invalidate_import_caches()
 
-    return reload_modules(silent=silent)
+    # DEBUG: Always print entry/exit to trace hangs
+    print("[LKS-DEBUG] reload_all() entering, discovering modules...", flush=True)
+    modules: list[str] = discover_lks_modules()
+    print(f"[LKS-DEBUG] reload_all() found {len(modules)} modules to reload", flush=True)
+    result = reload_modules(modules=modules, silent=silent)
+    print(f"[LKS-DEBUG] reload_all() complete: {result}", flush=True)
+    return result
 
 
 def reload_by_prefix(prefix: str, silent: bool = True) -> tuple[int, int]:
@@ -296,8 +415,17 @@ def fresh_reload(silent: bool = False) -> tuple[int, int]:
     # Step 2: Invalidate import caches
     invalidate_import_caches()
 
-    # Step 3: Remove LKS modules from sys.modules
-    cleared: int = clear_lks_from_sys_modules(preserve_hot_reload=True)
+    # Step 3: Remove LKS modules from sys.modules (filesystem-based)
+    cleared, _ = clear_lks_from_sys_modules(
+        preserve_hot_reload=True, preserve_extension=True)
+
+    # Step 4: Clear FastReimport cache
+    try:
+        from utils.fast_reimport import FastReimportFinder
+        finder = FastReimportFinder.get_instance()
+        finder.clear_all()
+    except Exception:
+        pass
 
     if not silent:
         print(f"[LKS] Fresh reload complete: cleared {cleared} modules, "
@@ -307,9 +435,113 @@ def fresh_reload(silent: bool = False) -> tuple[int, int]:
 
 
 # =============================================================================
-# PANEL RELOAD (special handling to keep window alive)
+# FULL HOT-RESTART (close old panel, clear everything, re-register, open fresh)
 # =============================================================================
 
+def full_restart_panel(
+    log_callback: Callable[[str], None] | None = None,
+) -> bool:
+    """
+    Perform a full hot-reload of the LKS addon from the panel button.
+
+    This is the most complete reload possible without restarting 3DCoat:
+    1. Clears all __pycache__ and invalidates import caches
+    2. Reinitializes the extension (closes the old panel)
+    3. Deletes ALL LKS modules from sys.modules (filesystem-based discovery,
+       so newly-added .py files are also caught)
+    4. Re-registers action scripts to the 3DCoat menu
+    5. Opens a fresh panel from the newly-reimported code
+
+    The cExtension C++ registration is permanent, but its Python state
+    is fully reset. Menu XML entries persist until 3DCoat restart but
+    become functional again after re-registration.
+
+    Args:
+        log_callback: Optional callback for log messages
+
+    Returns:
+        True if the full restart succeeded
+    """
+    import gc
+
+    def log(msg: str) -> None:
+        print(f"[LKS] {msg}")
+        if log_callback:
+            log_callback(msg)
+
+    try:
+        # ── Step 1: Clear all caches ──
+        log("Clearing caches...")
+        pycache_count: int = clear_pycache(silent=True)
+        invalidate_import_caches()
+        if pycache_count > 0:
+            log(f"  Cleared {pycache_count} __pycache__ folders")
+
+        # ── Step 2: Reinitialize extension (closes old panel) ──
+        log("Closing old panel...")
+        try:
+            from LKS import LKSExtension
+            ext = LKSExtension.get_instance()
+            if ext:
+                ext.reinitialize()
+                log("  Extension reinitialized")
+            else:
+                log("  No extension instance found")
+        except Exception as e:
+            log(f"  Extension reinit warning: {e}")
+
+        # ── Step 3: Clear ALL LKS modules from sys.modules ──
+        log("Clearing all LKS modules from sys.modules...")
+        cleared_count, _ = clear_lks_from_sys_modules(
+            preserve_hot_reload=True,
+            preserve_extension=True,
+        )
+        log(f"  Cleared {cleared_count} modules")
+
+        # Clear FastReimport cache
+        try:
+            from utils.fast_reimport import FastReimportFinder
+            finder = FastReimportFinder.get_instance()
+            finder.clear_all()
+        except Exception:
+            pass
+
+        # Force garbage collection to clean up any dangling references
+        gc.collect()
+
+        # ── Step 4: Re-register action scripts ──
+        log("Registering actions...")
+        try:
+            from utils.registration_utils import register_actions
+            action_count: int = register_actions()
+            log(f"  Registered {action_count} action scripts")
+        except Exception as e:
+            log(f"  Action registration warning: {e}")
+
+        # ── Step 5: Open fresh panel ──
+        log("Opening fresh panel...")
+        try:
+            from LKS import LKSExtension, _ensure_extension
+            ext = _ensure_extension()
+            ext.show_panel()
+            log("  Panel opened with fresh code")
+        except Exception as e:
+            import traceback
+            log(f"  Panel creation failed: {e}")
+            traceback.print_exc()
+            return False
+
+        log(f"Full hot-restart complete ({cleared_count} modules cleared)")
+        return True
+
+    except Exception as e:
+        log(f"Full hot-restart failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+# Backward compatibility — delegates to the new full_restart_panel
 def reload_for_panel(
     panel_instance,
     log_callback: Callable[[str], None] | None = None,
@@ -318,51 +550,43 @@ def reload_for_panel(
     """
     Reload all modules while keeping panel window alive.
 
-    This reloads all LKS modules and refreshes the panel's UI
-    without closing the window. The panel instance is preserved
-    but its callbacks will use freshly reloaded code.
+    DEPRECATED: This now delegates to full_restart_panel() which performs
+    a complete unregister/reregister cycle. The panel_instance argument
+    is ignored — the extension singleton is used instead.
 
     Args:
-        panel_instance: The LKSPanel instance to refresh
+        panel_instance: (ignored, kept for backward compatibility)
         log_callback: Optional callback for log messages
-        clear_cache: If True (default), clear __pycache__ before reload
+        clear_cache: (ignored — always True)
 
     Returns:
         True if reload succeeded
     """
-    def log(msg: str) -> None:
-        print(f"[LKS] {msg}")
-        if log_callback:
-            log_callback(msg)
+    return full_restart_panel(log_callback=log_callback)
 
+
+# =============================================================================
+# DEV-MODE CONDITIONAL RELOAD (for panel button callbacks)
+# =============================================================================
+
+def reload_if_dev() -> None:
+    """
+    Call reload_all() if dev_mode is enabled. No-op otherwise.
+
+    Use at the top of panel button callbacks so they pick up code changes
+    during development, matching the behavior of @action-decorated menu items.
+
+    This is safe to call unconditionally — it checks dev_mode internally
+    and is wrapped in try/except so a settings read failure won't block
+    the operation.
+    """
     try:
-        # Step 0: Clear caches for fresh import
-        if clear_cache:
-            pycache_count = clear_pycache(silent=True)
-            invalidate_import_caches()
-            if pycache_count > 0:
-                log(f"Cleared {pycache_count} __pycache__ folders")
-
-        # Step 1: Reload all modules
-        reloaded, failed = reload_modules(
-            log_callback=log_callback, silent=False)
-
-        # Step 2: If panel has a rebuild method, call it
-        if hasattr(panel_instance, "rebuild_ui"):
-            log("Rebuilding panel UI...")
-            panel_instance.rebuild_ui()
-        elif hasattr(panel_instance, "refresh"):
-            log("Refreshing panel...")
-            panel_instance.refresh()
-
-        log(f"Hot reload complete: {reloaded} modules reloaded")
-        return failed == 0
-
-    except Exception as e:
-        log(f"Hot reload failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        from utils.lks_settings import get_settings
+        if get_settings().dev_mode:
+            from utils.hot_reload import reload_all
+            reload_all()
+    except Exception:
+        pass  # Settings unavailable (not in 3DCoat) — no-op
 
 
 # =============================================================================

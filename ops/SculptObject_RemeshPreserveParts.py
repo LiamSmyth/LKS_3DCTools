@@ -14,6 +14,7 @@ This preserves the topology of separate parts while cleaning up mesh quality.
 Uses scope resolution to determine which element to process.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.scope_utils import Scope
 from utils.Volume_mode_utils import ensure_surface_mode
@@ -82,6 +83,7 @@ def _remesh_element(element: coat.SceneElement) -> bool:
 def main(
     scope: Scope = Scope.CURRENT,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Remesh object while preserving parts via decompose and merge.
@@ -89,6 +91,7 @@ def main(
     Args:
         scope: Which object to process (typically CURRENT for single object)
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of parts processed
@@ -115,8 +118,11 @@ def main(
 
     # Remesh each part in subtree
     subtree: list[coat.SceneElement] = SceneAPI.collect_subtree(current)
+    total: int = len(subtree)
     count: int = 0
-    for el in subtree:
+    for i, el in enumerate(subtree):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if _remesh_element(el):
             count += 1
 

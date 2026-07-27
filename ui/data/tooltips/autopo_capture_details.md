@@ -1,0 +1,1 @@
+<p><b>Capture Details</b> — Controls how much surface detail is captured by the retopology mesh. <span style='color:#90caf9;'>Higher values</span> preserve more detail but may increase polycount. <span style='color:#90caf9;'>Lower values</span> simplify the result.</p>

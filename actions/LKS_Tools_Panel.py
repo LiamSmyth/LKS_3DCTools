@@ -73,7 +73,7 @@ class LKSToolsConfig:
         # ==================== DYNAMIC SUBDIV SECTION ====================
         items.append("#Dynamic Subdivision")
         items.append("auto_subdivide")
-        items.append("details_level,[0,8]")
+        items.append("details_level,[-1,64]")
         items.append("remove_stretching")
         items.append("[1 1 1]")
         items.append("ApplyToBrushes")
@@ -361,7 +361,7 @@ class LKSToolsConfig:
     def IncrementLevel(self) -> None:
         """Increment details level by 1 (always enables auto_subdivide)."""
         from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
-        self.details_level = min(8.0, self.details_level + 1.0)
+        self.details_level = self.details_level + 1.0
         self.auto_subdivide = True
         apply_auto_subdivide_all(True)
         apply_details_level_all(self.details_level)
@@ -417,13 +417,12 @@ class LKSToolsConfig:
 
     def _resample_elements(self, elements: list, scale: float) -> int:
         """Helper to resample a list of elements."""
+        from utils.scope_utils import skip_instances
         from utils.Volume_resample_utils import execute_resample_scale_only
-        from utils.Volume_mode_utils import ensure_surface_mode
+        elements, _ = skip_instances(elements)
         count: int = 0
         for el in elements:
             if el.isSculptObject():
-                vol = el.Volume()
-                ensure_surface_mode(vol)
                 el.selectOne()
                 execute_resample_scale_only(ratio=scale)
                 count += 1
@@ -484,7 +483,9 @@ class LKSToolsConfig:
 
     def _convert_to_surface(self, elements: list) -> int:
         """Helper to convert elements to surface."""
+        from utils.scope_utils import skip_instances
         from utils.Volume_mode_utils import convert_to_surface
+        elements, _ = skip_instances(elements)
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -496,7 +497,9 @@ class LKSToolsConfig:
 
     def _convert_to_voxels(self, elements: list) -> int:
         """Helper to convert elements to voxels via voxelize dialog."""
+        from utils.scope_utils import skip_instances
         from utils.Volume_mode_utils import execute_voxelize
+        elements, _ = skip_instances(elements)
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -772,7 +775,9 @@ class LKSToolsConfig:
 
     def _uniform_resample_elements(self, reference: 'coat.SceneElement', elements: list) -> int:
         """Helper: Resample elements to match reference density."""
+        from utils.scope_utils import skip_instances
         from utils.Volume_density_utils import resample_to_match_density
+        elements, _ = skip_instances(elements)
         ref_vol = reference.Volume()
         count: int = 0
         for el in elements:
@@ -783,7 +788,9 @@ class LKSToolsConfig:
 
     def _uniform_smart_elements(self, reference: 'coat.SceneElement', elements: list) -> tuple:
         """Helper: Smart density match elements to reference."""
+        from utils.scope_utils import skip_instances
         from utils.Volume_density_utils import smart_match_density
+        elements, _ = skip_instances(elements)
         ref_vol = reference.Volume()
         subdivided: int = 0
         decimated: int = 0
@@ -864,6 +871,7 @@ class LKSToolsConfig:
     def RemeshResymmCur(self) -> None:
         """Remesh and symmetrize current selection."""
         from utils.scene_api import SceneAPI
+        from utils.scope_utils import skip_instances
         from utils.Volume_subdivide_utils import make_symmetrical
         from utils.Volume_mode_utils import ensure_surface_mode
         from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
@@ -871,6 +879,7 @@ class LKSToolsConfig:
         if not elements:
             show_message("No selection", 2000)
             return
+        elements, _ = skip_instances(elements)
         count: int = 0
         for el in elements:
             if el.isSculptObject():
@@ -885,6 +894,7 @@ class LKSToolsConfig:
     def RemeshResymmTree(self) -> None:
         """Remesh and symmetrize subtree."""
         from utils.scene_api import SceneAPI
+        from utils.scope_utils import skip_instances
         from utils.Volume_subdivide_utils import make_symmetrical
         from utils.Volume_mode_utils import ensure_surface_mode
         from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
@@ -893,6 +903,7 @@ class LKSToolsConfig:
             show_message("No selection", 2000)
             return
         elements = SceneAPI.collect_subtree(current)
+        elements, _ = skip_instances(elements)
         count: int = 0
         for el in elements:
             if el.isSculptObject():

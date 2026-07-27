@@ -1,12 +1,13 @@
 """
 Base class and decorator for LKS action scripts.
 
-Provides automatic hot-reload and consistent behavior for all action scripts.
+Provides automatic hot-reload, invocation logging with stdout/stderr capture,
+and consistent behavior for all action scripts.
 
 Usage (decorator - simplest):
     from utils.action_base import action
 
-    @action
+    @action(label="Decimate 50%")
     def main():
         from ops.SculptObject_Decimate import main as op_main
         from utils.scope_utils import Scope
@@ -19,7 +20,7 @@ Usage (class - more features):
 
     class DecimateHalfSelected(Action):
         '''Decimate selected to 50%.'''
-        room = "Sculpt"  # Optional room validation
+        room = "Sculpt"
 
         def execute(self) -> None:
             from ops.SculptObject_Decimate import main as op_main
@@ -31,18 +32,56 @@ Usage (class - more features):
 from __future__ import annotations
 
 import functools
+import inspect
 from typing import Callable, TypeVar
 
 F = TypeVar("F", bound=Callable)
 
 
 # =============================================================================
+# LABEL DERIVATION
+# =============================================================================
+
+def _derive_label(func: Callable) -> str:
+    """
+    Derive a human-readable label for an action function.
+
+    Tries:
+    1. The function's docstring (first line)
+    2. The module name with prefix stripped
+    3. The function name as fallback
+    """
+    # Try docstring
+    if func.__doc__:
+        first_line: str = func.__doc__.strip().split("\n")[0].strip()
+        if first_line and len(first_line) < 80:
+            return first_line
+
+    # Try module name
+    module: str = getattr(func, "__module__", "")
+    if module:
+        # Strip known prefixes
+        for prefix in [
+            "cExtensions.LKS.actions.",
+            "cExtensions.LKS.radial.",
+            "cExtensions.LKS.",
+            "actions.",
+        ]:
+            if module.startswith(prefix):
+                return module[len(prefix):]
+        return module
+
+    # Fallback to function name
+    return func.__name__
+
+
+# =============================================================================
 # DECORATOR (simplest approach)
 # =============================================================================
 
-def action(func: F) -> F:
+def action(func: F | None = None, *, label: str | None = None) -> F:
     """
-    Decorator that adds hot-reload before running an action.
+    Decorator that adds hot-reload and invocation logging before running an action.
 
     Usage:
         @action
@@ -50,24 +89,45 @@ def action(func: F) -> F:
             from ops.SomeOperator import main as op_main
             op_main(...)
 
+        # Or with explicit label:
+        @action(label="Decimate 50%")
+        def main():
+            ...
+
         main()
     """
+    # Support both @action and @action(label="...")
+    if func is None:
+        return lambda f: action(f, label=label)  # type: ignore
+
+    resolved_label: str = label or _derive_label(func)
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # CRITICAL: Force reload of hot_reload module itself first!
         # Otherwise we use the cached version which won't reload properly.
         import sys
         import importlib
+
         if "utils.hot_reload" in sys.modules:
             importlib.reload(sys.modules["utils.hot_reload"])
 
         # Now hot reload all LKS modules
         from utils.hot_reload import reload_all
+
         reload_all()
 
-        # Execute the action
+        # Execute the action with invocation logging
+        from utils.invocation_logger import get_invocation_logger
+
+        logger = get_invocation_logger()
         try:
-            return func(*args, **kwargs)
+            with logger.capture_invocation(resolved_label) as ctx:
+                result = func(*args, **kwargs)
+                return result
+        except Exception:
+            # capture_invocation handles success=False and stderr capture
+            raise
         finally:
             # Queue the calling module for cache clearing
             # The LKS extension's postprocess() will clear it next frame
@@ -84,13 +144,13 @@ def _queue_module_for_clearing() -> None:
     so subsequent menu clicks don't re-execute the file.
 
     We can't delete immediately because Python's import machinery is still on
-    the call stack. Instead, we queue module names and the LKS extension's 
+    the call stack. Instead, we queue module names and the LKS extension's
     postprocess() hook clears them on the next frame.
     """
     import sys
 
     # Initialize the queue if needed
-    if not hasattr(sys, '_lks_modules_to_clear'):
+    if not hasattr(sys, "_lks_modules_to_clear"):
         sys._lks_modules_to_clear = set()
 
     # Find and queue action script modules for clearing
@@ -106,16 +166,18 @@ def _queue_module_for_clearing() -> None:
 
 class Action:
     """
-    Base class for action scripts with automatic hot-reload.
+    Base class for action scripts with automatic hot-reload and invocation logging.
 
     Subclass and override execute() to implement your action.
 
     Attributes:
         room: Optional room name. If set, validates we're in that room.
         silent_reload: If True (default), suppress reload output.
+        label: Optional label override (default: derived from class docstring/name).
 
     Example:
         class MyAction(Action):
+            '''Decimate selected to 50%.'''
             room = "Sculpt"
 
             def execute(self) -> None:
@@ -127,40 +189,78 @@ class Action:
 
     room: str | None = None
     silent_reload: bool = True
+    label: str | None = None
 
     def execute(self) -> None:
         """Override this to implement the action logic."""
         raise NotImplementedError("Subclasses must implement execute()")
 
     def run(self) -> None:
-        """Run the action with hot-reload and optional room validation."""
+        """Run the action with hot-reload, invocation logging, and optional room validation."""
         # Hot reload all LKS modules
         from utils.hot_reload import reload_all
+
         reload_all(silent=self.silent_reload)
 
         # Validate room if specified
         if self.room is not None:
             self._validate_room()
 
-        # Execute the action
+        # Derive label
+        resolved_label: str = self.label or self._derive_class_label()
+
+        # Execute with invocation logging
+        from utils.invocation_logger import get_invocation_logger
+
+        logger = get_invocation_logger()
         try:
-            self.execute()
+            with logger.capture_invocation(resolved_label) as ctx:
+                self.execute()
+        except Exception:
+            raise
         finally:
             # Queue for cache clearing (same as @action decorator)
             _queue_module_for_clearing()
+
+    def _derive_class_label(self) -> str:
+        """Derive a human-readable label from the class."""
+        # Try class docstring
+        if self.__class__.__doc__:
+            first_line: str = (
+                self.__class__.__doc__.strip().split("\n")[0].strip()
+            )
+            if first_line and len(first_line) < 80:
+                return first_line
+
+        # Try module name from class
+        module: str = getattr(self.__class__, "__module__", "")
+        if module:
+            for prefix in [
+                "cExtensions.LKS.actions.",
+                "cExtensions.LKS.",
+                "actions.",
+            ]:
+                if module.startswith(prefix):
+                    return module[len(prefix):]
+            return module
+
+        # Fallback to class name
+        return self.__class__.__name__
 
     def _validate_room(self) -> None:
         """Validate we're in the expected room."""
         try:
             import coat
+
             current_room: str = coat.ui.currentRoom()
             if current_room != self.room:
                 coat.ui.showInfoMessage(
                     f"This action requires {self.room} room (current: {current_room})",
-                    3000
+                    3000,
                 )
                 raise RuntimeError(
-                    f"Wrong room: expected {self.room}, got {current_room}")
+                    f"Wrong room: expected {self.room}, got {current_room}"
+                )
         except ImportError:
             pass  # Running outside 3DCoat (testing)
 
@@ -169,13 +269,18 @@ class Action:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-def run_action(func: Callable[[], None]) -> None:
+def run_action(func: Callable[[], None], label: str | None = None) -> None:
     """
-    Run a function as an action with hot-reload.
+    Run a function as an action with hot-reload and invocation logging.
 
     Convenience function for one-liners:
-        run_action(lambda: op_main(scope=Scope.CURRENT))
+        run_action(lambda: op_main(scope=Scope.CURRENT), label="Decimate")
     """
     from utils.hot_reload import reload_all
+    from utils.invocation_logger import get_invocation_logger
+
     reload_all()
-    func()
+    resolved_label: str = label or _derive_label(func)
+    logger = get_invocation_logger()
+    with logger.capture_invocation(resolved_label):
+        func()

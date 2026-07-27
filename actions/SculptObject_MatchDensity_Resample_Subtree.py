@@ -1,22 +1,23 @@
 """
-Resample subtree objects to match the polygon density of the selected object.
+Smart-match subtree density using resample for downsampling.
 
-Useful for evening out triangle sizes after using split tools, or preparing
-for export with uniform mesh density.
+Uses the selected object as the reference and adjusts subtree objects to
+match its polygon density. Same behavior as the Resample panel Match Density
+row (SMART_RESAMPLE — not pure resample, not decimate-smart).
 
 Room: Sculpt
-Action: Resamples all subtree objects to match selected object's density
+Action: Resample-smart density matching on subtree of selected object
 """
 from utils.action_base import action
 
 
 @action
 def main() -> None:
-    """Resample all subtree objects to match reference density."""
+    """Match subtree density via smart-resample against selected reference."""
     from ops.SculptObject_UniformDensity import main as op_main, DensityMode
     from utils.scope_utils import Scope
 
-    op_main(scope=Scope.TREE, mode=DensityMode.RESAMPLE)
+    op_main(scope=Scope.TREE, mode=DensityMode.SMART_RESAMPLE)
 
 
 main()

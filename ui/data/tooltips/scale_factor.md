@@ -1,0 +1,1 @@
+<p><b>Scale Factor</b> — Scale multiplier applied to object dimensions. <span style='color:#90caf9;'>1.0</span> = no change, <span style='color:#90caf9;'>0.5</span> = half size, <span style='color:#90caf9;'>2.0</span> = double size. Values below 1.0 shrink the object, values above 1.0 grow it.</p>

@@ -1,20 +1,37 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Radial Menu Configuration",
-    "description": "Configuration schema for LKS radial tree menu with nested submenus",
+    "description": "LKS radial menu config schema version 3 — menu label + fixed pie radius.",
     "type": "object",
     "properties": {
         "version": {
+            "type": "integer",
+            "const": 3,
+            "default": 3,
+            "description": "Sequential schema version (integer). Must be 3 for this schema."
+        },
+        "name": {
             "type": "string",
-            "description": "Configuration format version",
-            "default": "1.0"
+            "description": "Optional registry / Scripts-menu display name"
+        },
+        "label": {
+            "type": "string",
+            "description": "Optional center-origin label. Empty/omitted → filename stem (or name)."
+        },
+        "radius": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 2000,
+            "default": 128,
+            "description": "Fixed pie radius in pixels. No auto-expand; increase manually to deoverlap."
         },
         "items": {
             "type": "array",
             "description": "Root-level menu items",
             "items": {
                 "$ref": "#/definitions/menuItem"
-            }
+            },
+            "minItems": 1
         }
     },
     "required": [
@@ -28,9 +45,26 @@
                     "type": "string",
                     "description": "Display label for the menu item"
                 },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "action",
+                        "branch",
+                        "list"
+                    ],
+                    "description": "Node kind. Soft constraint: side is only meaningful when type is list."
+                },
+                "side": {
+                    "type": "string",
+                    "enum": [
+                        "left",
+                        "right"
+                    ],
+                    "description": "List placement relative to the pie (meaningful for type=list only)"
+                },
                 "action": {
                     "type": "string",
-                    "description": "Python module path to action (e.g., 'ops.SculptObject_Decimate.main') or 'actions/ScriptName.py'"
+                    "description": "UI command ($...), action script path, or module.function"
                 },
                 "icon": {
                     "type": "string",
@@ -42,9 +76,13 @@
                     "minimum": 0,
                     "maximum": 360
                 },
+                "description": {
+                    "type": "string",
+                    "description": "Optional tooltip / docs text"
+                },
                 "children": {
                     "type": "array",
-                    "description": "Child menu items (creates submenu if present)",
+                    "description": "Child menu items (branch/list submenus)",
                     "items": {
                         "$ref": "#/definitions/menuItem"
                     }
@@ -56,20 +94,26 @@
                 }
             },
             "required": [
-                "label"
+                "label",
+                "type"
             ],
-            "oneOf": [
+            "allOf": [
                 {
-                    "required": [
-                        "action"
-                    ],
-                    "description": "Leaf node with action"
-                },
-                {
-                    "required": [
-                        "children"
-                    ],
-                    "description": "Branch node with children"
+                    "if": {
+                        "properties": {
+                            "type": {
+                                "const": "action"
+                            }
+                        },
+                        "required": [
+                            "type"
+                        ]
+                    },
+                    "then": {
+                        "required": [
+                            "action"
+                        ]
+                    }
                 }
             ]
         }

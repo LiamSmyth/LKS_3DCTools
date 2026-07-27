@@ -7,13 +7,13 @@ Supports: half polycount, target polycount, or ratio-based resampling.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.Volume_resample_utils import (
     execute_resample_scale_only,
     resample_to_half,
 )
-from utils.Volume_mode_utils import ensure_surface_mode
 from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
 from utils.coat_ui_utils import show_message, show_error
 
@@ -45,9 +45,10 @@ def _resample_element(
         return False
 
     vol: coat.Volume = element.Volume()
-    ensure_surface_mode(vol)
 
-    # Select element for operation
+    # Select element for operation (mode preservation handled by
+    # execute_resample_scale_only in Volume_resample_utils)
+
     element.selectOne()
 
     current_polycount: int = vol.getPolycount()
@@ -76,6 +77,7 @@ def main(
     scale: float = DEFAULT_SCALE,
     use_half: bool = False,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Resample objects to change polygon count.
@@ -86,6 +88,7 @@ def main(
         scale: Scale factor for polycount (e.g., 0.5 = half)
         use_half: Quick mode to resample to half polycount
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects resampled
@@ -102,15 +105,19 @@ def main(
         return 0
 
     # Resolve which elements to operate on
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
 
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
+    total: int = len(elements)
+
     # Resample each element
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if _resample_element(el, target_polycount, scale, use_half):
             count += 1
 
@@ -123,11 +130,11 @@ def main(
 
     # Build status message
     if use_half:
-        status: str = f"Resampled {count} to half"
+        status: str = f"Resampled {count}/{total} to half"
     elif target_polycount is not None:
-        status = f"Resampled {count} to {target_polycount:,}"
+        status = f"Resampled {count}/{total} to {target_polycount:,}"
     else:
-        status = f"Resampled {count} by {scale:.0%}"
+        status = f"Resampled {count}/{total} by {scale:.0%}"
 
     show_message(f"{status} objects", 2000)
     return count

@@ -1,0 +1,1 @@
+<p><b>Density Slider</b> — Tris per world-unit². Larger objects get proportionally more polygons to maintain consistent detail density. Default <span style='color:#90caf9;'>100</span> works well at most scene scales; increase for finer detail.</p>

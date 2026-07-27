@@ -1,175 +1,51 @@
-"""
-ButtonGrid widget - A grid layout of buttons with consistent styling.
-
-Useful for scope-based operations (Current, Subtree, All) or any
-grouped button actions.
-"""
+"""ButtonGrid — re-exported from lks_utils with add_scope_buttons extension."""
 from __future__ import annotations
+from typing import Callable
 
-from typing import TYPE_CHECKING, Callable
-
-try:
-    from PySide6.QtWidgets import (
-        QWidget,
-        QGridLayout,
-        QPushButton,
-    )
-
-    HAS_QT: bool = True
-except ImportError:
-    HAS_QT = False
-
-if TYPE_CHECKING:
-    from PySide6.QtWidgets import QWidget as QWidgetType
+from lks_utils.gui_qt.widgets.button_grid import QButtonGrid as _QButtonGrid
+from PySide6.QtWidgets import QPushButton
 
 
-# Default button style for dark theme
-DEFAULT_BUTTON_STYLE: str = """
-    QPushButton {
-        background: #3a3a3a;
-        border: 1px solid #555;
-        border-radius: 3px;
-        padding: 4px 8px;
-        color: #ddd;
-        min-height: 20px;
-    }
-    QPushButton:hover { background: #4a4a4a; border-color: #666; }
-    QPushButton:pressed { background: #2a2a2a; }
-"""
+class ButtonGrid(_QButtonGrid):
+    """ButtonGrid extended with add_scope_buttons convenience method.
 
+    Delegates all base functionality to lks_utils QButtonGrid and adds
+    the 3DCoat-specific scope-button helper.
+    """
 
-if HAS_QT:
+    def add_scope_buttons(
+        self,
+        on_current: Callable[[], None],
+        on_tree: Callable[[], None],
+        on_all: Callable[[], None],
+        current_tooltip: str = "Apply to selected",
+        tree_tooltip: str = "Apply to subtree",
+        all_tooltip: str = "Apply to all",
+    ) -> tuple[QPushButton, QPushButton, QPushButton]:
+        """Add three scope buttons using SvgIconButton.
 
-    class ButtonGrid(QWidget):
+        Returns:
+            Tuple of (selected_btn, subtree_btn, all_btn).
         """
-        A grid of buttons with consistent styling.
+        from .svg_icon import SvgIconButton
 
-        Useful for scope-based operations (Current, Subtree, All).
+        btn_sel = SvgIconButton("scope_selected", size=24, tooltip=current_tooltip)
+        btn_tree = SvgIconButton("scope_subtree", size=24, tooltip=tree_tooltip)
+        btn_all = SvgIconButton("scope_all", size=24, tooltip=all_tooltip)
 
-        Args:
-            parent: Parent widget
-            columns: Number of columns in the grid
-            button_style: CSS style for buttons
+        btn_sel.clicked.connect(on_current)
+        btn_tree.clicked.connect(on_tree)
+        btn_all.clicked.connect(on_all)
 
-        Example:
-            grid = ButtonGrid(parent, columns=3)
-            grid.add_button("Current", self._on_current)
-            grid.add_button("Subtree", self._on_subtree)
-            grid.add_button("All", self._on_all)
-        """
+        self.add_widget(btn_sel)
+        self.add_widget(btn_tree)
+        self.add_widget(btn_all)
 
-        def __init__(
-            self,
-            parent: QWidget | None = None,
-            columns: int = 3,
-            button_style: str | None = None,
-        ) -> None:
-            super().__init__(parent)
-            self._columns: int = columns
-            self._button_style: str = button_style or DEFAULT_BUTTON_STYLE
-            self._row: int = 0
-            self._col: int = 0
-            self._buttons: list[QPushButton] = []
+        self._buttons.append(btn_sel)
+        self._buttons.append(btn_tree)
+        self._buttons.append(btn_all)
 
-            self._layout = QGridLayout(self)
-            self._layout.setContentsMargins(0, 0, 0, 0)
-            self._layout.setSpacing(4)
+        return btn_sel, btn_tree, btn_all
 
-        def add_button(
-            self,
-            text: str,
-            callback: Callable[[], None],
-            tooltip: str | None = None,
-            style: str | None = None,
-        ) -> QPushButton:
-            """
-            Add a button to the grid.
 
-            Args:
-                text: Button label
-                callback: Click handler
-                tooltip: Optional tooltip text
-                style: Button style override
-
-            Returns:
-                The created button
-            """
-            btn = QPushButton(text)
-            btn.setStyleSheet(style or self._button_style)
-            btn.clicked.connect(callback)
-            if tooltip:
-                btn.setToolTip(tooltip)
-
-            self._layout.addWidget(btn, self._row, self._col)
-            self._buttons.append(btn)
-
-            # Advance position
-            self._col += 1
-            if self._col >= self._columns:
-                self._col = 0
-                self._row += 1
-
-            return btn
-
-        def add_widget(self, widget: QWidget, colspan: int = 1) -> None:
-            """
-            Add a custom widget to the grid.
-
-            Args:
-                widget: Widget to add
-                colspan: Number of columns to span
-            """
-            self._layout.addWidget(widget, self._row, self._col, 1, colspan)
-            self._col += colspan
-            if self._col >= self._columns:
-                self._col = 0
-                self._row += 1
-
-        def new_row(self) -> None:
-            """Move to a new row."""
-            if self._col > 0:
-                self._row += 1
-                self._col = 0
-
-        def get_buttons(self) -> list[QPushButton]:
-            """Get list of all buttons in the grid."""
-            return self._buttons.copy()
-
-        def set_button_enabled(self, index: int, enabled: bool) -> None:
-            """Enable or disable a button by index."""
-            if 0 <= index < len(self._buttons):
-                self._buttons[index].setEnabled(enabled)
-
-        def clear(self) -> None:
-            """Remove all buttons from the grid."""
-            for btn in self._buttons:
-                btn.deleteLater()
-            self._buttons.clear()
-            self._row = 0
-            self._col = 0
-
-else:
-    # Stub class when PySide6 is not available
-    class ButtonGrid:  # type: ignore[no-redef]
-        """Stub ButtonGrid for when Qt is not available."""
-
-        def __init__(self, *args, **kwargs) -> None:
-            self._buttons: list = []
-
-        def add_button(self, *args, **kwargs):
-            return None
-
-        def add_widget(self, *args, **kwargs) -> None:
-            pass
-
-        def new_row(self) -> None:
-            pass
-
-        def get_buttons(self) -> list:
-            return []
-
-        def set_button_enabled(self, index: int, enabled: bool) -> None:
-            pass
-
-        def clear(self) -> None:
-            pass
+__all__ = ["ButtonGrid"]

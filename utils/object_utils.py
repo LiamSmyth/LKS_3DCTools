@@ -12,6 +12,7 @@ Design Principles:
 Note: Files starting with "_" are hidden from the Addons menu per 3DCoat convention.
 """
 import coat
+from typing import Callable
 
 from utils.scene_api import SceneAPI, SelectionAPI
 from utils.coat_ui_utils import show_message, show_error
@@ -213,38 +214,29 @@ def validate_and_ensure_surface_mode() -> bool:
 
 def scale_element(element: coat.SceneElement, scale_factor: float) -> None:
     """
-    Scale a scene element by a factor.
+    Scale a scene element by a factor around its own local origin.
 
     Does NOT select the element - caller should handle selection if needed.
+    Preserves flip by multiplying the 3x3 basis (not SetScaling).
 
     Args:
         element: The element to scale
         scale_factor: Factor to multiply current scale by
     """
-    # Get the current 4x4 transformation matrix
-    transform: coat.mat4 = element.getTransform()
-
-    existing_scale: coat.vec3 = transform.GetScaling()
-    new_scale: coat.vec3 = existing_scale * scale_factor
-    transform.SetScaling(new_scale)
+    before: coat.mat4 = element.getTransform()
+    transform: coat.mat4 = coat.mat4(before)
+    for row in range(3):
+        for col in range(3):
+            transform.SetElem(row, col, before.Elem(row, col) * scale_factor)
     element.setTransform(transform)
-
-
-def scale_element_with_select(element: coat.SceneElement, scale_factor: float) -> None:
-    """
-    Select and scale a scene element by a factor.
-
-    Args:
-        element: The element to scale
-        scale_factor: Factor to multiply current scale by
-    """
-    SelectionAPI.select_one(element)
-    scale_element(element, scale_factor)
 
 
 def scale_elements(elements: list[coat.SceneElement], scale_factor: float) -> int:
     """
-    Scale multiple elements by a factor.
+    Scale multiple elements by a factor (local origin each).
+
+    Each SceneElement is scaled independently. Shared VolumeObject (instances)
+    still have distinct scene-graph transforms and must each be updated.
 
     Args:
         elements: List of elements to scale
@@ -258,3 +250,101 @@ def scale_elements(elements: list[coat.SceneElement], scale_factor: float) -> in
         scale_element(el, scale_factor)
         count += 1
     return count
+
+
+def scale_elements_about_pivot(
+    elements: list[coat.SceneElement],
+    scale_factor: float,
+    pivot: coat.vec3,
+    verbose_log: Callable[[str], None] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
+) -> int:
+    """
+    Scale every sculpt element's own transform about a shared pivot.
+
+    Does **not** compose parent chains or rewrite via ``inv(parent)*world``.
+    That path applies an extra scale per hierarchy level (``S**depth``) and
+    collapses deep nodes (fingers) to zero. Each ``getTransform()`` is scaled
+    in place about *pivot* (typically world origin ``(0,0,0)``).
+
+    Args:
+        elements: Elements to scale (e.g. full TREE scope list)
+        scale_factor: Uniform scale factor
+        pivot: Pivot in the same space as each element's translation
+        verbose_log: Optional per-element logger
+        progress_callback: Optional (index, total, name) progress hook
+
+    Returns:
+        Number of sculpt objects scaled
+    """
+    sculpt: list[coat.SceneElement] = [el for el in elements if el.isSculptObject()]
+    total: int = len(sculpt)
+    count: int = 0
+    for i, el in enumerate(sculpt):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
+        scale_element_at_center(el, scale_factor, pivot, verbose_log=verbose_log)
+        count += 1
+    return count
+
+
+def scale_element_at_center(
+    element: coat.SceneElement,
+    scale_factor: float,
+    center: coat.vec3,
+    verbose_log: Callable[[str], None] | None = None,
+) -> None:
+    """
+    Scale a scene element's transform about a pivot in the same space.
+
+    Flip/mirror is preserved by scaling the 3x3 basis via element-wise
+    multiply — never ``GetScaling``/``SetScaling``.
+
+    Args:
+        element: The element to scale
+        scale_factor: Factor to multiply both position offset and local scale by
+        center: Pivot in the same space as the element's translation
+        verbose_log: Optional function to log detailed transform data
+    """
+    name: str = element.name()
+    before: coat.mat4 = element.getTransform()
+    transform: coat.mat4 = coat.mat4(before)
+
+    before_scale: coat.vec3 = before.GetScaling()
+    before_pos: coat.vec3 = before.GetTranslation()
+
+    for row in range(3):
+        for col in range(3):
+            transform.SetElem(row, col, before.Elem(row, col) * scale_factor)
+
+    new_pos: coat.vec3 = coat.vec3(
+        center.x + (before_pos.x - center.x) * scale_factor,
+        center.y + (before_pos.y - center.y) * scale_factor,
+        center.z + (before_pos.z - center.z) * scale_factor,
+    )
+    transform.SetTranslation(new_pos)
+    element.setTransform(transform)
+
+    if verbose_log is not None:
+        after_check: coat.mat4 = element.getTransform()
+        after_scale: coat.vec3 = after_check.GetScaling()
+        after_pos: coat.vec3 = after_check.GetTranslation()
+        verbose_log(
+            f"[Scale] '{name}'  "
+            f"sc=({before_scale.x:.3f},{before_scale.y:.3f},{before_scale.z:.3f})"
+            f"→({after_scale.x:.3f},{after_scale.y:.3f},{after_scale.z:.3f})  "
+            f"pos=({before_pos.x:.3f},{before_pos.y:.3f},{before_pos.z:.3f})"
+            f"→({after_pos.x:.3f},{after_pos.y:.3f},{after_pos.z:.3f})"
+        )
+
+
+def scale_element_with_select(element: coat.SceneElement, scale_factor: float) -> None:
+    """
+    Select and scale a scene element by a factor.
+
+    Args:
+        element: The element to scale
+        scale_factor: Factor to multiply current scale by
+    """
+    SelectionAPI.select_one(element)
+    scale_element(element, scale_factor)

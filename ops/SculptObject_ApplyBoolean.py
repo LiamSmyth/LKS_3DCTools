@@ -15,9 +15,10 @@ Uses scope resolution to determine which elements to operate on
 (typically `Scope.CURRENT`).
 """
 import coat
+from typing import Callable
 
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.SceneElement_boolean_utils import (
     collapse_boolean_tree,
     collapse_boolean_tree_keep_original,
@@ -33,6 +34,7 @@ def main(
     scope: Scope = Scope.CURRENT,
     keep_original: bool = False,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Apply (collapse) live-boolean subtrees on scoped sculpt objects.
@@ -42,6 +44,7 @@ def main(
         keep_original: If True, duplicate each element and collapse the
             duplicate while hiding the original.
         preserve_selection: Whether to restore selection after the operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of elements processed
@@ -55,15 +58,19 @@ def main(
     if preserve_selection:
         saved = SelectionAPI.save_selection()
 
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
+    total: int = len(elements)
+
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
         if not el.isSculptObject():
             continue
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if keep_original:
             if collapse_boolean_tree_keep_original(el) is not None:
                 count += 1

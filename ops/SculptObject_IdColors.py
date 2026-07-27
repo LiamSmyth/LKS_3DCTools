@@ -10,6 +10,7 @@ import coat
 import random
 from pathlib import Path
 from datetime import datetime
+from typing import Callable
 from utils.scene_api import SceneAPI, get_element_path
 from utils.scope_utils import Scope, resolve_scope
 from utils.coat_ui_utils import (
@@ -17,6 +18,7 @@ from utils.coat_ui_utils import (
     SETTING_PEN_DEPTH,
     show_message,
     show_error,
+    wait_frames,
 )
 from utils.SceneElement_visibility_utils import (
     cache_ghost_states,
@@ -85,6 +87,7 @@ def _fill_element_with_random_color(
 
     coat.Volume.color(r, g, b)
     coat.ui.cmd(CMD_FILL_LAYER)
+    wait_frames(5)
 
     # Re-ghost so next element can be filled in isolation
     element.setGhost(True)
@@ -99,6 +102,7 @@ def main(
     layer_name: str = DEFAULT_LAYER_NAME,
     min_color: int = DEFAULT_MIN_COLOR,
     restore_layer: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Fill objects with random ID colors.
@@ -108,6 +112,7 @@ def main(
         layer_name: Name of the layer to create/use for ID colors
         min_color: Minimum RGB value (0-255) to avoid pure black
         restore_layer: Whether to restore Layer 0 as active after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects filled
@@ -183,8 +188,13 @@ def main(
     if DEBUG_MODE:
         _debug_log(f"\n=== Fill Loop ===")
 
-    for el in elements:
+    total: int = len(elements)
+    sculpt_count: int = 0
+
+    for i, el in enumerate(elements):
         if el.isSculptObject():
+            if progress_callback is not None:
+                progress_callback(sculpt_count, total, el.name())
             sculpt_count += 1
             if DEBUG_MODE:
                 path: str = get_element_path(el)

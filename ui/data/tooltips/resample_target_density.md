@@ -1,0 +1,1 @@
+<p><b>Target Density</b> — Resample to a uniform world-space detail density in <span style='color:#90caf9;'>triangles per square unit</span>. Larger objects get proportionally more polygons to maintain consistent detail across different scales.</p>

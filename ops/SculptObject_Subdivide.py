@@ -7,8 +7,9 @@ Each subdivision approximately doubles the polycount.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.Volume_subdivide_utils import subdivide_once
 from utils.Volume_mode_utils import ensure_surface_mode
 from utils.Scene_cleanup_utils import cleanup_after_mesh_operation
@@ -60,6 +61,7 @@ def main(
     scope: Scope = Scope.CURRENT,
     subdivisions: int = DEFAULT_SUBDIVISIONS,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Subdivide objects to increase polygon count.
@@ -68,6 +70,7 @@ def main(
         scope: Which objects to subdivide
         subdivisions: Number of subdivisions (1-4, each roughly doubles polys)
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects subdivided
@@ -87,15 +90,19 @@ def main(
         return 0
 
     # Resolve which elements to operate on
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
 
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
+    total: int = len(elements)
+
     # Subdivide each element
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if _subdivide_element(el, subdivisions):
             count += 1
 

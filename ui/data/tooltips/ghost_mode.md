@@ -1,0 +1,1 @@
+<p><b>Ghost Mode</b> — Make objects translucent and non-interactive for reference, preventing accidental edits while keeping them visible. <span style='color:#81c784;'>&#x2713; Use</span> for reference meshes, blocking volumes, or frozen-in-place drafts.</p>

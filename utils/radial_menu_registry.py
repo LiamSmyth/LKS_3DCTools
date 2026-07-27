@@ -266,9 +266,10 @@ def register_menu(menu_filename: str, display_name: str) -> bool:
     # Register with 3DCoat
     register_action(
         menu_id=menu_id,
-        display_name=f"Radial: {display_name}",
+        display_name=f"LKS: RadialMenu_{display_name}",
         script_path=script_path,
         menu_name="Scripts",
+        force=True,
     )
 
     # Update registry state
@@ -310,6 +311,34 @@ def unregister_menu(menu_filename: str) -> bool:
     print(f"[RadialRegistry] Unregistered menu: {menu_filename}")
     print("[RadialRegistry] Note: Menu item XML persists until 3DCoat restart")
     return True
+
+
+def _re_register_menu(menu_filename: str, display_name: str) -> None:
+    """
+    Re-register an already-registered menu to refresh its display name.
+
+    Deletes the stale ExtraMenuItems XML file and re-inserts into 3DCoat
+    so the current display name (e.g., "LKS: RadialMenu_*") takes effect.
+
+    Args:
+        menu_filename: Filename in library (e.g., "my_menu.json")
+        display_name: Human-readable name for menu
+    """
+    import coat
+    from utils.coat_menu_utils import register_action
+
+    menu_id = generate_menu_id(menu_filename)
+    script_path = RADIAL_ACTIONS_DIR / generate_action_script_name(menu_filename)
+
+    display_name_formatted = f"LKS: RadialMenu_{display_name}"
+    register_action(
+        menu_id=menu_id,
+        display_name=display_name_formatted,
+        script_path=script_path,
+        menu_name="Scripts",
+        force=True,
+    )
+    print(f"[RadialRegistry] Re-registered display name: {display_name_formatted}")
 
 
 def is_menu_registered(menu_filename: str) -> bool:
@@ -376,9 +405,11 @@ def sync_all_menus() -> tuple[int, int, int]:
     # Register/update menus in library
     for menu_filename in library_menus:
         if menu_filename in state:
-            # Already registered - regenerate action script
+            # Already registered - regenerate action script AND re-register
+            # to ensure stale XML files with old display names are replaced.
             display_name = state[menu_filename]
             write_action_script(menu_filename, display_name)
+            _re_register_menu(menu_filename, display_name)
             updated_count += 1
         else:
             # Not registered - extract display name from config

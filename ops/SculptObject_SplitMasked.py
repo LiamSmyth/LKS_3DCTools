@@ -7,8 +7,9 @@ Closes holes on both the original and newly created elements.
 Uses scope resolution to determine which element to split.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.object_utils import ObjectUtils
 from utils.Volume_mode_utils import ensure_surface_mode
 from utils.coat_ui_utils import wait_frames, show_message, show_error
@@ -52,6 +53,7 @@ def main(
     scope: Scope = Scope.CURRENT,
     close_holes: bool = True,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Split masked/frozen area from sculpt object(s).
@@ -60,6 +62,7 @@ def main(
         scope: Which object to operate on (typically CURRENT)
         close_holes: Whether to close holes on both original and new elements
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of new elements created
@@ -72,16 +75,20 @@ def main(
         saved_selection = SelectionAPI.save_selection()
 
     # Get elements to process (typically just current)
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
     if not elements:
         show_error("No object selected", 2000)
         return 0
 
+    total: int = len(elements)
     total_new: int = 0
 
-    for element in elements:
+    for i, element in enumerate(elements):
         if not element.isSculptObject():
             continue
+
+        if progress_callback is not None:
+            progress_callback(i, total, element.name())
 
         new_count: int = _split_element(element, close_holes)
         total_new += new_count

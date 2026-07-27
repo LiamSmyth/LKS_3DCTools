@@ -1,1 +1,2 @@
 PySide6
+ftfy>=6.1.3

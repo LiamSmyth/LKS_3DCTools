@@ -1,0 +1,2 @@
+<p><b>Target Polycount</b> — Resample each object to an exact target polygon count, regardless of its current size. All objects in scope will be resampled to the same polycount.</p>
+<p><span style='color:#ffb74d;'>⚠️ Warning:</span> Very high target values on many objects can produce extreme total polycounts. Check the estimated polycount readout below the slider.</p>

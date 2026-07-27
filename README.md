@@ -8,16 +8,19 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam
 ![Radial Tree Menu Animation](./assets/3DCoatGL64_2026-02-15_22-18-58_O5I77gFP3y_anim_000000.webp)
 - Similar to Blender's pie menus and Maya's Marking menus, but in 3DCoat
 - Make your own in the editor
+- Saved library configs auto-migrate through schema versions on load, so older presets keep working as the editor/runtime evolve
 
 ## Batch Tools
 ![Batch Tools Panel](./assets/2026-02-15_image-6.webp)
 - These batch tools are meant to work consistently across your 3DC scene where 3DC don't, or wrap modals in static ui so that you can perform operations in one-click instead of configuring popups. 
 - A whole lotta batch tools, leveraging a custom iterator that attempts to bypass instances so you don't get double-ops. 
 - Scopes selected / subtree / all make it much easier to manage your scene
+- Section headers include richer help/tooltips (markdown) so you can hover for the "why" without leaving the Tools tab
 
 #### Match Density Decimate
 ![Match Density Decimate Animation](./assets/3DCoatGL64_2026-02-15_22-31-51_7WL4nALNmL_anim_000000.webp)
 - From a reference mesh, the tool will try to decimate or subdivide either the subtree or everything in the scene to match the source object's polygon density. Good for mass optimizing your 3dcoat scenes before export
+- Decimate / density paths are hardened against a few 3DCoat dialog timing quirks so batch runs are less likely to no-op or leave stale UI values
 
 #### Target Polycount & Density Resample
 - Resample any sculpt object (or entire subtree/scene) to a specific target polycount in one click. No more fiddling with the resample dialog sliders.
@@ -49,6 +52,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam
 
 #### Dynamic Subdiv Brush Globals
 - Do you hate always having to change your dynamic subdiv settings every time you change a brush? Try mapping the Dynamic Subdiv increment / decrement to a shortcut (I like pg up / pg down). This tool caches the dynamic subdiv level you are currently at to disk, so you can change brushes and get back to your sculpting with a keypress instead of having to reconfigure your brush
+- Details-level apply waits for AutoSubdivide / UI settle when needed, so increment/decrement after a brush switch is less likely to silently fail on the first press
 
 #### WIP: One click autopo -> multires
 ![Autopo Panel](./assets/2026-02-16_image.webp)
@@ -112,6 +116,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam
 - Must restart 3DCoat for them to show up / be removed.
 - Once they are added, open scripts menu and use typical END shortcut mapping to map custom scripts to hotkeys.
 - Uninstall with "Remove Action Menus". At present there is no partial installs, sorry!
+- Menu cleanup / install helpers are stricter about orphaned ExtraMenuItems XML and stale registrations, so add/remove cycles leave less junk behind
 
 ### Install Radial Menu to Hotkey
 ![alt text](./assets/2026-02-15_image.webp)
@@ -120,6 +125,7 @@ A cModule for [3DCoat](https://3dcoat.com/) by Liam
 - Click the dropdown "Library" to select a radial preset. You can also build one from scratch. 
 	- Radial menu definitions are simple json files. You can save / load them from disk, or store them to the addons folder library with store. Delete will remove the currently edited one.
 - With a library item selected, hit the white square button at right to load the preset. With the preset loaded, you can Register the radial menu. Registering will add a radial menu item to your scripts menu. As usual, when changing menu items, you will need to restart 3DCoat for them to show up.
+- Older library JSON is upgraded automatically when loaded (schema migrations), so you usually do not need to hand-edit presets after an LKS update.
 - This generally should be invoked with a shortcut key. Use 3DCoat's `END` shortcut mapping to map the radial menu to a key.
 
 ![alt text](./assets/2026-02-15_image-5.webp)

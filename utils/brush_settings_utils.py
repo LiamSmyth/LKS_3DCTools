@@ -50,9 +50,12 @@ DEFAULT_AUTO_SUBDIVIDE: bool = True
 DEFAULT_DETAILS_LEVEL: float = 1.0
 DEFAULT_REMOVE_STRETCHING: bool = True
 
-# Range limits
+# Range limits (floor only — no upper max on details level)
 MIN_DETAILS_LEVEL: float = -1.0
-MAX_DETAILS_LEVEL: float = 16.0
+
+# Frames to wait after enabling AutoSubdivide before DetailsLevel is writable.
+# Same pattern as Autopo voxelize polycount (conditional UI field).
+AUTO_SUBDIVIDE_UI_SETTLE_FRAMES: int = 2
 
 
 # =============================================================================
@@ -107,9 +110,7 @@ def apply_details_level_all(level: float) -> None:
     Args:
         level: Detail level (0 = neutral, higher = finer)
     """
-    # Clamp to valid range
-    clamped_level: float = max(
-        MIN_DETAILS_LEVEL, min(MAX_DETAILS_LEVEL, level))
+    clamped_level: float = max(MIN_DETAILS_LEVEL, level)
 
     for brush_type in BRUSH_TYPES:
         setting: str = SETTING_DETAILS_LEVEL_TEMPLATE.format(brush=brush_type)
@@ -162,16 +163,50 @@ def apply_remove_stretching(brush_type: str, enabled: bool) -> None:
 # CURRENT BRUSH FUNCTIONS (applies to active brush only - fast)
 # =============================================================================
 
+def _is_auto_subdivide_current_enabled() -> bool:
+    """Read live AutoSubdivide for the active brush (False if unreadable)."""
+    try:
+        return bool(coat.ui.getBool(SETTING_AUTO_SUBDIVIDE_CURRENT))
+    except Exception:
+        try:
+            return bool(coat.ui.getBoolField(SETTING_AUTO_SUBDIVIDE_CURRENT))
+        except Exception:
+            return False
+
+
 def apply_auto_subdivide_current(enabled: bool) -> None:
     """Set auto subdivide for the currently active brush only."""
     coat.ui.setBoolValue(SETTING_AUTO_SUBDIVIDE_CURRENT, enabled)
 
 
-def apply_details_level_current(level: float) -> None:
-    """Set details level for the currently active brush only."""
-    clamped_level: float = max(
-        MIN_DETAILS_LEVEL, min(MAX_DETAILS_LEVEL, level))
-    coat.ui.setSliderValue(SETTING_DETAILS_LEVEL_CURRENT, clamped_level)
+def apply_details_level_current(level: float) -> bool:
+    """
+    Set details level for the currently active brush only.
+
+    `$BrushConstructor::DetailsLevel` is a conditional UI field — it is only
+    writable after AutoSubdivide is enabled and the brush UI has settled.
+    After a brush switch where AutoSubdivide was off, a same-frame write
+    silently fails and the visible number stays stale until a second press.
+
+    Returns:
+        True if setSliderValue reported success on the final attempt.
+    """
+    clamped_level: float = max(MIN_DETAILS_LEVEL, float(level))
+
+    was_enabled: bool = _is_auto_subdivide_current_enabled()
+    coat.ui.setBoolValue(SETTING_AUTO_SUBDIVIDE_CURRENT, True)
+    if not was_enabled:
+        coat.io.step(AUTO_SUBDIVIDE_UI_SETTLE_FRAMES)
+
+    ok: bool = bool(
+        coat.ui.setSliderValue(SETTING_DETAILS_LEVEL_CURRENT, clamped_level)
+    )
+    if not ok:
+        coat.io.step(AUTO_SUBDIVIDE_UI_SETTLE_FRAMES)
+        ok = bool(
+            coat.ui.setSliderValue(SETTING_DETAILS_LEVEL_CURRENT, clamped_level)
+        )
+    return ok
 
 
 def apply_remove_stretching_current(enabled: bool) -> None:
@@ -186,8 +221,13 @@ def apply_brush_settings_current(params: BrushDynamicSubdivParams) -> None:
     Args:
         params: BrushDynamicSubdivParams with all settings
     """
-    apply_auto_subdivide_current(params.auto_subdivide)
-    apply_details_level_current(params.details_level)
+    if params.auto_subdivide:
+        # Hardened path: enable AutoSubdivide, settle UI, then set DetailsLevel
+        apply_details_level_current(params.details_level)
+    else:
+        apply_auto_subdivide_current(False)
+        clamped_level: float = max(MIN_DETAILS_LEVEL, float(params.details_level))
+        coat.ui.setSliderValue(SETTING_DETAILS_LEVEL_CURRENT, clamped_level)
     apply_remove_stretching_current(params.remove_stretching)
 
 

@@ -125,20 +125,24 @@ def smart_match_density(
     element: coat.SceneElement,
     reference_volume: coat.Volume,
     tolerance: float = DEFAULT_DENSITY_TOLERANCE,
+    downsample_method: str = "decimate",
 ) -> str:
     """
     Smart density matching using subdivide, decimate, or resample.
 
     Strategy:
-    - If target is much higher (>4x): subdivide to overshoot, then decimate to exact
+    - If target is much higher (>4x): subdivide to overshoot, then trim to exact
     - If target is higher (1.5x-4x): resample up
     - If within tolerance: skip
-    - If target is lower: decimate to target
+    - If target is lower: downsample to target using *downsample_method*
+      ("decimate" = decimate_by_percent, "resample" = resample_to_target)
 
     Args:
         element: The SceneElement to adjust
         reference_volume: The reference volume whose density to match
         tolerance: How close is "close enough" (0.2 = within 20%)
+        downsample_method: How to reduce when target is below current —
+            "decimate" (default) or "resample"
 
     Returns:
         Action taken: "subdivided", "decimated", "resampled", or "skipped"
@@ -190,18 +194,24 @@ def smart_match_density(
         return "skipped"
 
     if polycount_ratio < 1.0:
-        # Need to reduce - use decimate
+        # Need to reduce — use configured downsample method
         reduction_percent: float = (1.0 - polycount_ratio) * 100.0
         print(
-            f"[SmartDensity] Decimating by {reduction_percent:.1f}% (keeping {polycount_ratio*100:.1f}%)")
+            f"[SmartDensity] Downsampling by {reduction_percent:.1f}% "
+            f"via {downsample_method} (keeping {polycount_ratio*100:.1f}%)")
 
-        decimate_by_percent(reduction_percent)
+        if downsample_method == "resample":
+            resample_to_target(current_polycount, target_polycount)
+        else:
+            decimate_by_percent(reduction_percent)
         wait_frames(MESH_OP_WAIT_FRAMES)
 
         final_polycount: int = vol.getPolycount()
         print(
-            f"[SmartDensity] Decimated '{element.name()}': {current_polycount:,} -> {final_polycount:,} (target was {target_polycount:,})")
-        return "decimated"
+            f"[SmartDensity] {downsample_method}d '{element.name()}': "
+            f"{current_polycount:,} -> {final_polycount:,} "
+            f"(target was {target_polycount:,})")
+        return downsample_method if downsample_method == "resample" else "decimated"
 
     elif polycount_ratio > 4.0:
         # Need to increase significantly - subdivide then decimate to exact target
@@ -218,14 +228,19 @@ def smart_match_density(
             print(
                 f"[SmartDensity] After subdivide {i+1}: {vol.getPolycount():,} polys")
 
-        # Now we likely overshot - decimate to exact target
+        # Now we likely overshot — trim to exact target
         new_polycount: int = vol.getPolycount()
         if new_polycount > target_polycount:
             reduction_ratio: float = target_polycount / new_polycount
-            reduction_percent: float = (1.0 - reduction_ratio) * 100.0
             print(
-                f"[SmartDensity] Decimating by {reduction_percent:.1f}% to reach {target_polycount:,}")
-            decimate_by_percent(reduction_percent)
+                f"[SmartDensity] Trimming by "
+                f"{(1.0 - reduction_ratio) * 100:.1f}% via {downsample_method} "
+                f"to reach {target_polycount:,}")
+            if downsample_method == "resample":
+                resample_to_target(new_polycount, target_polycount)
+            else:
+                reduction_percent: float = (1.0 - reduction_ratio) * 100.0
+                decimate_by_percent(reduction_percent)
             wait_frames(MESH_OP_WAIT_FRAMES)
             final_polycount: int = vol.getPolycount()
             print(

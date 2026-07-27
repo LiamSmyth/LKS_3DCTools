@@ -572,3 +572,79 @@ def collect_subtree_direct(
             pass  # Skip if we can't get child count
 
     return elements
+
+
+# =============================================================================
+# VOLUME OBJECT IDENTITY (Instance Detection)
+# =============================================================================
+
+def is_same_volume(a: coat.SceneElement, b: coat.SceneElement) -> bool:
+    """
+    Check if two elements share the same VolumeObject (shared mesh / instance).
+
+    Shared VO means shared **mesh data**, not a shared scene-graph transform.
+    Each instance still has its own ``getTransform()`` / ``setTransform()``.
+    Use this for mesh ops that mutate volume content; do **not** use it to
+    skip transform updates (see scale tooling).
+
+    Compare with ``va.vo() == vb.vo()`` while both wrappers are alive.
+    Never use ``id(vo)`` — wrappers are ephemeral and ids recycle.
+
+    Args:
+        a: First element to compare
+        b: Second element to compare
+
+    Returns:
+        True if both elements reference the same VolumeObject
+    """
+    try:
+        va: coat.Volume | None = a.Volume()
+        vb: coat.Volume | None = b.Volume()
+        if va and vb:
+            return va.vo() == vb.vo()
+    except Exception:
+        pass
+    return False
+
+
+def deduplicate_elements_by_vo(
+    elements: list[coat.SceneElement],
+) -> list[coat.SceneElement]:
+    """
+    Keep one SceneElement per unique VolumeObject (shared mesh).
+
+    Intended for **mesh** operations where mutating one VO updates all
+    instances. Do **not** use before transform/scale — instances need their
+    own ``setTransform`` (they do not inherit the source's transform).
+
+    Never key identity with Python ``id(vo)``. ``Volume.vo()`` returns
+    ephemeral wrappers; recycled ``id()`` values falsely collide unrelated
+    parts. Keep wrappers alive and compare with ``==``.
+
+    Args:
+        elements: List that may contain instance-linked duplicates
+
+    Returns:
+        List with only one element per unique VolumeObject
+    """
+    # Keep wrappers alive for the duration of this pass so ``==`` is stable.
+    seen_vos: list[object] = []
+    result: list[coat.SceneElement] = []
+    for el in elements:
+        try:
+            vol: coat.Volume | None = el.Volume()
+            if vol:
+                vo: object | None = vol.vo()
+                if vo is not None:
+                    already_seen: bool = False
+                    for seen in seen_vos:
+                        if vo == seen:
+                            already_seen = True
+                            break
+                    if already_seen:
+                        continue
+                    seen_vos.append(vo)
+        except Exception:
+            pass
+        result.append(el)
+    return result

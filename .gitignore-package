@@ -16,4 +16,14 @@ package_release.py
 git_*.py
 
 # Assets folder (development resources not needed in distribution)
+# NOTE: Keep assets/ in GitHub remote (README media); exclude only from zip/.3dcpack
 assets/
+
+# Redundant clarity: these are also in .gitignore-remote (packager loads both).
+# Listed here so package dry-runs stay obvious without reading remote filters.
+test/
+tools/
+utils/live_test/
+docs/
+pytest.ini
+test_runner.py

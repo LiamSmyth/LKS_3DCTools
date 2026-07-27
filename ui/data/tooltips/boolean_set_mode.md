@@ -1,0 +1,2 @@
+<p><b>Set Boolean Mode</b> — Change the boolean mode of existing selected objects in-place. Auto-voxelizes both the object and its parent to enable boolean operations. Renames with suffix based on mode.</p>
+<p><span style='color:#ffb74d;'>⚠️ Destructive:</span> Both the element and its parent will be converted to voxels if they are currently in surface mode.</p>

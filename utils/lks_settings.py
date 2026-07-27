@@ -78,6 +78,7 @@ AUTOPO_DEFAULTS: dict = {
 GENERAL_DEFAULTS: dict = {
     "decimate_reduction": 50,
     "dev_mode": False,  # When True, action scripts reload all modules before invoke
+    "show_symmetry_plane": True,  # Persisted by symmetry_utils.toggle_show_symmetry_plane()
 }
 
 # Radial menu settings defaults
@@ -394,6 +395,9 @@ UI_STATE_DEFAULTS: dict = {
     "section_booleans_expanded": False,
     # Panel window settings
     "panel_always_on_top": False,
+    # First-launch & tab tracking
+    "panel_has_been_launched": False,
+    "active_tab_index": 0,
 }
 
 

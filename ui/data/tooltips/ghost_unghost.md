@@ -1,0 +1,1 @@
+<p><b>Unghost</b> — Restore ghosted objects to normal, fully interactive state. Select a ghosted object then click a scope button to unghost.</p>

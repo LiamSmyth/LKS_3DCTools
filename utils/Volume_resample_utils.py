@@ -84,6 +84,10 @@ def execute_resample_scale_only(ratio: float) -> None:
 
     Result: ``after = current * sqrt(ratio)^2 = current * ratio``.
 
+    Preserves voxel/surface mode — 3DCoat's $Resample always converts
+    to surface, so we save the original mode and restore it after the
+    operation completes.
+
     Args:
         ratio: Desired polycount ratio (e.g. 0.5 for half, 2.0 for double)
     """
@@ -97,9 +101,24 @@ def execute_resample_scale_only(ratio: float) -> None:
         f"slider=sqrt={safe_slider:.4f}{nudge_note}"
     )
 
+    # Save original mode — $Resample always converts to surface
+    scene: coat.Scene = coat.Scene.current()
+    vol: coat.Volume = scene.Volume()
+    was_voxelized: bool = vol.isVoxelized()
+    print(
+        f"[ResampleDialog] original mode: "
+        f"{'voxel' if was_voxelized else 'surface'}"
+    )
+
     callback: Callable[[], None] = _configure_dialog(safe_slider)
     coat.ui.cmd(CMD_RESAMPLE, callback)
     wait_frames(MESH_OP_WAIT_FRAMES)
+
+    # Restore voxel mode if the volume was originally voxelized
+    if was_voxelized:
+        print("[ResampleDialog] restoring voxel mode after resample")
+        vol.toVoxels()
+        wait_frames(MESH_OP_WAIT_FRAMES)
 
 
 # =============================================================================

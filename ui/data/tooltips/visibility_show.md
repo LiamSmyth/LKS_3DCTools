@@ -1,0 +1,1 @@
+<p><b>Show</b> — Make previously hidden objects visible again in the viewport. <span style='color:#81c784;'>&#x2713; Tip:</span> Use <b>Show All</b> scope to reveal every hidden object at once.</p>

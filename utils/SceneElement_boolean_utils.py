@@ -10,6 +10,7 @@ Pattern:
 """
 import coat
 from enum import IntEnum
+from typing import Callable
 
 from utils.coat_ui_utils import wait_frames, show_message, show_error, CMD_DIALOG_OK
 from utils.Volume_mode_utils import ensure_voxel_mode
@@ -191,9 +192,7 @@ def create_boolean_child(
     child.rename(apply_boolean_suffix(parent.name(), mode))
     wait_frames(BOOLEAN_WAIT_FRAMES)
 
-    # Select and parent under original
-    child.selectOne()
-    wait_frames(BOOLEAN_WAIT_FRAMES)
+    # Parent under original (no selectOne — caller manages selection)
     child.changeParent(parent)
     wait_frames(BOOLEAN_WAIT_FRAMES)
 
@@ -318,6 +317,7 @@ def set_live_boolean_mode(
 def set_live_boolean_mode_on_elements(
     elements: list[coat.SceneElement],
     mode: BooleanMode,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Set live boolean mode on a list of elements.
@@ -325,12 +325,16 @@ def set_live_boolean_mode_on_elements(
     Args:
         elements: List of SceneElements to update
         mode: The desired BooleanMode
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Count of elements that were successfully updated
     """
+    total: int = len(elements)
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if set_live_boolean_mode(el, mode):
             count += 1
     return count

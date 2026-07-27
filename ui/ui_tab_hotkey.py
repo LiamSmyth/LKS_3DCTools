@@ -1,10 +1,8 @@
 """
 LKS UI - Hotkey Tab.
 
-Provides hotkey editor controls and menu registration:
+Provides hotkey editor controls:
 - Launch hotkey editor (closes 3DCoat)
-- Register/unregister LKS actions as custom menu items
-- Inspect menu status
 
 Usage:
     from ui.ui_tab_hotkey import create_hotkey_tab
@@ -19,11 +17,19 @@ if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
 
+def _load_ui_tooltip(filename: str) -> str:
+    """Load HTML help text from ui/data/tooltips/."""
+    from utils.ui.widgets.text_resource import TextResource
+    return TextResource(f"data/tooltips/{filename}", base_dir=__file__).text
+
+
 def create_hotkey_tab(
     log_success: Callable[[str], None],
     log_error: Callable[[str], None],
     log_info: Callable[[str], None],
     log_warn: Callable[[str], None],
+    *,
+    parent: "QWidget | None" = None,
 ) -> "QWidget":
     """
     Create the hotkey editor tab.
@@ -33,55 +39,105 @@ def create_hotkey_tab(
         log_error: Callback for error messages
         log_info: Callback for info messages
         log_warn: Callback for warning messages
+        parent: Parent panel window for embedding dialogs.
 
     Returns:
         QWidget containing hotkey editor controls
     """
-    from PySide6.QtWidgets import QWidget, QVBoxLayout
-    from utils.ui.widgets import CollapsibleSection, ButtonGrid
+    from utils.ui.widgets import (
+        CollapsibleSection, ButtonGrid,
+    )
+    from utils.ui.widgets.tab_container import StandardTabBody
 
-    container = QWidget()
-    layout = QVBoxLayout(container)
-    layout.setContentsMargins(4, 4, 4, 4)
-    layout.setSpacing(4)
+    body = StandardTabBody(
+        title="Hotkey Editor",
+        info_tooltip=_load_ui_tooltip("hotkey_tab.md"),
+    )
 
     # =========================================================================
     # HOTKEY EDITOR SECTION
     # =========================================================================
     editor_section = CollapsibleSection(
-        title="🔑 Hotkey Editor", color="#ce93d8", collapsed=False)
+        title="Hotkey Editor", color="#ce93d8", collapsed=False, icon_name="settings",
+        help_text=_load_ui_tooltip("hotkey_editor_help.md"),
+    )
 
-    # Keep reference to editor window to prevent garbage collection
     def on_launch_hotkey_editor() -> None:
         """Launch hotkey editor standalone and close 3DCoat."""
         try:
+            from PySide6.QtCore import QTimer
+
+            # Use embedded dialog so it stays on top of the pinned panel
+            if parent is not None:
+                from lks_utils.gui_qt.widgets.embedded_dialog import (
+                    QEmbeddedDialog,
+                    DialogButton,
+                    BUTTONS_YES_NO,
+                )
+
+                dialog = QEmbeddedDialog(
+                    parent=parent,
+                    title="Launch Hotkey Editor",
+                    message=(
+                        "⚠️ Launching the Hotkey Editor will close 3DCoat.<br><br>"
+                        "This is necessary because 3DCoat saves its in-memory "
+                        "hotkey state on exit, which would overwrite any edits "
+                        "made while it's running.<br><br>"
+                        "The editor will open as a standalone application "
+                        "after 3DCoat closes.<br><br>"
+                        "Continue?"
+                    ),
+                    buttons=BUTTONS_YES_NO,
+                )
+                result: DialogButton | None = dialog.exec_()
+
+                if result != DialogButton.YES:
+                    log_info("Hotkey Editor launch cancelled")
+                    return
+            else:
+                # Fallback for standalone usage without a parent
+                from PySide6.QtWidgets import QMessageBox
+
+                reply = QMessageBox.question(
+                    None,
+                    "Launch Hotkey Editor",
+                    "⚠️ Launching the Hotkey Editor will close 3DCoat.\n\n"
+                    "This is necessary because 3DCoat saves its in-memory hotkey state "
+                    "on exit, which would overwrite any edits made while it's running.\n\n"
+                    "The editor will open as a standalone application after 3DCoat closes.\n\n"
+                    "Continue?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+
+                if reply != QMessageBox.StandardButton.Yes:
+                    log_info("Hotkey Editor launch cancelled")
+                    return
+
+            # Defer the launch so we exit the dialog's nested event loop
+            # before starting the subprocess.
+            QTimer.singleShot(0, lambda: _do_launch_hotkey_editor(log_success, log_error, log_info))
+
+        except Exception as e:
+            log_error(f"Failed to launch Hotkey Editor: {e}")
+            import traceback
+            log_error(traceback.format_exc())
+
+
+    def _do_launch_hotkey_editor(
+        log_success: Callable[[str], None],
+        log_error: Callable[[str], None],
+        log_info: Callable[[str], None],
+    ) -> None:
+        """Actual subprocess launch + coat quit, deferred via QTimer."""
+        try:
             import coat
             from pathlib import Path
+            import shutil
+            import subprocess
             import sys
-            from PySide6.QtWidgets import QMessageBox
-
-            # Confirmation dialog
-            reply = QMessageBox.question(
-                None,
-                "Launch Hotkey Editor",
-                "⚠️ Launching the Hotkey Editor will close 3DCoat.\n\n"
-                "This is necessary because 3DCoat saves its in-memory hotkey state "
-                "on exit, which would overwrite any edits made while it's running.\n\n"
-                "The editor will open as a standalone application after 3DCoat closes.\n\n"
-                "Continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-
-            if reply != QMessageBox.Yes:
-                log_info("Hotkey Editor launch cancelled")
-                return
 
             # Find Python executable in system PATH
-            # 3DCoat uses system-installed Python, not an embedded interpreter
-            import sys
-            import shutil
-
             python_exe: Path | None = None
             pythonw_in_path: str | None = shutil.which("pythonw")
             python_in_path: str | None = shutil.which("python")
@@ -106,30 +162,27 @@ def create_hotkey_tab(
             log_info(f"Python: {python_exe}")
             log_info(f"Editor: {editor_path}")
 
-            # Launch editor as DETACHED process using subprocess
-            # This ensures it survives when 3DCoat exits
-            import subprocess
-
-            # Windows-specific flags for detached process
             DETACHED_PROCESS = 0x00000008
-            CREATE_NEW_PROCESS_GROUP = 0x00000200
 
+            # Use cmd /c start to launch a truly independent process.
+            # DETACHED_PROCESS alone only disconnects the console — the
+            # child can still be terminated when 3DCoat's process exits.
+            # cmd /c start creates a new process tree that survives the
+            # parent's termination.
             subprocess.Popen(
-                [str(python_exe), str(editor_path)],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-                close_fds=True,
+                [
+                    "cmd", "/c", "start", "",
+                    str(python_exe), str(editor_path),
+                ],
+                creationflags=DETACHED_PROCESS,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
 
-            # Wait for process to spawn
-            log_info("Waiting for editor process to spawn...")
-            coat.io.step(5)
-
             log_success("Closing 3DCoat...")
 
-            # Close 3DCoat (quit is in utils namespace)
+            # Close 3DCoat
             coat.utils.quit()
 
         except Exception as e:
@@ -145,146 +198,6 @@ def create_hotkey_tab(
     )
     editor_section.content_layout.addWidget(editor_grid)
 
-    # Help section for Hotkey Editor - inside the collapsible section
-    from utils.ui.widgets import HelpMenu
-    editor_help_menu = HelpMenu(
-        title="Hotkey Editor",
-        content=(
-            "<b>Why does 3DCoat close?</b><br/>"
-            "3DCoat saves its in-memory hotkey configuration when it exits. "
-            "If the editor modifies the hotkey file while 3DCoat is running, "
-            "the changes would be overwritten on exit.<br/><br/>"
-            "<b>Workflow:</b><br/>"
-            "1. Launch the Hotkey Editor (3DCoat closes)<br/>"
-            "2. Make your hotkey changes in the editor<br/>"
-            "3. Save changes in the editor<br/>"
-            "4. Close the editor<br/>"
-            "5. Restart 3DCoat (changes will be loaded)"
-        ),
-        max_height=180
-    )
-    editor_section.content_layout.addWidget(editor_help_menu)
+    body.content_layout.addWidget(editor_section)
 
-    layout.addWidget(editor_section)
-
-    # =========================================================================
-    # MENU REGISTRATION SECTION
-    # =========================================================================
-    menu_section = CollapsibleSection(
-        title="📋 Menu Registration", color="#81c784", collapsed=False)
-
-    # About text using HelpMenu widget
-    about_menu = HelpMenu(
-        title="Menu Items",
-        content=(
-            "<b>Why are custom menu items needed?</b><br/>"
-            "3DCoat only allows hotkeys to be assigned to menu items. "
-            "To make LKS actions hotkey-assignable, we register them as custom menu items "
-            "in the Scripts menu. This enables you to assign shortcuts via 3DCoat's Preferences → Hotkeys."
-        ),
-        max_height=150
-    )
-    menu_section.content_layout.addWidget(about_menu)
-
-    def on_register_all() -> None:
-        try:
-            from utils.registration_utils import register_actions
-            count = register_actions()
-            log_success(f"Registered {count} actions to Scripts menu")
-        except Exception as e:
-            log_error(f"Registration failed: {e}")
-
-    def on_cleanup_menu() -> None:
-        try:
-            from utils.menu_cleanup import cleanup_lks_menu
-            deleted, names = cleanup_lks_menu()
-            if deleted > 0:
-                log_warn(
-                    f"Deleted {deleted} stale menu files. Restart 3DCoat.")
-                for name in names[:3]:
-                    log_info(f"  • {name}")
-            else:
-                log_info("No stale menu files found.")
-        except Exception as e:
-            log_error(f"Menu cleanup failed: {e}")
-
-    action_grid = ButtonGrid(columns=2)
-    action_grid.add_button("Add Action Menus", on_register_all,
-                           "Register all LKS actions as custom menu items in Scripts menu")
-    action_grid.add_button(
-        "Remove Action Menus", on_cleanup_menu, "Remove all LKS custom menu items from Scripts menu")
-    menu_section.content_layout.addWidget(action_grid)
-
-    def on_inspect_menu() -> None:
-        """Show combined menu status: registered actions + cleanup status."""
-        try:
-            from utils.registration_utils import get_registered_actions
-            from utils.menu_cleanup import get_menu_cleanup_status
-
-            # Show registered actions
-            actions = get_registered_actions()
-            if actions:
-                log_info(f"Registered: {len(actions)} actions")
-                for action in actions[:5]:  # Show first 5
-                    log_info(f"  • {action}")
-                if len(actions) > 5:
-                    log_info(f"  ... and {len(actions) - 5} more")
-            else:
-                log_info("No actions registered yet")
-
-            # Show menu file status
-            status = get_menu_cleanup_status()
-            count = status.get("count", 0)
-            if count > 0:
-                log_info(f"Found {count} LKS menu files in ExtraMenuItems")
-            else:
-                log_info("No LKS menu files in ExtraMenuItems (clean state)")
-
-        except Exception as e:
-            log_error(f"Failed to inspect menu status: {e}")
-
-    inspect_grid = ButtonGrid(columns=1)
-    inspect_grid.add_button(
-        "Inspect Menu Status", on_inspect_menu, "View registered actions and menu file status")
-    menu_section.content_layout.addWidget(inspect_grid)
-
-    layout.addWidget(menu_section)
-
-    # --- Revert to Defaults Button ---
-    from PySide6.QtWidgets import QPushButton
-    revert_btn = QPushButton("⟲ Revert UI State to Defaults")
-    revert_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #3a3a3a;
-            color: #ddd;
-            border: 1px solid #4a4a4a;
-            border-radius: 4px;
-            padding: 6px 12px;
-            font-size: 11px;
-        }
-        QPushButton:hover {
-            background-color: #4a4a4a;
-            border-color: #90caf9;
-        }
-        QPushButton:pressed {
-            background-color: #2a2a2a;
-        }
-    """)
-    revert_btn.setToolTip(
-        "Reset all collapsible section states to their defaults")
-
-    def on_revert() -> None:
-        try:
-            from utils.lks_settings import reset_ui_state
-            reset_ui_state()
-            log_success(
-                "UI state reverted to defaults. Restart panel to apply.")
-        except Exception as e:
-            log_error(f"Failed to revert UI state: {e}")
-
-    revert_btn.clicked.connect(on_revert)
-    layout.addWidget(revert_btn)
-
-    layout.addStretch()
-
-    return container
+    return body

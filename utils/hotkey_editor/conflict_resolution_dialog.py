@@ -102,7 +102,8 @@ if HAS_QT:
             layout.addWidget(self._status_label)
 
             # Scroll area for conflict groups
-            scroll = QScrollArea()
+            from lks_utils.gui_qt.widgets import QSmoothScrollArea
+            scroll = QSmoothScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 

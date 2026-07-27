@@ -1,0 +1,1 @@
+<p><b>Apply Scale</b> — Choose which objects receive the scale operation via scope icons: <span style='color:#90caf9;'>Selected</span>, <span style='color:#90caf9;'>Subtree</span>, or <span style='color:#90caf9;'>All</span> objects in the scene.</p>

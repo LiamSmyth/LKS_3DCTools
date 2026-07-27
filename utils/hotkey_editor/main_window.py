@@ -33,11 +33,15 @@ from .qt_imports import (
     QScrollArea,
     QFormLayout,
     QCheckBox,
+    QIcon,
     Qt,
     QColor,
     QBrush,
     QAction,
+    QPixmap,
+    QPainter,
 )
+from PySide6.QtSvg import QSvgRenderer
 from .styles import (
     EDITOR_STYLESHEET,
     COL_COMMAND,
@@ -63,6 +67,31 @@ from .styles import (
     ICON_GARBAGE,
     ICON_OK,
 )
+# SVG icon paths for file toolbar buttons — pre-colored with theme accent
+from pathlib import Path as _Path
+_ICONS_DIR = _Path(__file__).resolve().parent.parent.parent / 'utils' / 'ui' / 'data'
+
+def _make_colored_icon(name: str, color: str, size: int = 16) -> QIcon:
+    svg_path: Path = _ICONS_DIR / f"{name}.svg"
+    content: str = svg_path.read_text(encoding="utf-8")
+    content = content.replace("currentColor", color)
+    renderer: QSvgRenderer = QSvgRenderer(content.encode("utf-8"))
+    pixmap: QPixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter: QPainter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
+
+try:
+    from utils.ui.styles import COLOR_ACCENT
+except ImportError:
+    COLOR_ACCENT = "#90caf9"
+
+_ICON_OPEN = _make_colored_icon('load', COLOR_ACCENT)
+_ICON_SAVE_ICON = _make_colored_icon('save', COLOR_ACCENT)
+_ICON_SAVE_AS_ICON = _make_colored_icon('save_as', COLOR_ACCENT)
+
 from .hotkey_imports import (
     HotkeyEntry,
     HotkeysFile,
@@ -224,15 +253,18 @@ if HAS_QT:
             self._file_label.setStyleSheet("color: #888;")
             layout.addWidget(self._file_label, 1)
 
-            btn_open = QPushButton("📂 Open...")
+            btn_open = QPushButton("Open...")
+            btn_open.setIcon(_ICON_OPEN)
             btn_open.clicked.connect(self._on_open_file)
             layout.addWidget(btn_open)
 
-            btn_save = QPushButton("💾 Save")
+            btn_save = QPushButton("Save")
+            btn_save.setIcon(_ICON_SAVE_ICON)
             btn_save.clicked.connect(self._on_save_file)
             layout.addWidget(btn_save)
 
-            btn_save_as = QPushButton("💾 Save As...")
+            btn_save_as = QPushButton("Save As...")
+            btn_save_as.setIcon(_ICON_SAVE_AS_ICON)
             btn_save_as.clicked.connect(self._on_save_file_as)
             layout.addWidget(btn_save_as)
 

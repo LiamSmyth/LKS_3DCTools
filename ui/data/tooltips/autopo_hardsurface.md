@@ -1,0 +1,1 @@
+<p><b>Hardsurface Mode</b> — Optimize for hard surface models with sharp edges. Produces cleaner topology on mechanical and angular forms. <span style='color:#ffb74d;'>⚠️ Not suitable</span> for organic or smooth curved models.</p>

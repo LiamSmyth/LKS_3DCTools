@@ -8,8 +8,9 @@ Uses scope resolution to determine which elements to operate on.
 """
 import coat
 from enum import Enum
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.Volume_mode_utils import (
     convert_to_surface,
     convert_to_voxels,
@@ -54,6 +55,15 @@ def _convert_element(
         return False
 
     vol: coat.Volume = element.Volume()
+
+    # Skip empty voxel layers and other zero-polycount elements
+    if vol.getPolycount() <= 0:
+        print(
+            f"[ModeConvert] SKIP '{element.name()}': "
+            f"zero polycount (empty voxel layer)"
+        )
+        return False
+
     element.selectOne()
     coat.io.step(1)  # Wait for 3DCoat to register new active selection
 
@@ -77,6 +87,7 @@ def main(
     polycount: int | None = None,
     multiplier: float = DEFAULT_RESAMPLE_MULTIPLIER,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Convert objects between surface and voxel modes.
@@ -87,6 +98,7 @@ def main(
         polycount: Target polycount for voxelization (if set)
         multiplier: Polycount multiplier for RESAMPLE_VOXELIZE mode
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of objects converted
@@ -103,15 +115,19 @@ def main(
         return 0
 
     # Resolve which elements to operate on
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
 
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
+    total: int = len(elements)
+
     # Convert each element
     count: int = 0
-    for el in elements:
+    for i, el in enumerate(elements):
+        if progress_callback is not None:
+            progress_callback(i, total, el.name())
         if _convert_element(el, mode, polycount, multiplier):
             count += 1
 
@@ -124,11 +140,11 @@ def main(
 
     # Build status message
     if mode == ConvertMode.TO_SURFACE:
-        status: str = f"Converted {count} to surface"
+        status: str = f"Converted {count}/{total} to surface"
     elif mode == ConvertMode.TO_VOXELS:
-        status = f"Converted {count} to voxels"
+        status = f"Converted {count}/{total} to voxels"
     else:
-        status = f"Resampled+voxelized {count} ({multiplier:.0f}x)"
+        status = f"Resampled+voxelized {count}/{total} ({multiplier:.0f}x)"
 
     show_message(f"{status}", 2000)
     return count

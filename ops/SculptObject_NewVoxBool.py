@@ -87,6 +87,8 @@ def main(
 
     if child:
         mode_name: str = mode.name.lower()
+        # Select only the new child so the user can sculpt it immediately
+        child.selectOne()
         show_message(f"Created {mode_name}: {child.name()}", 2000)
     else:
         show_error(f"Failed to create {mode.name.lower()} child", 2000)

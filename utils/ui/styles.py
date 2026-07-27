@@ -1,196 +1,191 @@
-"""
-LKS UI Styles.
+"""LKS UI Styles — re-exported from lks_utils theme system.
 
-Contains Qt stylesheets and theme definitions for the LKS panel.
-Separated from main code for maintainability.
+Backward-compatible color constants and DARK_STYLESHEET are provided
+by mapping lks_utils COLORS keys to the legacy 3DCoat names.
 
-Color constants are defined first, then used to construct the stylesheet dynamically.
+New code should prefer ``from lks_utils.gui_qt.theme.colors import COLORS``
+and ``from lks_utils.gui_qt.theme.dark_theme import DARK_QSS``.
 """
+from __future__ import annotations
+
+from lks_utils.gui_qt.theme.dark_theme import DARK_QSS, apply_dark_theme
+from lks_utils.gui_qt.theme.colors import COLORS as _C
 
 # =============================================================================
-# COLOR CONSTANTS (for programmatic use and stylesheet construction)
+# Backward-compatible color constants (mapped from lks_utils COLORS)
 # =============================================================================
 
 # Background colors
-COLOR_BG_PRIMARY: str = "#2b2b2b"
-COLOR_BG_SECONDARY: str = "#1e1e1e"
-COLOR_BG_BUTTON: str = "#404040"
-COLOR_BG_BUTTON_HOVER: str = "#4a4a4a"
-COLOR_BG_BUTTON_PRESSED: str = "#353535"
-COLOR_BG_BUTTON_DISABLED: str = "#333333"
-COLOR_BG_HIGHLIGHT: str = "#264f78"
-COLOR_BG_TREE_ALT: str = "#252525"
-COLOR_BG_HEADER: str = "#383838"
-COLOR_BG_TOOLTIP: str = "#3c3c3c"
-COLOR_BG_TAB: str = "#353535"
-COLOR_BG_TREE_HOVER: str = "#3a3a3a"
+COLOR_BG_PRIMARY: str = "#2b2b2b"     # 3DCoat uses #2b2b2b (lks_utils uses #222222)
+COLOR_BG_SECONDARY: str = _C["input_bg"]  # #2d2d2d
+COLOR_BG_BUTTON: str = _C["dark"]         # #303030
+COLOR_BG_BUTTON_HOVER: str = "#4a4a4a"    # 3DCoat specific
+COLOR_BG_BUTTON_PRESSED: str = "#353535"  # 3DCoat specific
+COLOR_BG_BUTTON_DISABLED: str = "#333333" # 3DCoat specific
+COLOR_BG_HIGHLIGHT: str = "#264f78"       # 3DCoat specific (selection)
+COLOR_BG_TREE_ALT: str = _C["tree_alt_bg"]      # #252525
+COLOR_BG_HEADER: str = _C["header_bg"]           # #383838
+COLOR_BG_TOOLTIP: str = _C["tooltip_bg"]          # #3c3c3c
+COLOR_BG_TAB: str = _C["tab_bg"]                  # #353535
+COLOR_BG_TREE_HOVER: str = _C["tree_hover_bg"]    # #3a3a3a
 
 # Text colors
-COLOR_TEXT_PRIMARY: str = "#e0e0e0"
-COLOR_TEXT_MUTED: str = "#888888"
-COLOR_TEXT_DISABLED: str = "#666666"
+COLOR_TEXT_PRIMARY: str = _C["fg"]          # #ffffff
+COLOR_TEXT_MUTED: str = "#888888"           # 3DCoat specific
+COLOR_TEXT_DISABLED: str = _C["disabled_fg"]  # #666666
 
 # Accent colors
-COLOR_ACCENT: str = "#90caf9"        # Icy blue - primary accent
-COLOR_SUCCESS: str = "#81c784"       # Green
-COLOR_WARNING: str = "#ffb74d"       # Orange
-COLOR_ERROR: str = "#ef5350"         # Red
+COLOR_ACCENT: str = "#90caf9"       # 3DCoat specific (icy blue)
+COLOR_ACCENT_ALT: str = "#ffb74d"   # 3DCoat specific (orange accent)
+COLOR_SUCCESS: str = "#81c784"      # 3DCoat specific
+COLOR_WARNING: str = _C["warning"]  # #f39c12
+COLOR_ERROR: str = _C["danger"]     # #e74c3c
 
 # Border/separator colors
-COLOR_BORDER: str = "#555555"
-COLOR_BORDER_LIGHT: str = "#666666"
+COLOR_BORDER: str = _C["border"]         # #444444
+COLOR_BORDER_LIGHT: str = "#666666"      # 3DCoat specific
+COLOR_BORDER_INPUT: str = "#3d3d3d"      # 3DCoat specific
+COLOR_BORDER_INPUT_FOCUS: str = "#4a4a4a"  # 3DCoat specific
 
 # Scrollbar colors
-COLOR_SCROLLBAR_BG: str = COLOR_BG_PRIMARY
-COLOR_SCROLLBAR_HANDLE: str = COLOR_BORDER
-COLOR_SCROLLBAR_HANDLE_HOVER: str = COLOR_BORDER_LIGHT
+COLOR_SCROLLBAR_BG: str = _C["scrollbar_bg"]          # #3a3a3a
+COLOR_SCROLLBAR_HANDLE: str = _C["scrollbar_handle"]   # #808080
+COLOR_SCROLLBAR_HANDLE_HOVER: str = _C["scrollbar_handle_hover"]  # #A0A0A0
+
+# Side ribbon colors
+COLOR_RIBBON_BAR_BG: str = COLOR_BG_PRIMARY            # "#2b2b2b"
+COLOR_RIBBON_BAR_BG_HOVER: str = "#3a3a3a"             # 3DCoat specific
+COLOR_RIBBON_BAR_BORDER: str = COLOR_BORDER            # "#444444"
+COLOR_RIBBON_BAR_TEXT: str = COLOR_ACCENT              # "#90caf9"
 
 # =============================================================================
-# DARK THEME STYLESHEET (dynamically constructed from constants)
+# DARK THEME STYLESHEET (backward-compatible alias)
 # =============================================================================
 
-def _create_dark_stylesheet() -> str:
-    """
-    Create the dark theme stylesheet using color constants.
-    
-    This allows colors to be defined once and reused throughout the stylesheet,
-    making it easier to maintain and modify the theme.
-    """
-    return f"""
+# lks_utils DARK_QSS applies generous button sizing (min-width: 80px,
+# padding: 6px 16px, blue #375a7f background).  3DCoat's compact tool
+# panel needs tighter, grayscale buttons.  We append an override block.
+#
+# ALSO: DARK_QSS contains QTreeView::branch { background-color: #252525 }
+# rules that render native branch arrows invisible on Windows by painting
+# a dark background over the arrow area.  We strip those rules to allow
+# native arrows to follow palette WindowText color.
+#
+# ALSO: DARK_QSS sets QTreeWidget::item:alternate { background-color: ... }
+# while base ::item has no background. Qt then paints alternate rows via the
+# stylesheet item path and non-alternate via the style/palette path, which
+# shifts icons+text by ~1-2px (zebra sawtooth). Zebra must use the widget
+# property alternate-background-color / QPalette.AlternateBase only.
+import re
+
+_DARK_QSS_STRIPPED: str = re.sub(
+    r'QTreeView::branch[^{]*\{[^}]*\}', '', DARK_QSS, flags=re.DOTALL)
+_DARK_QSS_STRIPPED = re.sub(
+    r'QTreeWidget::item:alternate,\s*QTreeView::item:alternate\s*\{[^}]*\}',
+    '',
+    _DARK_QSS_STRIPPED,
+    flags=re.DOTALL,
+)
+
+# ── 3DCoat compact override sizing constants ──
+_FONT_FAMILY: str = "'Consolas', 'Cascadia Code', 'Courier New', monospace"
+_BTN_BG: str = "#3a3a3a"
+_BTN_BORDER: str = "#555555"
+_BTN_BORDER_RADIUS: str = "3px"
+_BTN_PADDING: str = "3px 8px"
+_BTN_FONT_SIZE: str = "11px"
+_BTN_HOVER_BG: str = "#4a4a4a"
+_BTN_HOVER_BORDER: str = "#666666"
+_BTN_PRESSED_BG: str = "#2a2a2a"
+_BTN_DISABLED_BG: str = "#333333"
+_BTN_DISABLED_COLOR: str = "#666666"
+_TREE_FONT_SIZE: str = "10px"
+# Identical box model on every row — never differ by :alternate.
+# Keep in sync with ui.radial_menu_theme.TREE_ITEM_*.
+_TREE_ITEM_PADDING: str = "0px 2px"
+_TREE_ITEM_BORDER: str = "none"
+_TREE_ITEM_MARGIN: str = "0px"
+_HEADER_PADDING: str = "1px 2px"
+_HEADER_FONT_SIZE: str = "9px"
+
+_3DCOAT_BUTTON_OVERRIDE: str = f"""
 QWidget {{
-    background-color: {COLOR_BG_PRIMARY};
-    color: {COLOR_TEXT_PRIMARY};
-    font-family: "Segoe UI", Arial, sans-serif;
-    font-size: 11px;
+    font-family: {_FONT_FAMILY};
 }}
-
-QGroupBox {{
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 4px;
-    margin-top: 8px;
-    padding-top: 8px;
-    font-weight: bold;
-}}
-
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    left: 8px;
-    padding: 0 4px;
-    color: {COLOR_ACCENT};
-}}
-
 QPushButton {{
-    background-color: {COLOR_BG_BUTTON};
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 4px;
-    padding: 6px 12px;
-    min-height: 20px;
+    background-color: {_BTN_BG};
+    border: 1px solid {_BTN_BORDER};
+    border-radius: {_BTN_BORDER_RADIUS};
+    padding: {_BTN_PADDING};
+    min-width: 0px;
+    font-size: {_BTN_FONT_SIZE};
 }}
-
 QPushButton:hover {{
-    background-color: {COLOR_BG_BUTTON_HOVER};
-    border-color: {COLOR_ACCENT};
+    background-color: {_BTN_HOVER_BG};
+    border-color: {_BTN_HOVER_BORDER};
 }}
-
 QPushButton:pressed {{
-    background-color: {COLOR_BG_BUTTON_PRESSED};
+    background-color: {_BTN_PRESSED_BG};
 }}
-
 QPushButton:disabled {{
-    background-color: {COLOR_BG_BUTTON_DISABLED};
-    color: {COLOR_TEXT_DISABLED};
+    background-color: {_BTN_DISABLED_BG};
+    color: {_BTN_DISABLED_COLOR};
 }}
-
-QLabel {{
-    background-color: transparent;
-}}
-
 QTreeWidget {{
-    background-color: {COLOR_BG_SECONDARY};
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 4px;
-    alternate-background-color: {COLOR_BG_TREE_ALT};
+    font-size: {_TREE_FONT_SIZE};
 }}
-
-QTreeWidget::item {{
-    padding: 4px 2px;
-    border: none;
+QTreeWidget::item, QTreeView::item {{
+    padding: {_TREE_ITEM_PADDING};
+    border: {_TREE_ITEM_BORDER};
+    margin: {_TREE_ITEM_MARGIN};
 }}
-
-QTreeWidget::item:selected {{
-    background-color: {COLOR_BG_HIGHLIGHT};
+QTreeWidget::item:alternate, QTreeView::item:alternate {{
+    padding: {_TREE_ITEM_PADDING};
+    border: {_TREE_ITEM_BORDER};
+    margin: {_TREE_ITEM_MARGIN};
 }}
-
-QTreeWidget::item:hover {{
-    background-color: {COLOR_BG_TREE_HOVER};
-}}
-
 QHeaderView::section {{
-    background-color: {COLOR_BG_HEADER};
-    color: {COLOR_TEXT_PRIMARY};
-    padding: 4px;
-    border: 1px solid {COLOR_BORDER};
-}}
-
-QFrame[frameShape="4"] {{
-    /* HLine */
-    background-color: {COLOR_BORDER};
-    max-height: 1px;
-}}
-
-QScrollBar:vertical {{
-    background-color: {COLOR_SCROLLBAR_BG};
-    width: 12px;
-    border: none;
-}}
-
-QScrollBar::handle:vertical {{
-    background-color: {COLOR_SCROLLBAR_HANDLE};
-    border-radius: 4px;
-    min-height: 20px;
-}}
-
-QScrollBar::handle:vertical:hover {{
-    background-color: {COLOR_SCROLLBAR_HANDLE_HOVER};
-}}
-
-QToolTip {{
-    background-color: {COLOR_BG_TOOLTIP};
-    color: {COLOR_TEXT_PRIMARY};
-    border: 1px solid {COLOR_BORDER};
-    padding: 4px;
-}}
-
-QSplitter::handle {{
-    background-color: {COLOR_BORDER};
-}}
-
-QSplitter::handle:hover {{
-    background-color: {COLOR_ACCENT};
-}}
-
-QTabWidget::pane {{
-    border: 1px solid {COLOR_BORDER};
-    background-color: {COLOR_BG_PRIMARY};
-}}
-
-QTabBar::tab {{
-    background-color: {COLOR_BG_TAB};
-    color: {COLOR_TEXT_PRIMARY};
-    padding: 8px 16px;
-    border: 1px solid {COLOR_BORDER};
-    border-bottom: none;
-}}
-
-QTabBar::tab:selected {{
-    background-color: {COLOR_BG_PRIMARY};
-    border-bottom: 2px solid {COLOR_ACCENT};
-}}
-
-QTabBar::tab:hover:!selected {{
-    background-color: {COLOR_BG_BUTTON};
+    padding: {_HEADER_PADDING};
+    font-size: {_HEADER_FONT_SIZE};
 }}
 """
 
-# Create the stylesheet constant
-DARK_STYLESHEET: str = _create_dark_stylesheet()
+DARK_STYLESHEET: str = _DARK_QSS_STRIPPED + _3DCOAT_BUTTON_OVERRIDE
+
+# Re-export apply_dark_theme for convenience
+__all__ = [
+    "DARK_STYLESHEET",
+    "DARK_QSS",
+    "apply_dark_theme",
+    "COLOR_BG_PRIMARY",
+    "COLOR_BG_SECONDARY",
+    "COLOR_BG_BUTTON",
+    "COLOR_BG_BUTTON_HOVER",
+    "COLOR_BG_BUTTON_PRESSED",
+    "COLOR_BG_BUTTON_DISABLED",
+    "COLOR_BG_HIGHLIGHT",
+    "COLOR_BG_TREE_ALT",
+    "COLOR_BG_HEADER",
+    "COLOR_BG_TOOLTIP",
+    "COLOR_BG_TAB",
+    "COLOR_BG_TREE_HOVER",
+    "COLOR_TEXT_PRIMARY",
+    "COLOR_TEXT_MUTED",
+    "COLOR_TEXT_DISABLED",
+    "COLOR_ACCENT",
+    "COLOR_ACCENT_ALT",
+    "COLOR_SUCCESS",
+    "COLOR_WARNING",
+    "COLOR_ERROR",
+    "COLOR_BORDER",
+    "COLOR_BORDER_LIGHT",
+    "COLOR_BORDER_INPUT",
+    "COLOR_BORDER_INPUT_FOCUS",
+    "COLOR_SCROLLBAR_BG",
+    "COLOR_SCROLLBAR_HANDLE",
+    "COLOR_SCROLLBAR_HANDLE_HOVER",
+    "COLOR_RIBBON_BAR_BG",
+    "COLOR_RIBBON_BAR_BG_HOVER",
+    "COLOR_RIBBON_BAR_BORDER",
+    "COLOR_RIBBON_BAR_TEXT",
+]

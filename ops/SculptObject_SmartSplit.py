@@ -9,8 +9,9 @@ Closes holes on both original and newly created elements in both modes.
 Uses scope resolution to determine which element(s) to split.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.Volume_resample_utils import execute_resample_scale_only
 from utils.coat_ui_utils import wait_frames, show_message, show_error
 
@@ -55,6 +56,7 @@ def main(
     scope: Scope = Scope.CURRENT,
     close_holes: bool = True,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Smart split: adapts based on voxel vs surface mode.
@@ -66,6 +68,7 @@ def main(
         scope: Which object(s) to operate on
         close_holes: Whether to close holes on both original and new elements
         preserve_selection: Whether to restore selection after operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of new elements created
@@ -76,18 +79,22 @@ def main(
         saved_selection = SelectionAPI.save_selection()
 
     # Get elements to process
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
     if not elements:
         show_error("No object selected", 2000)
         return 0
 
+    total: int = len(elements)
     total_new: int = 0
     voxel_count: int = 0
     surface_count: int = 0
 
-    for element in elements:
+    for i, element in enumerate(elements):
         if not element.isSculptObject():
             continue
+
+        if progress_callback is not None:
+            progress_callback(i, total, element.name())
 
         vol: coat.Volume = element.Volume()
 
@@ -139,10 +146,13 @@ def _split_voxel_element(element: coat.SceneElement, close_holes: bool) -> int:
     This avoids $SeparateHidden which loses colored-surface data.
 
     Voxel path:
-    1. duplicate()      - clone the object (inherits same vox-hide state)
-    2. Original: $DeleteHidden  - original keeps only the VISIBLE part
-    3. Dupe: $InvertHide        - flip hidden↔visible on the duplicate
-    4. Dupe: $DeleteHidden      - dupe keeps only what was originally HIDDEN
+    1. $InvertHide             - flip hidden↔visible (visible→hidden, hidden→visible)
+    2. duplicate()              - clone with only shown voxels, no hide state
+    3. Original: $InvertHide    - restore original hide state on original
+    4. Original: $DeleteHidden  - original keeps only what was originally VISIBLE
+
+    The duplicate is produced with only the currently-shown voxels
+    (originally-hidden) and no hide state — it needs no further processing.
 
     Note: close_holes is intentionally skipped — $CloseSurfHoles is a
     surface command and is not meaningful in voxel mode.
@@ -154,38 +164,45 @@ def _split_voxel_element(element: coat.SceneElement, close_holes: bool) -> int:
     Returns:
         Number of new elements created (always 1 if successful, 0 on failure)
     """
-    # Required order: invert hide first, then duplicate.
     coat.ui.cmd(CMD_INVERT_HIDE)
-    wait_frames(1)
-
+    wait_frames(5)
     dupe: coat.SceneElement | None = element.duplicate()
-    if not dupe:
-        return 0
-    wait_frames(DEFAULT_WAIT_FRAMES)
-
-    # Duplicate keeps hidden side.
+    wait_frames(5)
+    dupe.removeSubtree()
+    wait_frames(5)
     dupe.selectOne()
-    wait_frames(1)
-    coat.ui.cmd(CMD_DELETE_HIDDEN)
-    wait_frames(DEFAULT_WAIT_FRAMES)
+    wait_frames(5)
 
-    # Original keeps visible side.
+    # Dupe inherits only the shown (originally-hidden) voxels with no
+    # hide state — it is already the correct split result.
+    dupe_vol: coat.Volume = dupe.Volume()
+
+    # Early-out: if dupe has zero polygons, nothing was hidden — clean up
+    # and restore the original hide state before returning.
+    if dupe_vol and dupe_vol.getPolycount() <= 0:
+        dupe.selectOne()
+        dupe.remove()
+        coat.ui.cmd(CMD_INVERT_HIDE)
+        show_message(
+            "No polygons were produced: use voxhide to hide voxels", 3000)
+        return 0
+
+    # Original: restore hide state, then delete the still-hidden
+    # (originally-hidden) voxels, keeping only the originally-visible side.
     element.selectOne()
-    wait_frames(1)
+    coat.ui.cmd(CMD_INVERT_HIDE)
     coat.ui.cmd(CMD_DELETE_HIDDEN)
-    wait_frames(DEFAULT_WAIT_FRAMES)
 
     # Force resample on duplicate to stabilize voxel data after split.
     dupe.selectOne()
-    wait_frames(1)
-    dupe_vol: coat.Volume = dupe.Volume()
+    # wait_frames(1)
+    dupe_vol = dupe.Volume()
     if dupe_vol and dupe_vol.isVoxelized():
         polycount: int = dupe_vol.getPolycount()
         if polycount > 0:
             execute_resample_scale_only(ratio=1.1)
-            wait_frames(DEFAULT_WAIT_FRAMES)
 
-    element.selectOne()
+    dupe.selectOne()
     return 1
 
 
@@ -193,12 +210,16 @@ def _split_surface_element(element: coat.SceneElement, close_holes: bool) -> int
     """
     Split surface mode element (hides masked/frozen, then separates hidden).
 
+    Early-out: if the split produces zero-polygon elements, they are deleted
+    and a warning is shown ("use masked area to split"). Only elements with
+    actual geometry survive to the close-holes step.
+
     Args:
         element: The surface element to split
         close_holes: Whether to close holes on resulting elements
 
     Returns:
-        Number of new elements created
+        Number of new elements created (0 if nothing was masked/frozen)
     """
     # Cache parent and existing children BEFORE split
     parent: coat.SceneElement = element.parent()
@@ -213,9 +234,9 @@ def _split_surface_element(element: coat.SceneElement, close_holes: bool) -> int
     # In surface mode: hide frozen/masked area first, then separate
     coat.ui.cmd(CMD_HIDE_FROZEN_AREA)
     coat.ui.cmd(CMD_SEPARATE_HIDDEN)
-    wait_frames(DEFAULT_WAIT_FRAMES)
+    # wait_frames(DEFAULT_WAIT_FRAMES)
 
-    # Find newly created elements
+    # Find newly created elements, filtering out zero-poly empties.
     new_elements: list[coat.SceneElement] = []
     for i in range(parent.childCount()):
         child: coat.SceneElement = parent.child(i)
@@ -227,19 +248,38 @@ def _split_surface_element(element: coat.SceneElement, close_holes: bool) -> int
         if not is_existing:
             new_elements.append(child)
 
-    # Close holes on original element and new elements if requested
+    # Early-out: delete zero-polygon new elements. If none survive,
+    # restore selection on the original and warn.
+    survivors: list[coat.SceneElement] = []
+    for new_elem in new_elements:
+        new_vol: coat.Volume = new_elem.Volume()
+        if new_vol and new_vol.getPolycount() > 0:
+            survivors.append(new_elem)
+        else:
+            new_elem.removeSubtree()
+            # wait_frames(1)
+
+    if not survivors:
+        element.selectOne()
+        show_message(
+            "No polygons were produced: use masked area to split", 3000)
+        return 0
+
+    # Close holes on original element and surviving new elements if requested
     if close_holes:
         # Close holes on original element
         element.selectOne()
-        wait_frames(1)
+        # wait_frames(1)
         coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
-        wait_frames(DEFAULT_WAIT_FRAMES)
+        # wait_frames(DEFAULT_WAIT_FRAMES)
 
-        # Close holes on each new element
-        for new_elem in new_elements:
+        # Close holes on each surviving new element
+        for new_elem in survivors:
             new_elem.selectOne()
-            wait_frames(1)
+            # wait_frames(1)
             coat.ui.cmd(CMD_CLOSE_HOLES, _configure_close_holes_dialog)
-            wait_frames(DEFAULT_WAIT_FRAMES)
+            # wait_frames(DEFAULT_WAIT_FRAMES)
 
-    return len(new_elements)
+    # Make the new split object the active selection.
+    survivors[0].selectOne()
+    return len(survivors)

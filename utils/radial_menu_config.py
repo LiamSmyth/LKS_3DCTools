@@ -6,10 +6,12 @@ Supports both direct action paths and module.function references.
 """
 
 from __future__ import annotations
-import json
-import os
+
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Any
+from typing import Any, Callable
+
+from utils.radial_menu_migrations import migrate_file
 
 try:
     from utils.ui.widgets.radial_menu import RadialMenuItem
@@ -19,7 +21,7 @@ except ImportError:
 
 
 # =============================================================================
-# CONFIG PATHS
+# CONFIG PATHS / DEFAULTS
 # =============================================================================
 
 # Default config file location
@@ -27,12 +29,91 @@ _DATA_DIR: Path = Path(__file__).parent.parent / "data"
 _STATE_DIR: Path = _DATA_DIR / "state"
 DEFAULT_CONFIG_PATH: Path = _STATE_DIR / "radial_menu_config.json"
 
+# Fixed pie radius default (schema v3). Authors increase this to deoverlap.
+DEFAULT_MENU_RADIUS: int = 128
+_MIN_MENU_RADIUS: int = 50
+_MAX_MENU_RADIUS: int = 2000
+
+
+@dataclass
+class LoadedRadialMenu:
+    """Parsed radial menu config ready for show_menu / editor."""
+
+    items: list[Any]  # list[RadialMenuItem] when HAS_RADIAL_MENU
+    label: str
+    radius: int
+    name: str
+    path: Path | None = None
+
+
+def clamp_menu_radius(raw: Any) -> int:
+    """Clamp a config radius value into the supported pixel range."""
+    try:
+        value: int = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MENU_RADIUS
+    return max(_MIN_MENU_RADIUS, min(_MAX_MENU_RADIUS, value))
+
+
+def resolve_menu_label(
+    config_data: dict[str, Any],
+    config_path: Path | None = None,
+) -> str:
+    """Resolve center-origin label: explicit label → name → filename stem."""
+    label_raw: Any = config_data.get("label")
+    if isinstance(label_raw, str) and label_raw.strip():
+        return label_raw.strip()
+    name_raw: Any = config_data.get("name")
+    if isinstance(name_raw, str) and name_raw.strip():
+        return name_raw.strip()
+    if config_path is not None:
+        return config_path.stem
+    return ""
+
 
 # =============================================================================
 # ACTION RESOLUTION
 # =============================================================================
 
-def _resolve_action_path(action_path: str, action_args: dict[str, Any] | None = None) -> Callable[[], None]:
+def _wrap_with_logging(
+    action: Callable[[], None],
+    label: str,
+    is_branch: bool,
+) -> Callable[[], None]:
+    """
+    Wrap an action callback with invocation logging (stdout/stderr capture).
+
+    Only wraps leaf actions (not branch nodes that just open submenus).
+
+    Args:
+        action: The raw action callable
+        label: Human-readable label for the action
+        is_branch: True if this is a branch node (no logging)
+
+    Returns:
+        Wrapped callable with invocation logging
+    """
+    # Don't log branch nodes - they just open submenus
+    if is_branch:
+        return action
+
+    def logged_action() -> None:
+        from utils.invocation_logger import get_invocation_logger
+
+        logger = get_invocation_logger()
+        radial_label: str = f"Radial: {label}"
+        try:
+            with logger.capture_invocation(radial_label):
+                action()
+        except Exception:
+            raise
+
+    return logged_action
+
+
+def _resolve_action_path(
+    action_path: str, action_args: dict[str, Any] | None = None
+) -> Callable[[], None]:
     """
     Resolve action path string to callable function.
 
@@ -56,10 +137,10 @@ def _resolve_action_path(action_path: str, action_args: dict[str, Any] | None = 
         def ui_command_wrapper():
             try:
                 import coat
-                print(f"[RadialMenu] Executing 3DCoat command: {command_name}")
                 coat.ui.cmd(command_name)
             except Exception as e:
-                print(f"[RadialMenu] Failed to execute {command_name}: {e}")
+                import traceback
+                traceback.print_exc()
 
         return ui_command_wrapper
 
@@ -76,7 +157,8 @@ def _resolve_action_path(action_path: str, action_args: dict[str, Any] | None = 
                 full_path: str = f"{install_folder}/UserPrefs/StdScripts/cModules/LKS/{script_path}"
                 coat.ui.cmd(f"$execute:{full_path}")
             except Exception as e:
-                print(f"[RadialMenu] Failed to execute {script_path}: {e}")
+                import traceback
+                traceback.print_exc()
 
         return action_script_wrapper
 
@@ -109,8 +191,9 @@ def _resolve_action_path(action_path: str, action_args: dict[str, Any] | None = 
                     func(**action_args)
                 else:
                     func()
-            except Exception as e:
-                print(f"[RadialMenu] Failed to execute {action_path}: {e}")
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
         return module_function_wrapper
 
@@ -136,16 +219,20 @@ def _parse_menu_item(item_data: dict[str, Any]) -> RadialMenuItem:
     action_path: str | None = item_data.get("action")
     action_args: dict[str, Any] | None = item_data.get("action_args")
     children_data: list[dict] | None = item_data.get("children")
+    is_list: bool = (item_data.get("type") in ("list", "leaf"))
+    list_side: str = item_data.get("side", "right")
 
     # Resolve action if present
     action: Callable[[], None] | None = None
+    has_children: bool = bool(children_data)
     if action_path:
         action = _resolve_action_path(action_path, action_args)
+        # Wrap with invocation logging for leaf nodes
+        action = _wrap_with_logging(action, label, is_branch=has_children)
     else:
-        # No action - use dummy for branch nodes
+        # No action - use dummy for branch nodes (not logged)
         def dummy_action() -> None:
-            print(
-                f"[RadialMenu] Branch node '{label}' has no action (this is normal)")
+            pass
         action = dummy_action
 
     # Parse children recursively
@@ -159,6 +246,49 @@ def _parse_menu_item(item_data: dict[str, Any]) -> RadialMenuItem:
         icon=icon,
         children=children,
         angle=angle,
+        is_list=is_list,
+        list_side=list_side,
+    )
+
+
+def load_radial_menu(config_path: str | Path | None = None) -> LoadedRadialMenu:
+    """
+    Load a radial menu config with items, center label, and fixed radius.
+
+    Migrates on disk when needed. ``label`` falls back to ``name`` then
+    filename stem. ``radius`` defaults to ``DEFAULT_MENU_RADIUS`` (128).
+    """
+    if config_path is None:
+        path: Path = DEFAULT_CONFIG_PATH
+    else:
+        path = Path(config_path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Radial menu config not found: {path}")
+
+    config_data, migrated = migrate_file(path, write=True)
+    if migrated:
+        print(
+            f"[RadialMenuConfig] Migrated schema to current version: {path}"
+        )
+
+    items_data = config_data.get("items", [])
+    if not items_data:
+        raise ValueError("Config must contain at least one item")
+
+    items = [_parse_menu_item(item) for item in items_data]
+    name_raw: Any = config_data.get("name")
+    name: str = (
+        name_raw.strip()
+        if isinstance(name_raw, str) and name_raw.strip()
+        else path.stem
+    )
+    return LoadedRadialMenu(
+        items=items,
+        label=resolve_menu_label(config_data, path),
+        radius=clamp_menu_radius(config_data.get("radius", DEFAULT_MENU_RADIUS)),
+        name=name,
+        path=path,
     )
 
 
@@ -176,32 +306,7 @@ def load_menu_config(config_path: str | Path | None = None) -> list[RadialMenuIt
         FileNotFoundError: If config file doesn't exist
         ValueError: If config is invalid
     """
-    if config_path is None:
-        config_path = DEFAULT_CONFIG_PATH
-    else:
-        config_path = Path(config_path)
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Radial menu config not found: {config_path}")
-
-    # Load JSON
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config_data = json.load(f)
-
-    # Validate version (optional)
-    version = config_data.get("version", "1.0")
-    if version != "1.0":
-        print(
-            f"[RadialMenuConfig] Warning: Unknown config version {version}, proceeding anyway")
-
-    # Parse items
-    items_data = config_data.get("items", [])
-    if not items_data:
-        raise ValueError("Config must contain at least one item")
-
-    items = [_parse_menu_item(item) for item in items_data]
-
-    return items
+    return load_radial_menu(config_path).items
 
 
 def get_default_menu_items() -> list[RadialMenuItem]:

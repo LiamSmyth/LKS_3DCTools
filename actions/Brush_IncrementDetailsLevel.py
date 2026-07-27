@@ -1,11 +1,11 @@
 """
 Increment Details Level
 
-Increments the brush details level by 1 and applies to current brush.
-Use 'Apply to Brushes' in LKS panel to apply to all brush types.
+Increments the brush details level by 0.5 and applies to all brush types
+(and the live current-brush UI).
 
 Room: Sculpt
-Action: Increment details level, apply to current brush
+Action: Increment details level, apply to all brushes
 """
 from utils.action_base import action
 
@@ -17,7 +17,7 @@ def main() -> None:
 
     adjust_details_level(
         mode=DetailsLevelMode.INCREMENT,
-        apply_scope=ApplyScope.CURRENT,
+        apply_scope=ApplyScope.ALL,
     )
 
 

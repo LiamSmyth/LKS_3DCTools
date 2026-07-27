@@ -1,26 +1,32 @@
 {
-    "version": "1.0",
+    "version": 3,
     "name": "LKS_Radial_Booleans",
+    "radius": 128,
     "items": [
         {
             "label": "New",
-            "icon": "➕",
+            "type": "list",
+            "side": "right",
+            "icon": "add.svg",
             "children": [
                 {
-                    "label": "New Union",
-                    "icon": "➕",
+                    "label": "Union",
+                    "type": "action",
+                    "icon": "boolean_union.svg",
                     "action": "$LKS_SculptObject_NewVoxBool_Union",
                     "description": "Clone selected → parent under it → Union mode"
                 },
                 {
-                    "label": "New Subtract",
-                    "icon": "➖",
+                    "label": "Subtract",
+                    "type": "action",
+                    "icon": "boolean_subtract.svg",
                     "action": "$LKS_SculptObject_NewVoxBool_Subtract",
                     "description": "Clone selected → parent under it → Subtract mode"
                 },
                 {
-                    "label": "New Intersect",
-                    "icon": "✴️",
+                    "label": "Intersect",
+                    "type": "action",
+                    "icon": "boolean_intersect.svg",
                     "action": "$LKS_SculptObject_NewVoxBool_Intersect",
                     "description": "Clone selected → extrude → parent under it → Intersect"
                 }
@@ -28,29 +34,35 @@
         },
         {
             "label": "Set Mode",
-            "icon": "🔁",
+            "type": "list",
+            "side": "right",
+            "icon": "settings.svg",
             "children": [
                 {
                     "label": "Union",
-                    "icon": "➕",
+                    "type": "action",
+                    "icon": "boolean_union.svg",
                     "action": "$LKS_SculptObject_LiveBool_Union",
                     "description": "Set selected to Union (rename suffix _Union)"
                 },
                 {
                     "label": "Subtract",
-                    "icon": "➖",
+                    "type": "action",
+                    "icon": "boolean_subtract.svg",
                     "action": "$LKS_SculptObject_LiveBool_Subtract",
                     "description": "Set selected to Subtract (rename suffix _Subtract)"
                 },
                 {
                     "label": "Intersect",
-                    "icon": "✴️",
+                    "type": "action",
+                    "icon": "boolean_intersect.svg",
                     "action": "$LKS_SculptObject_LiveBool_Intersect",
                     "description": "Set selected to Intersect (rename suffix _Intersect)"
                 },
                 {
                     "label": "Clear",
-                    "icon": "🚫",
+                    "type": "action",
+                    "icon": "boolean_clear.svg",
                     "action": "$LKS_SculptObject_LiveBool_None",
                     "description": "Disable live booleans on selected, strip suffix"
                 }
@@ -58,39 +70,31 @@
         },
         {
             "label": "Apply",
-            "icon": "✅",
-            "children": [
-                {
-                    "label": "Apply",
-                    "icon": "✅",
-                    "action": "$LKS_SculptObject_ApplyBoolean_Selected",
-                    "description": "Collapse boolean subtree on selected"
-                },
-                {
-                    "label": "Apply (keep)",
-                    "icon": "📋",
-                    "action": "$LKS_SculptObject_ApplyBoolean_KeepOriginal_Selected",
-                    "description": "Duplicate + apply, hide original"
-                }
-            ]
+            "type": "action",
+            "icon": "boolean_apply.svg",
+            "action": "$LKS_SculptObject_ApplyBoolean_Selected",
+            "description": "Collapse boolean subtree on selected"
         },
         {
-            "label": "Voxelize",
-            "icon": "⚙️",
-            "children": [
-                {
-                    "label": "To Voxels",
-                    "icon": "⚙️",
-                    "action": "$LKS_SculptObject_ToVoxel_All",
-                    "description": "Convert all to voxels (booleans require voxel mode)"
-                },
-                {
-                    "label": "Toggle Mesh/Vox",
-                    "icon": "🔄",
-                    "action": "$LKS_SculptObject_ToggleMeshVox_Selected",
-                    "description": "Toggle selected between surface and voxel"
-                }
-            ]
+            "label": "Apply (keep orig)",
+            "type": "action",
+            "icon": "apply_keep.svg",
+            "action": "$LKS_SculptObject_ApplyBoolean_KeepOriginal_Selected",
+            "description": "Duplicate + apply, hide original"
+        },
+        {
+            "label": "To Voxels All",
+            "type": "action",
+            "icon": "mode_convert.svg",
+            "action": "$LKS_SculptObject_ToVoxel_All",
+            "description": "Convert all to voxels (booleans require voxel mode)"
+        },
+        {
+            "label": "Toggle Mesh/Vox",
+            "type": "action",
+            "icon": "mode_convert.svg",
+            "action": "$LKS_SculptObject_ToggleMeshVox_Selected",
+            "description": "Toggle selected between surface and voxel"
         }
     ]
 }

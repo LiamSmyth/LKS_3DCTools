@@ -1,0 +1,2 @@
+<p><b>Apply Boolean</b> — Collapse the boolean subtree, merging child boolean operations into the parent object permanently. Strips boolean suffixes from names.</p>
+<p><span style='color:#90caf9;'>Apply (keep)</span> duplicates the selected object first, applies on the duplicate, and hides the original — preserving it for future editing.</p>

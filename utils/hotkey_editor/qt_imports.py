@@ -39,7 +39,7 @@ try:
         QCheckBox,
     )
     from PySide6.QtCore import Qt, QTimer, Signal, QEvent
-    from PySide6.QtGui import QColor, QBrush, QAction, QKeySequence, QKeyEvent
+    from PySide6.QtGui import QColor, QBrush, QAction, QKeySequence, QKeyEvent, QIcon, QPixmap, QPainter
 
     HAS_QT = True
 except ImportError:

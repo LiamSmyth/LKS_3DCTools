@@ -18,11 +18,24 @@ if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
 try:
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QHBoxLayout
+
     from utils.ui.widgets import CollapsibleSection, ButtonGrid
     from utils.ui.widgets.sub_header import create_sub_header
+    from utils.ui.widgets.badge_button import _make_icon_from_svg
+    from utils.ui.widgets.markdown_file_resource import MarkdownFileResource
+    from utils.menu_action_tooltip import action_menu_tooltip
+
+    _APPLY_ICON: QIcon = _make_icon_from_svg("apply")
+
     HAS_QT: bool = True
 except ImportError:
     HAS_QT = False
+
+
+# Text resources for tooltips (module-local directory)
+_HELP = MarkdownFileResource("data/tooltips/help_subdiv.md", base_dir=__file__)
 
 
 # =============================================================================
@@ -46,18 +59,24 @@ def create_subdiv_section(
         CollapsibleSection widget with subdiv tools
     """
     section = CollapsibleSection(
-        title="🔺 Dynamic Subdiv", collapsed=True, state_key="section_subdiv")
+        title="Dynamic Subdiv", icon_name="subdivide", collapsed=True, state_key="section_subdiv",
+        help_text=_HELP.text,
+    )
     layout = section.content_layout
 
     # --- Details Level ---
-    layout.addWidget(create_sub_header("Details Level"))
+    sub_header_row = QHBoxLayout()
+    sub_header_row.setContentsMargins(0, 0, 0, 0)
+    sub_header_row.addWidget(create_sub_header("Details Level"))
+    sub_header_row.addStretch()
+    layout.addLayout(sub_header_row)
 
     def increment_level() -> None:
         try:
             from utils.brush_settings_utils import apply_auto_subdivide_all, apply_details_level_all
             from utils.lks_settings import get_brush_settings, save_brush_settings
             settings = get_brush_settings()
-            new_level: float = min(8.0, settings.details_level + 0.5)
+            new_level: float = settings.details_level + 0.5
             settings.details_level = new_level
             settings.auto_subdivide = True
             save_brush_settings()
@@ -99,11 +118,36 @@ def create_subdiv_section(
             log_error(f"Apply failed: {e}")
 
     level_grid = ButtonGrid(columns=3)
-    level_grid.add_button("−", decrement_level, "Decrement level")
-    level_grid.add_button("+", increment_level, "Increment level")
     level_grid.add_button(
-        "Apply All", apply_brush_settings, "Apply to all brushes")
-    layout.addWidget(level_grid)
+        "−",
+        decrement_level,
+        action_menu_tooltip(
+            "Decrement details level by 0.5 (enables auto-subdivide; applies to all brushes)",
+            "Brush_DecrementDetailsLevel.py",
+        ),
+    )
+    level_grid.add_button(
+        "+",
+        increment_level,
+        action_menu_tooltip(
+            "Increment details level by 0.5 (enables auto-subdivide; applies to all brushes)",
+            "Brush_IncrementDetailsLevel.py",
+        ),
+    )
+    level_grid.add_button(
+        "Apply All",
+        apply_brush_settings,
+        action_menu_tooltip(
+            "Apply cached dynamic subdiv settings to all brushes",
+            "Brush_ApplyDynamicSubdivSettings.py",
+        ),
+        icon=_APPLY_ICON,
+    )
+    grid_row = QHBoxLayout()
+    grid_row.setContentsMargins(0, 0, 0, 0)
+    grid_row.addWidget(level_grid)
+    grid_row.addStretch()
+    layout.addLayout(grid_row)
 
     return section
 

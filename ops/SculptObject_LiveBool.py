@@ -13,8 +13,9 @@ BooleanMode.NONE turns live booleans off for the element.
 Uses scope resolution to determine which elements to operate on.
 """
 import coat
+from typing import Callable
 from utils.scene_api import SceneAPI, SelectionAPI
-from utils.scope_utils import Scope, resolve_scope
+from utils.scope_utils import Scope, resolve_scope_skip_instances
 from utils.SceneElement_boolean_utils import (
     BooleanMode,
     set_live_boolean_mode_on_elements,
@@ -33,6 +34,7 @@ def main(
     mode: BooleanMode = BooleanMode.SUBTRACT,
     scope: Scope = Scope.CURRENT,
     preserve_selection: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> int:
     """
     Set the live boolean mode on selected sculpt objects.
@@ -41,6 +43,7 @@ def main(
         mode: The boolean mode to assign (NONE / SUBTRACT / INTERSECT / UNION)
         scope: Which elements to operate on
         preserve_selection: Whether to restore selection after the operation
+        progress_callback: Called per-item as (index, total, name) for progress logging
 
     Returns:
         Number of elements that were updated
@@ -57,13 +60,15 @@ def main(
         saved = SelectionAPI.save_selection()
 
     # Resolve target elements
-    elements: list[coat.SceneElement] = resolve_scope(scope)
+    elements, _ = resolve_scope_skip_instances(scope)
     if not elements:
         show_error("No objects to process", 2000)
         return 0
 
     # Apply mode to all resolved elements
-    count: int = set_live_boolean_mode_on_elements(elements, mode)
+    count: int = set_live_boolean_mode_on_elements(
+        elements, mode, progress_callback=progress_callback
+    )
 
     # Restore selection
     if preserve_selection and saved:
