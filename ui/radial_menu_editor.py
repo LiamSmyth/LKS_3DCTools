@@ -764,7 +764,7 @@ class RadialMenuEditorWindow(QWidget):
         add_tooltip(self._tree, _TT_TREE)
 
         # Force light branch arrows on dark background
-        from lks_utils.gui_qt.theme import darken_treeview
+        from lks_utils.gui_qt.theme.dark_theme import darken_treeview
         darken_treeview(self._tree, branch_scale=_BRANCH_ARROW_SCALE)
         # Theme after darken_treeview (API sizing only — no tree QSS).
         if apply_tree_list_theme is not None:

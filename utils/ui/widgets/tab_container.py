@@ -41,7 +41,7 @@ try:
         QPushButton, QSizePolicy,
     )
     from PySide6.QtCore import Qt
-    from lks_utils.gui_qt.widgets import QSmoothScrollArea
+    from lks_utils.gui_qt.widgets.smooth_scroll_area import QSmoothScrollArea
 
     HAS_QT: bool = True
 except ImportError:

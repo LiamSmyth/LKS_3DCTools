@@ -60,13 +60,9 @@ def _derive_label(func: Callable) -> str:
     # Try module name
     module: str = getattr(func, "__module__", "")
     if module:
-        # Strip known prefixes
-        for prefix in [
-            "cExtensions.LKS.actions.",
-            "cExtensions.LKS.radial.",
-            "cExtensions.LKS.",
-            "actions.",
-        ]:
+        from utils.extension_identity import action_module_strip_prefixes
+
+        for prefix in action_module_strip_prefixes():
             if module.startswith(prefix):
                 return module[len(prefix):]
         return module
@@ -154,9 +150,16 @@ def _queue_module_for_clearing() -> None:
         sys._lks_modules_to_clear = set()
 
     # Find and queue action script modules for clearing
-    # They're imported as "cExtensions.LKS.actions.<ScriptName>"
+    # Imported as "cExtensions.<Folder>.actions.<ScriptName>"
+    from utils.extension_identity import get_extension_folder_name
+
+    folder: str = get_extension_folder_name()
+    action_markers: tuple[str, ...] = (
+        f"cExtensions.{folder}.actions.",
+        "cExtensions.LKS.actions.",
+    )
     for name in list(sys.modules.keys()):
-        if "cExtensions.LKS.actions." in name:
+        if any(marker in name for marker in action_markers):
             sys._lks_modules_to_clear.add(name)
 
 
@@ -235,11 +238,9 @@ class Action:
         # Try module name from class
         module: str = getattr(self.__class__, "__module__", "")
         if module:
-            for prefix in [
-                "cExtensions.LKS.actions.",
-                "cExtensions.LKS.",
-                "actions.",
-            ]:
+            from utils.extension_identity import action_module_strip_prefixes
+
+            for prefix in action_module_strip_prefixes():
                 if module.startswith(prefix):
                     return module[len(prefix):]
             return module

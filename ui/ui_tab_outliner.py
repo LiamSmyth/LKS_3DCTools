@@ -139,7 +139,7 @@ def create_outliner_tab(
     tree.setColumnWidth(3, _COL_POLYS_W)
     tree.setMinimumHeight(_TREE_MIN_HEIGHT)
     # Force light branch arrows on dark background (must be BEFORE setStyleSheet)
-    from lks_utils.gui_qt.theme import darken_treeview
+    from lks_utils.gui_qt.theme.dark_theme import darken_treeview
     darken_treeview(tree, branch_scale=_BRANCH_ARROW_SCALE)
 
     # Apply font sizing via QFont (not QSS, which would wrap the style and

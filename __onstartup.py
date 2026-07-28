@@ -18,22 +18,17 @@ from pathlib import Path
 # Get the LKS module root directory
 _LKS_ROOT: Path = Path(__file__).parent.resolve()
 
-# Add to sys.path if not already present (enables 'from utils.' imports)
+# Add to sys.path if not already present (enables 'from utils.', 'from ops.',
+# and 'import lks_utils' — the slim/bundled package lives at <LKS>/lks_utils/).
+# ONLY the addon root is added; never an external lks_utils or vendor path.
 if str(_LKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_LKS_ROOT))
     print(f"[LKS] Added to sys.path: {_LKS_ROOT}")
 
-# Add vendor/ to sys.path for lks_utils imports
-_VENDOR: Path = _LKS_ROOT / "vendor"
-if _VENDOR.exists() and str(_VENDOR) not in sys.path:
-    sys.path.insert(0, str(_VENDOR))
-    print(f"[LKS] Added vendor path: {_VENDOR}")
-
 # =============================================================================
-# DEPENDENCY INSTALL — lks_utils needs ftfy at import time
+# DEPENDENCY INSTALL — optional pip deps used by bundled lks_utils leaves
 # =============================================================================
-# ftfy is imported by lks_utils.text.normalization at module level.
-# It must be installed before ANY lks_utils import chain fires later.
+# Keep ftfy available for any text helpers that still need it at runtime.
 # 3DCoat's coat.io.pipInstall uses internal pip, not sys.executable.
 
 try:

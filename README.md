@@ -2,9 +2,6 @@
 
 A cModule for [3DCoat](https://3dcoat.com/) by Liam
 
-New tutorial video!
-https://www.youtube.com/watch?v=CM-uigdT4ao
-
 ## Features
 ### Customizable Radial Tree Menu
 

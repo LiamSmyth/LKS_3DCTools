@@ -97,7 +97,11 @@ def clear_lks_from_sys_modules(
     if preserve_hot_reload:
         _preserve.add("utils.hot_reload")
     if preserve_extension:
-        _preserve.add("LKS")
+        from utils.extension_identity import get_extension_folder_name
+
+        folder: str = get_extension_folder_name()
+        _preserve.add(folder)
+        _preserve.add("LKS")  # source-tree / classic entry module name
         # Also preserve anything the extension module directly depends on
         # at module level (coat, cPy) — these are 3DCoat builtins, safe to skip
 
@@ -110,16 +114,16 @@ def clear_lks_from_sys_modules(
             del sys.modules[name]
             removed.append(name)
 
-    # Also clear any modules that matched the old prefixes but weren't
-    # caught by filesystem scan (e.g., modules imported from outside LKS root)
-    extra_prefixes: tuple[str, ...] = (
-        "cExtensions.LKS.",
-        "cModules.LKS.",
-    )
+    # Also clear any modules that matched install prefixes but weren't
+    # caught by filesystem scan (e.g., modules imported from outside root)
+    from utils.extension_identity import cextension_module_prefixes
+
+    extra_prefixes: tuple[str, ...] = cextension_module_prefixes()
     for name in list(sys.modules.keys()):
         if any(name.startswith(p) for p in extra_prefixes):
-            del sys.modules[name]
-            removed.append(name)
+            if name not in _preserve:
+                del sys.modules[name]
+                removed.append(name)
 
     return len(removed), removed
 
@@ -139,7 +143,8 @@ _PACKAGE_PRIORITY: dict[str, int] = {
     "actions.": 5,      # Action scripts depend on everything above
 }
 
-# Root-level modules (no dot prefix) that belong to LKS
+# Root-level modules (no dot prefix) that belong to this cExtension.
+# Folder-named entry (e.g. LKS_Side.py) is included dynamically at reload time.
 _ROOT_MODULES: set[str] = {
     "LKS", "__init__", "__onstartup",
 }
