@@ -239,7 +239,10 @@ build/
 LKS_*.zip
 
 # Bundled / junctioned lks_utils at addon root (dev junction or release slim copy).
-# Never commit the junction target tree; package_release.py copies a slim subset.
+# Never commit the junction target tree on 'local' — it is the full fat source.
+# package_release.py and _tools/git_push_remote.py vendor a slim subset:
+#   - packs / .3dcpack include real slim files
+#   - git_push_remote injects slim lks_utils/ into origin/main (clones can run)
 lks_utils/
 
 # Legacy location (pre root-level bundle)
